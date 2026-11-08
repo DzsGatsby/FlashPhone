@@ -1,0 +1,83 @@
+package com.wangzan101.mika.calls
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import com.wangzan101.mika.MikaApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+/** Telecom keeps its bound InCallService alive; we need a cancellable notification, not an idle FGS. */
+internal class CallNotifications(private val context: Context) {
+    private val manager get() = context.getSystemService(NotificationManager::class.java)
+
+    fun ready(): Boolean = runCatching {
+        val notificationManager = manager ?: return false
+        notificationManager.createNotificationChannel(
+            NotificationChannel(CHANNEL, "AI 电话", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
+        )
+        notificationManager.areNotificationsEnabled() &&
+            notificationManager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+    }.getOrDefault(false)
+
+    fun show(callId: String, message: String, ringing: Boolean): Boolean = runCatching {
+        if (!ready()) return false
+        val takeOverIntent = Intent(context, CallNotificationAction::class.java)
+            .setAction(ACTION).setData(Uri.fromParts("mika-call", callId, null))
+        val takeOver = PendingIntent.getBroadcast(context, 0, takeOverIntent, PendingIntent.FLAG_IMMUTABLE)
+        val builder = Notification.Builder(context, CHANNEL)
+            .setContentTitle("Mika AI 电话").setContentText(message)
+            .setSmallIcon(android.R.drawable.sym_action_call)
+            .setOnlyAlertOnce(true).setOngoing(true).setVisibility(Notification.VISIBILITY_PRIVATE)
+            .addAction(Notification.Action.Builder(null, if (ringing) "取消 AI 接听" else "手动接管", takeOver).build())
+        context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { intent ->
+            builder.setContentIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE))
+        }
+        manager?.notify(ID, builder.build()) ?: return false
+        true
+    }.getOrDefault(false)
+
+    fun handoff() {
+        runCatching {
+            if (!ready()) return
+            manager?.notify(ID, Notification.Builder(context, CHANNEL)
+                .setContentTitle("AI 已退出通话").setContentText("请在系统电话界面接管")
+                .setSmallIcon(android.R.drawable.sym_action_call).setAutoCancel(true)
+                .setVisibility(Notification.VISIBILITY_PRIVATE).setTimeoutAfter(12_000L).build())
+        }
+    }
+
+    fun clear() { runCatching { manager?.cancel(ID) } }
+
+    companion object {
+        const val ACTION = "com.wangzan101.mika.calls.TAKEOVER"
+        const val CHANNEL = "mika_ai_calls"
+        private const val ID = 90_117
+    }
+}
+
+class CallNotificationAction : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != CallNotifications.ACTION || intent.data?.scheme != "mika-call") return
+        val callId = intent.data?.schemeSpecificPart ?: return
+        val app = context.applicationContext as? MikaApp ?: return
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                app.calls.takeover(callId)
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+}

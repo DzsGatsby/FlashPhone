@@ -6,7 +6,13 @@ import com.wangzan101.mika.core.model.Part
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.wangzan101.mika.core.testing.WEB_SCRIPT_TOOL
 import com.wangzan101.mika.core.assembly.toolDispatcher
@@ -44,15 +50,41 @@ class ToolRiskTest {
 
     @Test fun readCallsRefuseWhatTheOldListsRefused() = runTest {
         val refused = oldWriting + oldSandbox + WEB_SCRIPT_TOOL +
-            setOf("phone_find", "phone_collect", "phone_dialog", "phone_run", "phone_system_command", "phone_calendar_bulk_insert", "schedule_task", "spawn_agent", "settings_set", "root_run_command", "web_search")
+            setOf("phone_find", "phone_collect", "phone_dialog", "phone_run", "phone_system_command", "phone_calendar_bulk_insert", "schedule_task", "spawn_agent", "settings_set", "root_run_command", "web_search",
+                "phone_call_state", "phone_call_dial", "phone_call_answer", "phone_call_hangup", "phone_call_takeover")
         assertEquals(refused, allTools().filter { !it.readOnly }.map { it.name }.toSet())
         // root 命令只在给了端口时登记:给一个,所有工具都在
-        val d = toolDispatcher(FakeScreen(), root = object : com.wangzan101.mika.core.cap.root.RootPort {
+        val calls = object : com.wangzan101.mika.core.calls.PhoneCallPort {
+            override suspend fun state() = JsonObject(emptyMap())
+            override suspend fun dial(number: String, simId: String?) = state()
+            override suspend fun answer(callId: String) = state()
+            override suspend fun hangup(callId: String) = state()
+            override suspend fun takeover() = state()
+        }
+        val d = toolDispatcher(FakeScreen(), phoneCalls = calls, root = object : com.wangzan101.mika.core.cap.root.RootPort {
             override suspend fun run(command: String, timeoutMs: Long) = com.wangzan101.mika.core.cap.root.RootRun.Unavailable
         })
         for (name in names) {
             val r = d.executeRead(Part.ToolCall("c", name, "{}")).content
             assertEquals(name, name in refused, r["error"] == JsonPrimitive("not_a_read"))
+        }
+    }
+
+    @Test fun callApprovalValidatesArgumentsBeforeAskingAndBindsItsTarget() {
+        val tools = allTools().associateBy { it.name }
+        val dial = tools.getValue("phone_call_dial")
+        assertNull(dial.approvalRisk(buildJsonObject { putJsonObject("number") {} })?.ask)
+        assertNull(dial.approvalRisk(buildJsonObject { put("number", "13800000000"); put("simId", false) })?.ask)
+        val dialAsk = dial.approvalRisk(buildJsonObject { put("number", "13800000000"); put("simId", "sim-2") })!!.ask!!
+        assertTrue(dialAsk.content.contains("13800000000"))
+        assertTrue(dialAsk.target.contains("sim-2"))
+        for (name in listOf("phone_call_answer", "phone_call_hangup")) {
+            val tool = tools.getValue(name)
+            assertNull(tool.approvalRisk(buildJsonObject {})?.ask)
+            assertNull(tool.approvalRisk(buildJsonObject { put("call_id", 123) })?.ask)
+            fun ask(id: String) = tool.approvalRisk(buildJsonObject { put("call_id", id) })!!.ask!!
+            assertTrue(ask("call-a").target.contains("call-a"))
+            assertNotEquals(ask("call-a"), ask("call-b"))
         }
     }
 

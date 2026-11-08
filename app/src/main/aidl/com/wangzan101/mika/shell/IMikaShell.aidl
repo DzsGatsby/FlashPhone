@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.ParcelFileDescriptor;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.view.Surface;
 
 // 运行在 shell 身份(uid 2000)进程里的常驻服务:经无线调试拉起的内置助手。
@@ -118,6 +119,14 @@ interface IMikaShell {
     // 只在 Mika 的虚拟屏、指定的最前面任务里,把可打印 ASCII 作为键盘事件输入;不发送控制字符
     // 0=未发送 1=全部事件已投递 2=投递不确定(可能只输入了前缀)
     int injectAsciiText(int displayId, int taskId, String packageName, String text) = 50;
+
+    // 通话音频独立于通话控制。0=自动,1=直连运营商音频,2=Android PSTN 重定向。
+    Bundle probeCallAudio(int mode) = 51;
+    // 仅 ACTIVE 运营商通话；owner 每通独立，死亡时停止。下行可读/上行可写的匿名管道均为单声道 PCM16LE。
+    Bundle openCallAudio(int mode, IBinder owner) = 52;
+    void stopCallAudio(IBinder owner) = 53;
+    boolean flushCallAudio(IBinder owner) = 54;
+    Bundle callAudioStats(IBinder owner) = 55;
 
     // 沿用早先定下的销毁事务号;AIDL 要求要么全部方法编号要么都不编号
     void destroy() = 16777114;
