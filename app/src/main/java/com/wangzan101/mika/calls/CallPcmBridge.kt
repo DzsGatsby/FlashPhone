@@ -22,6 +22,7 @@ internal class CallPcmBridge(
     suspend fun run(
         session: VolcRealtimeSession,
         greeting: String,
+        counters: CallMediaCounters?,
         onTranscript: (String, String) -> Unit,
     ): Unit = coroutineScope {
         val playbackQueue = Channel<Frame>(16)
@@ -62,12 +63,14 @@ internal class CallPcmBridge(
                     position += count
                     if (position == frame.size) {
                         if (!session.sendPcm16(frame)) throw CallMediaFailure("火山音频输入已中断")
+                        counters?.inputAccepted(frame, System.nanoTime())
                         position = 0
                     }
                 }
             }
             try {
                 session.events.collect { event ->
+                    counters?.eventReceived(event)
                     when (event) {
                         is VolcRealtimeEvent.Audio -> if (event.pcm.isNotEmpty() &&
                             !playbackQueue.trySend(Frame(generation.get(), event.pcm)).isSuccess) {

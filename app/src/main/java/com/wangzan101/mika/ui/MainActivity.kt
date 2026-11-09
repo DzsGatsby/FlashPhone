@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var monitor: SystemStatusMonitor
     private var requestedConversation by mutableStateOf<String?>(null)
     private var openTeach by mutableStateOf(false)
+    private var openCalls by mutableStateOf(false)
     private var requestedSharedDraft by mutableStateOf<SharedDraftRequest?>(null)
     private var shareJob: Job? = null
     private var shareSerial = 0L
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        openCalls = intent.getBooleanExtra(EXTRA_OPEN_CALLS, false)
         requestedConversation = intent.getStringExtra(EXTRA_OPEN_CONVERSATION)
         takeTeach(intent)
         val pendingShare = (application as MikaApp).sharedDrafts.read()
@@ -125,6 +127,8 @@ class MainActivity : ComponentActivity() {
                         },
                         openTeach = openTeach,
                         onTeachOpened = { openTeach = false },
+                        openCalls = openCalls,
+                        onCallsOpened = { intent.removeExtra(EXTRA_OPEN_CALLS); openCalls = false },
                     )
                 }
             }
@@ -134,6 +138,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        openCalls = intent.getBooleanExtra(EXTRA_OPEN_CALLS, false)
+        if (openCalls) return // 只打开电话页;不打断现有对话/分享，也不从这里操作通话。
         requestedConversation = intent.getStringExtra(EXTRA_OPEN_CONVERSATION)
         takeTeach(intent)
         requestedSharedDraft?.let { (application as MikaApp).sharedDrafts.discard(it.draft.image) }
@@ -281,6 +287,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_CONVERSATION = "open_conversation"
         const val EXTRA_OPEN_TEACH = "open_teach"
         const val EXTRA_TEACH_GOAL = "teach_goal"
+        const val EXTRA_OPEN_CALLS = "open_calls"
         private const val TAG = "MikaMain"
     }
 }
@@ -314,6 +321,8 @@ private fun MikaRoot(
     onSharedDraftOpened: (Boolean, SharedDraft) -> Unit,
     openTeach: Boolean,
     onTeachOpened: () -> Unit,
+    openCalls: Boolean,
+    onCallsOpened: () -> Unit,
 ) {
     val nav = rememberNavStack()
     // 从设置页「重新配对」进来时先回到配对一步
@@ -386,8 +395,16 @@ private fun MikaRoot(
             null -> nav.reset()
         }
     }
-    LaunchedEffect(Unit) {
-        if (onboarding == null) Onboarding.start(onboardingInputs())?.let(::goOnboarding)
+    var initialNavigationDone by remember { mutableStateOf(false) }
+    LaunchedEffect(openCalls) {
+        val keepCallsOpen = openCalls || nav.current == Route.Calls
+        if (!initialNavigationDone) {
+            initialNavigationDone = true
+            if (onboarding == null) Onboarding.start(onboardingInputs())?.let(::goOnboarding)
+        }
+        // 电话通知不需要聊天模型。需要上手时仍在电话页下方保留上手步骤，退出电话页后继续。
+        if (keepCallsOpen) nav.push(Route.Calls)
+        if (openCalls) onCallsOpened()
     }
     val phoneSetupNeeded by phoneSetup.needed.collectAsState()
     // 页面有自己的返回处理时(设置页里的子页、侧栏)由它们先接;这里只管退回上一页
@@ -396,6 +413,7 @@ private fun MikaRoot(
     // 聊天页离开组合树时保留列表位置和输入内容，返回设置页等子页面后原样恢复。
     val screenStates = rememberSaveableStateHolder()
     when (nav.current) {
+        Route.Calls -> CallSettingsScreen(app.calls, onBack = back)
         Route.PhoneSetup -> PhoneSetupScreen(status, setupRepair, onFix, onboarding = onboarding == OnboardingStep.Phone) {
             phoneSetup.markGuideSeen()
             if (onboarding == OnboardingStep.Phone) goOnboarding(null) else nav.back()

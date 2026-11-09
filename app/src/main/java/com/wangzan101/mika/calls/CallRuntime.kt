@@ -1,6 +1,7 @@
 package com.wangzan101.mika.calls
 
 import android.annotation.SuppressLint
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
@@ -14,6 +15,8 @@ import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
+import android.util.Log
+import com.wangzan101.mika.BuildConfig
 import com.wangzan101.mika.MikaApp
 import com.wangzan101.mika.shell.IMikaShell
 import kotlinx.coroutines.CancellationException
@@ -257,13 +260,15 @@ class CallRuntime(private val app: MikaApp) {
         }
         call.suppressed = true
         val active = cancelWork("用户挂断")
+        val cleaned = awaitCleanup(active)
+        val endedMessage = if (cleaned) "Android 已确认通话结束" else "Android 已确认通话结束；音频恢复尚未确认"
+        if (confirmedEnded(call)) return@onMain ok(endedMessage)
         if (!isCurrentCall(call, expectedCallId) || call.phase == CallPhase.DISCONNECTING) return@onMain report(CALL_CHANGED)
         if (runCatching {
                 if (call.phase == CallPhase.RINGING) call.call.reject(false, null) else call.call.disconnect()
             }.isFailure) return@onMain report("Android 未能发出挂断请求")
         val ended = waitFor(CallPolicy.CONTROL_TIMEOUT_MS) { confirmedEnded(call) } || confirmedEnded(call)
-        awaitCleanup(active)
-        if (ended) ok("Android 已确认通话结束") else report("Android 尚未确认通话结束，请查看系统电话界面")
+        if (ended) ok(endedMessage) else report("Android 尚未确认通话结束，请查看系统电话界面")
     }
 
     suspend fun takeover(): CallActionResult = takeover(null)
@@ -277,14 +282,14 @@ class CallRuntime(private val app: MikaApp) {
         else report("AI 已停止，通话音频恢复尚未确认，请查看系统电话界面")
     }
 
-    internal fun onCallAdded(call: Call) {
+    internal fun onCallAdded(service: MikaInCallService, call: Call) {
         unobservedManagedCall = false
-        tracked.getOrPut(call) { Tracked(call) }
-        onCallChanged(call)
+        tracked.getOrPut(call) { Tracked(call, service) }
+        onCallChanged(service, call)
     }
 
-    internal fun onCallChanged(call: Call) {
-        val t = tracked[call] ?: return
+    internal fun onCallChanged(service: MikaInCallService, call: Call) {
+        val t = tracked[call]?.takeIf { it.service === service } ?: return
         val active = work
         if (active != null) {
             if (active.track == null && active.placed && matchesOutgoing(active, t)) {
@@ -311,12 +316,20 @@ class CallRuntime(private val app: MikaApp) {
         publish()
     }
 
-    internal fun onCallRemoved(call: Call) {
-        val removed = tracked.remove(call) ?: return
+    internal fun onCallRemoved(service: MikaInCallService, call: Call) {
+        val removed = tracked[call]?.takeIf { it.service === service } ?: return
+        tracked.remove(call)
         if (work?.track === removed) cancelWork(
             if (confirmedEnded(removed)) callEndMessage(removed) else "Android 通话状态已断开，电话由系统处理",
         )
         publish()
+    }
+
+    internal fun onTelecomMuteChanged(service: MikaInCallService, muted: Boolean) {
+        val current = work ?: return
+        if (current.track?.service === service && current.muteLease?.observeTelecomMute(muted) == true) {
+            cancelWork("系统通话静音已解除，AI 已交还通话")
+        }
     }
 
     private fun startWork(attempt: Work) {
@@ -344,6 +357,7 @@ class CallRuntime(private val app: MikaApp) {
                 throw CallProblem("通话音频设置已变化，请重试")
             }
             validateTarget(w)
+            w.mediaStage = MediaStage.VOLC_CONNECT
             val session = withTimeoutOrNull(5_000L) {
                 VolcRealtimeClient().connect(credentials, VolcRealtimeConfig(
                     systemPrompt = CallPolicy.prompt(w.config.systemPrompt, w.direction), speaker = w.config.speaker,
@@ -357,6 +371,7 @@ class CallRuntime(private val app: MikaApp) {
             }
             prerequisite(ignoreWork = true)?.let { throw CallProblem(it) }
             validateTarget(w)
+            w.mediaStage = MediaStage.TELECOM_CONNECT
             if (w.direction == CallDirection.INCOMING) {
                 val target = w.track ?: throw CallProblem("来电已结束")
                 w.answerSent = true
@@ -397,25 +412,34 @@ class CallRuntime(private val app: MikaApp) {
             publish()
             runAudio(w, helper, session)
         } catch (e: CancellationException) {
+            // Coroutine cancellation may carry a secondary descriptor-close exception.
+            if (BuildConfig.DEBUG) e.suppressed.take(MAX_MEDIA_DIAGNOSTICS).forEach { debugMediaException(w, it) }
             throw e
         } catch (e: CallProblem) {
-            w.stopReason = e.message ?: "AI 电话未就绪"
+            debugMediaException(w, e)
+            w.stopReason.record(e.message ?: "AI 电话未就绪")
         } catch (e: CallMediaFailure) {
-            w.stopReason = e.message ?: "通话音频已断开"
+            debugMediaException(w, e)
+            if (w.stopReason.value == null) {
+                w.stopReason.record(shellAudioFailure(w) ?: e.message ?: "通话音频已断开")
+            }
         } catch (e: VolcRealtimeException) {
-            w.stopReason = when (e.kind) {
+            debugMediaException(w, e)
+            w.stopReason.record(when (e.kind) {
                 VolcRealtimeException.Kind.AUTH -> "火山拒绝认证，请检查电话语音凭据和服务开通状态"
                 VolcRealtimeException.Kind.RATE_LIMITED -> "火山实时语音达到服务限额，电话由系统处理"
                 VolcRealtimeException.Kind.TIMEOUT, VolcRealtimeException.Kind.NETWORK -> "火山实时语音连接不可用，电话由系统处理"
                 VolcRealtimeException.Kind.BACKPRESSURE -> "火山实时音频拥塞，电话由系统处理"
                 else -> "火山实时语音未能继续，请检查通话配置"
-            }
-        } catch (_: Exception) {
-            w.stopReason = "AI 音频连接失败，电话由系统处理"
+            })
+        } catch (e: Exception) {
+            debugMediaException(w, e)
+            w.stopReason.record("AI 音频连接失败，电话由系统处理")
         } finally {
             withContext(NonCancellable) {
-                val reason = w.stopReason ?: "AI 已退出，电话由系统处理"
-                w.session?.close()
+                val reason = w.stopReason.value ?: "AI 已退出，电话由系统处理"
+                w.mediaStage = MediaStage.RELEASE
+                runCatching { w.session?.close() }.onFailure { debugMediaException(w, it) }
                 val restored = restoreAudio(w)
                 w.track?.let {
                     if (w.telecomActionIssued) {
@@ -460,8 +484,16 @@ class CallRuntime(private val app: MikaApp) {
         }
         // Capture is never started while ringing, dialing, held, or in a different call.
         val target = w.track ?: throw CallProblem("通话已结束")
-        if (liveCalls().singleOrNull() !== target || target.phase != CallPhase.ACTIVE ||
-            target.suppressed || shell !== helper) throw CallProblem("通话状态已变更，AI 未接入音频")
+        if (!sameActiveMuteTarget(w, target) || target.suppressed || shell !== helper) {
+            throw CallProblem("通话状态已变更，AI 未接入音频")
+        }
+        w.mediaStage = MediaStage.MUTE_ACQUIRE
+        val mute = acquireTelecomMute(w, target)
+        if (!sameActiveMuteTarget(w, target) || target.suppressed || shell !== helper ||
+            !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
+            throw CallProblem("通话状态或静音已变更，AI 未接入音频")
+        }
+        w.mediaStage = MediaStage.SHELL_OPEN
         w.audioHelper = helper
         val channel = withContext(NonCancellable + Dispatchers.IO) {
             val result = helper.openCallAudio(w.config.audioMode.wire, w.audioOwner)
@@ -485,12 +517,15 @@ class CallRuntime(private val app: MikaApp) {
                 withContext(Dispatchers.IO) { runCatching { helper.flushCallAudio(w.audioOwner) }.getOrDefault(false) }
             }
         }
-        if (liveCalls().singleOrNull() !== target || target.phase != CallPhase.ACTIVE || target.suppressed ||
-            shell !== helper || !settings.state.value.enabled) throw CallProblem("通话已变更，未发送语音")
+        if (!sameActiveMuteTarget(w, target) || target.suppressed || shell !== helper ||
+            !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
+            throw CallProblem("通话状态或静音已变更，未发送语音")
+        }
         val greeting = w.config.greeting.let {
             if (it.startsWith("您好，我是 Mika 的 AI 电话助手。")) it else "您好，我是 Mika 的 AI 电话助手。$it"
         }
         val remaining = (w.config.maxCallSeconds * 1_000L - (SystemClock.elapsedRealtime() - w.activeElapsed)).coerceAtLeast(1)
+        w.mediaStage = MediaStage.PCM_BRIDGE
         val completed = withTimeoutOrNull(remaining) {
             coroutineScope {
                 val watchdog = launch {
@@ -502,7 +537,8 @@ class CallRuntime(private val app: MikaApp) {
                             runCatching { helper.callAudioStats(w.audioOwner) }.getOrNull()
                         }
                         if (stats?.getBoolean("active") != true) {
-                            throw CallMediaFailure("设备已停止双向音频，电话由系统处理")
+                            throw CallMediaFailure(shellAudioStopDiagnostic(stats?.getString("reason"))
+                                ?: "设备已停止双向音频，电话由系统处理")
                         }
                         val bytes = stats.getLong("downBytes")
                         if (!w.aiActive) {
@@ -527,7 +563,7 @@ class CallRuntime(private val app: MikaApp) {
                     }
                 }
                 try {
-                    channel.run(session, greeting, onTranscript = { role, text ->
+                    channel.run(session, greeting, counters = w.mediaCounters, onTranscript = { role, text ->
                         val line = text.trim().take(CallHistory.MAX_LINE_LENGTH)
                         if (line.isNotEmpty() && w.transcript.lastOrNull() != CallTranscriptLine(role, line)) {
                             if (w.transcript.size >= CallHistory.MAX_LINES) w.transcript.removeAt(0)
@@ -541,7 +577,9 @@ class CallRuntime(private val app: MikaApp) {
             }
         }
         if (completed != true) {
-            w.stopReason = "已达到 AI 通话时长上限"
+            val timeoutReason = "已达到 AI 通话时长上限"
+            if (!w.stopReason.record(timeoutReason)) return
+            w.mediaStage = MediaStage.RELEASE
             w.session?.close()
             val restored = restoreAudio(w)
             w.aiActive = false
@@ -549,17 +587,90 @@ class CallRuntime(private val app: MikaApp) {
             if (!restored || target.suppressed || liveCalls().singleOrNull() !== target || target.phase != CallPhase.ACTIVE) return
             if (runCatching { target.call.disconnect() }.isSuccess &&
                 (waitFor(CallPolicy.CONTROL_TIMEOUT_MS) { confirmedEnded(target) } || confirmedEnded(target))) {
-                w.stopReason = "达到时长上限，Android 已挂断"
+                w.stopReason.refine(timeoutReason, "达到时长上限，Android 已挂断")
             } else {
-                w.stopReason = "达到时长上限，Android 未确认挂断，已交还系统"
+                w.stopReason.refine(timeoutReason, "达到时长上限，Android 未确认挂断，已交还系统")
             }
         }
     }
 
-    private suspend fun restoreAudio(w: Work): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun acquireTelecomMute(w: Work, target: Tracked): TelecomMuteLease {
+        val service = target.service
+        var baseline: TelecomMuteLease? = null
+        val known = awaitMute {
+            if (!sameActiveMuteTarget(w, target) || target.suppressed) return@awaitMute false
+            baseline = TelecomMuteLease.fromBaseline(service.telecomMuted, microphoneMuted())
+            baseline != null
+        }
+        val lease = baseline?.takeIf { known }
+            ?: throw CallProblem("Android 未确认原有通话静音状态，AI 未接入音频")
+        w.muteLease = lease
+        if (lease.needsMuteRequest) {
+            // Mark before the Binder request: an in-flight mute still needs a compensating
+            // unmute if the acknowledgement times out while this exact call remains active.
+            lease.markMuteRequested()
+            if (!service.requestMute(target.call, true)) {
+                throw CallProblem("Android 未接受本次通话静音请求")
+            }
+        }
+        val confirmed = awaitMute {
+            sameActiveMuteTarget(w, target) && !target.suppressed &&
+                lease.isConfirmed(service.telecomMuted, microphoneMuted())
+        }
+        if (!confirmed) throw CallProblem("Android 未确认通话麦克风静音，AI 未接入音频")
+        return lease
+    }
+
+    private fun sameActiveMuteTarget(w: Work, target: Tracked): Boolean =
+        target.phase == CallPhase.ACTIVE && sameMuteTarget(w, target)
+
+    private fun sameMuteTarget(w: Work, target: Tracked): Boolean =
+        work === w && w.track === target && isCurrentCall(target, target.id) &&
+            (target.phase == CallPhase.ACTIVE || target.phase == CallPhase.HOLDING) && target.service.tracks(target.call)
+
+    private fun microphoneMuted(): Boolean? = runCatching {
+        app.getSystemService(AudioManager::class.java)?.isMicrophoneMute
+    }.getOrNull()
+
+    private suspend fun awaitMute(ready: () -> Boolean): Boolean = withTimeoutOrNull(MUTE_ACK_MS) {
+        while (!ready()) delay(40)
+        true
+    } == true
+
+    private suspend fun shellAudioFailure(w: Work): String? = withContext(Dispatchers.IO) {
+        val helper = w.audioHelper ?: return@withContext null
+        val stats = runCatching { helper.callAudioStats(w.audioOwner) }.getOrNull() ?: return@withContext null
+        if (stats.getBoolean("active")) null else shellAudioStopDiagnostic(stats.getString("reason"))
+    }
+
+    private suspend fun restoreAudio(w: Work): Boolean {
+        // Release and flush hardware media before making the handset microphone available again.
+        val shellRestored = restoreShellAudio(w)
+        val muteRestored = restoreTelecomMute(w)
+        return shellRestored && muteRestored
+    }
+
+    private suspend fun restoreTelecomMute(w: Work): Boolean {
+        val lease = w.muteLease ?: return true
+        val target = w.track
+        fun sameCall() = target != null && sameMuteTarget(w, target)
+        val plan = lease.beginRelease(sameCall())
+        if (plan == TelecomMuteLease.Release.REQUEST_UNMUTE && target != null) {
+            // No suspension since sameCall() above. Do not send a global mute command on a
+            // different call, even if this service is still bound after the original call ended.
+            target.service.requestMute(target.call, false)
+        }
+        val restored = awaitMute {
+            plan.confirmed(sameCall(), target?.service?.telecomMuted, microphoneMuted())
+        }
+        if (restored) w.muteLease = null
+        return restored
+    }
+
+    private suspend fun restoreShellAudio(w: Work): Boolean = withContext(Dispatchers.IO) {
         val helper = w.audioHelper
-        runCatching { w.capture?.close() }
-        runCatching { w.playback?.close() }
+        runCatching { w.capture?.close() }.onFailure { debugMediaException(w, it) }
+        runCatching { w.playback?.close() }.onFailure { debugMediaException(w, it) }
         w.capture = null
         w.playback = null
         if (helper == null) return@withContext true
@@ -567,9 +678,16 @@ class CallRuntime(private val app: MikaApp) {
             helper.stopCallAudio(w.audioOwner)
             val stats = helper.callAudioStats(w.audioOwner) ?: return@runCatching false
             !stats.getBoolean("active") && stats.getBoolean("microphoneRestored")
-        }.getOrDefault(false).also {
+        }.onFailure { debugMediaException(w, it) }.getOrDefault(false).also {
             if (it) w.audioHelper = null
         }
+    }
+
+    private fun debugMediaException(w: Work, error: Throwable) {
+        if (!BuildConfig.DEBUG || w.mediaDiagnosticCount >= MAX_MEDIA_DIAGNOSTICS) return
+        w.mediaDiagnosticCount++
+        val type = error.javaClass.simpleName.take(64).ifBlank { "Exception" }
+        Log.d("MikaCallMedia", "stage=${w.mediaStage.name} exception=$type")
     }
 
     private val CallAudioMode.wire: Int get() = if (this == CallAudioMode.DIRECT) 1 else 2
@@ -604,7 +722,7 @@ class CallRuntime(private val app: MikaApp) {
 
     private fun cancelWork(reason: String): Work? {
         val active = work ?: return null
-        if (active.stopReason == null) active.stopReason = reason
+        active.stopReason.record(reason)
         active.track?.suppressed = true
         active.job?.cancel()
         publish()
@@ -722,7 +840,7 @@ class CallRuntime(private val app: MikaApp) {
     private fun fail(message: String) = CallActionResult(false, message)
 
     private class CarrierSim(val info: CallSim, val handle: PhoneAccountHandle)
-    private class Tracked(val call: Call) {
+    private class Tracked(val call: Call, val service: MikaInCallService) {
         val id = UUID.randomUUID().toString()
         val number get() = numberOf(call)
         val direction get() = when (call.details?.callDirection) {
@@ -743,6 +861,8 @@ class CallRuntime(private val app: MikaApp) {
         var autoTried = false
         var suppressed = false
     }
+    private enum class MediaStage { PREFLIGHT, VOLC_CONNECT, TELECOM_CONNECT, MUTE_ACQUIRE, SHELL_OPEN, PCM_BRIDGE, RELEASE }
+
     private class Work(
         val direction: CallDirection,
         val config: CallConfig,
@@ -765,10 +885,14 @@ class CallRuntime(private val app: MikaApp) {
         var aiActive = false
         var activeAt: Long? = null
         var activeElapsed: Long = 0L
-        var stopReason: String? = null
+        val stopReason = CallStopReason()
+        var mediaStage = MediaStage.PREFLIGHT
+        var mediaDiagnosticCount = 0
+        val mediaCounters = if (BuildConfig.DEBUG) CallMediaCounters() else null
         var session: VolcRealtimeSession? = null
         val audioOwner = Binder()
         var audioHelper: IMikaShell? = null
+        var muteLease: TelecomMuteLease? = null
         var capture: ParcelFileDescriptor.AutoCloseInputStream? = null
         var playback: ParcelFileDescriptor.AutoCloseOutputStream? = null
     }
@@ -776,6 +900,8 @@ class CallRuntime(private val app: MikaApp) {
     private class CallProblem(message: String) : Exception(message)
 
     private companion object {
+        const val MAX_MEDIA_DIAGNOSTICS = 4
+        const val MUTE_ACK_MS = 2_000L
         const val CALL_CHANGED = "指定通话已变化或结束，请重新读取电话状态"
         const val TOKEN = "com.wangzan101.mika.CALL_REQUEST_TOKEN"
         fun disconnected(call: Call): Boolean =
@@ -783,5 +909,22 @@ class CallRuntime(private val app: MikaApp) {
 
         fun numberOf(call: Call): String? = call.details?.handle?.takeIf { it.scheme == PhoneAccount.SCHEME_TEL }
             ?.schemeSpecificPart?.let(CallPolicy::incomingNumber)
+    }
+}
+
+/** The first event owns the history outcome; secondary cleanup exceptions cannot replace it. */
+internal class CallStopReason {
+    var value: String? = null
+        private set
+
+    fun record(reason: String): Boolean {
+        if (value != null) return false
+        value = reason
+        return true
+    }
+
+    /** A timeout may report the confirmed outcome of its own hangup attempt. */
+    fun refine(expected: String, reason: String) {
+        if (value == expected) value = reason
     }
 }

@@ -52,7 +52,7 @@ class CallDeviceLiveTest {
             val helper = withTimeoutOrNull(PREPARE_MS) { app.phone.hub.shell.first { it != null } }
                 ?: throw Rejected("helper_unavailable")
             val runtime = withContext(Dispatchers.Main.immediate) { app.calls }
-            val simId = withTimeoutOrNull(PREPARE_MS) { prepare(runtime, request) }
+            val simId = withTimeoutOrNull(PREPARE_MS) { prepare(runtime, request, report) }
                 ?: throw Rejected("prepare_timeout")
             report.put("preflight_ready", true)
             status = runLive(runtime, helper, request, simId, report)
@@ -72,7 +72,7 @@ class CallDeviceLiveTest {
         }
     }
 
-    private suspend fun prepare(runtime: CallRuntime, request: Request): String {
+    private suspend fun prepare(runtime: CallRuntime, request: Request, report: Report): String {
         runtime.refresh()
         val before = runtime.state.value
         if (before.phase != CallPhase.IDLE || before.aiActive || before.pendingAutoAnswer || before.canTakeOver) {
@@ -100,7 +100,16 @@ class CallDeviceLiveTest {
         if (state.phase != CallPhase.IDLE || state.aiActive || state.pendingAutoAnswer || state.canTakeOver || state.callId != null) {
             throw Rejected("not_idle")
         }
-        return (state.simOptions.singleOrNull() ?: state.simOptions.singleOrNull { it.isDefault })?.id
+        val options = state.simOptions
+        report.put("sim_option_count", options.size)
+        val label = request.simLabel
+        if (label != null) {
+            val matches = options.filter { it.label == label }
+            report.put("sim_label_match_count", matches.size)
+            return matches.singleOrNull()?.id ?: throw Rejected("sim_label_not_unique")
+        }
+        report.put("sim_default_option_count", options.count { it.isDefault })
+        return (options.singleOrNull() ?: options.singleOrNull { it.isDefault })?.id
             ?: throw Rejected("unambiguous_sim_unavailable")
     }
 
@@ -116,6 +125,8 @@ class CallDeviceLiveTest {
         var activeAfterTakeover = false
         var flowProven = false
         var micRestored = false
+        var helperReleased = false
+        var earlyEndRecorded = false
         var status = "live_timeout"
         report.write("dial_started")
         val dial = async { runtime.dial(request.number, simId) }
@@ -129,7 +140,10 @@ class CallDeviceLiveTest {
                         dialReceipt = dial.await()
                         val confirmed = dialReceipt?.ok == true
                         report.put("dial_confirmed", confirmed)
-                        if (!confirmed) throw Rejected("dial_not_confirmed")
+                        if (!confirmed) {
+                            dialReceipt?.message?.let { report.put("early_end_detail", redactCallDiagnostic(it)) }
+                            throw Rejected("dial_not_confirmed")
+                        }
                     }
                     val observed = dialReceipt?.let { captureBound(runtime, request.number, it, bound) }
                     if (observed != null) {
@@ -141,6 +155,10 @@ class CallDeviceLiveTest {
                         }
                         if (observed.phase == CallPhase.ACTIVE) activeAt = now()
                     } else if (bound != null && !stillMatches(runtime.state.value, request.number, bound)) {
+                        val state = runtime.state.value
+                        if (state.callId == null && state.phase == CallPhase.IDLE) {
+                            state.detail?.let { report.put("early_end_detail", redactCallDiagnostic(it)) }
+                        }
                         throw Rejected("call_ended_or_changed_before_active")
                     }
                     val elapsed = now() - started
@@ -160,9 +178,16 @@ class CallDeviceLiveTest {
                 val takeoverAt = minOf(connected + minOf(23_000L, activeLimit - 4_000L), hangupAt - 3_000L)
                 while (now() < takeoverAt) {
                     val state = runtime.state.value
-                    if (!stillMatches(state, request.number, call) || state.phase != CallPhase.ACTIVE) {
-                        throw Rejected("call_changed_before_takeover")
+                    val sameCall = stillMatches(state, request.number, call)
+                    if (!earlyEndRecorded && ((sameCall && (!state.canTakeOver || state.phase != CallPhase.ACTIVE)) ||
+                            (state.callId == null && state.phase == CallPhase.IDLE))) {
+                        earlyEndRecorded = true
+                        report.put("ai_ended_before_takeover", true)
+                        report.put("early_end_after_active_ms", now() - connected)
+                        state.detail?.let { report.put("early_end_detail", redactCallDiagnostic(it)) }
+                        report.write("ai_ended_before_takeover")
                     }
+                    if (!sameCall || state.phase != CallPhase.ACTIVE) throw Rejected("call_changed_before_takeover")
                     if (state.aiActive) report.put("ai_active_observed", true)
                     if (now() - lastAudioRead >= 500) {
                         lastAudioRead = now()
@@ -184,13 +209,20 @@ class CallDeviceLiveTest {
                 val after = runtime.state.value
                 activeAfterTakeover = stillMatches(after, request.number, call) && after.phase == CallPhase.ACTIVE && !after.aiActive
                 readAudio(helper, call.owner)?.let { stats ->
-                    micRestored = !stats.active && stats.microphoneRestored
+                    helperReleased = !stats.active && stats.microphoneRestored
                     flowProven = flowProven || stats.downBytes > 0 && stats.upBytes > 0
                     report.putAudio(stats)
                 }
                 report.put("local_duplex_pcm_flow_observed", flowProven)
+                // The helper proves its media lease was released. Only the runtime's successful
+                // takeover also confirms the Telecom callback and actual microphone state.
+                micRestored = takeoverOk && helperReleased
                 report.put("takeover_ok", takeoverOk)
                 report.put("active_after_takeover", activeAfterTakeover)
+                report.put("helper_release_readback", helperReleased)
+                if (!takeoverOk && !earlyEndRecorded && stillMatches(after, request.number, call)) {
+                    after.detail?.let { report.put("early_end_detail", redactCallDiagnostic(it)) }
+                }
                 report.put("microphone_restored_readback", micRestored)
                 report.write("takeover_observed")
                 while (now() < hangupAt && stillMatches(runtime.state.value, request.number, call)) delay(POLL_MS)
@@ -239,9 +271,16 @@ class CallDeviceLiveTest {
                     }.orEmpty().filter { it.id == bound?.workId && it.id !in initialHistory }
                     report.put("history_record_count", history.size)
                     report.put("history_line_count", history.sumOf { it.transcript.size })
+                    history.singleOrNull()?.let { report.put("history_result", redactCallDiagnostic(it.result)) }
                     report.put("expected_phrase_recognized", history.any { record ->
                         record.transcript.any { it.role == "caller" && it.text.replace(Regex("[\\s，。！,.!]"), "").contains("蓝色苹果七号") }
                     })
+                }
+                // The bound work remains available even after the runtime has cleared it.
+                // Take the numeric snapshot after bounded cleanup, including on a timeout.
+                bound?.let { call ->
+                    runCatching { (field(call.work, "mediaCounters") as? CallMediaCounters)?.snapshot() }
+                        .getOrNull()?.let(report::putMediaCounters)
                 }
             }
         }
@@ -290,10 +329,26 @@ class CallDeviceLiveTest {
     private suspend fun readAudio(helper: IMikaShell, owner: IBinder): AudioReadback? = withContext(Dispatchers.IO) {
         val stats = runCatching { helper.callAudioStats(owner) }.getOrNull()
             ?.takeIf { it.containsKey("microphoneRestored") } ?: return@withContext null
-        AudioReadback(stats.getBoolean("active"), stats.getLong("downBytes"), stats.getLong("upBytes"),
-            stats.getInt("downPeak"), stats.getInt("rxDevice", -1), stats.getInt("txDevice", -1),
-            stats.getBoolean("microphoneRestored"),
-            stats.getString("reason").orEmpty().replace(Regex("[+0-9][0-9 ()-]{5,}"), "[redacted]").take(160))
+        AudioReadback(
+            active = stats.getBoolean("active"),
+            downBytes = stats.getLong("downBytes"),
+            upBytes = stats.getLong("upBytes"),
+            downPeak = stats.getInt("downPeak"),
+            rxDevice = stats.getInt("rxDevice", -1),
+            txDevice = stats.getInt("txDevice", -1),
+            microphoneRestored = stats.getBoolean("microphoneRestored"),
+            reason = stats.getString("reason").orEmpty().replace(Regex("[+0-9][0-9 ()-]{5,}"), "[redacted]").take(160),
+            clientSilencedKnown = stats.getBoolean("clientSilencedKnown"),
+            clientSilenced = stats.getBoolean("clientSilenced"),
+            clientSilencedEver = stats.getBoolean("clientSilencedEver"),
+            clientSource = stats.getInt("clientSource", -1),
+            clientRate = stats.getInt("clientRate", -1),
+            clientChannels = stats.getInt("clientChannels", -1),
+            clientEncoding = stats.getInt("clientEncoding", -1),
+            deviceRate = stats.getInt("deviceRate", -1),
+            deviceChannels = stats.getInt("deviceChannels", -1),
+            deviceEncoding = stats.getInt("deviceEncoding", -1),
+        )
     }
 
     private fun consumeRequest(dir: File): Request {
@@ -324,6 +379,11 @@ class CallDeviceLiveTest {
             ?: throw Rejected("invalid_audio_mode")
         val seconds = (json["maxSeconds"] as? JsonPrimitive)?.intOrNull?.takeIf { it in 15..30 }
             ?: throw Rejected("invalid_duration")
+        val simLabel = json["simLabel"]?.let { value ->
+            (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+                ?.takeIf { it.isNotBlank() && it.length <= 80 }
+                ?: throw Rejected("invalid_sim_label")
+        }
         val spent = File(dir, "call-live-consumed")
         if (!spent.isDirectory && !spent.mkdir()) throw Rejected("nonce_store_unavailable")
         val digest = MessageDigest.getInstance("SHA-256").digest(nonce.toByteArray()).joinToString("") { "%02x".format(it) }
@@ -337,16 +397,19 @@ class CallDeviceLiveTest {
         } catch (_: Exception) {
             throw Rejected("nonce_store_unavailable")
         }
-        return Request(number, mode, seconds)
+        return Request(number, mode, seconds, simLabel)
     }
 
-    private class Request(val number: String, val mode: CallAudioMode, val maxSeconds: Int)
+    private class Request(val number: String, val mode: CallAudioMode, val maxSeconds: Int, val simLabel: String?)
     private class BoundCall(val id: String, val workId: String, val owner: IBinder, val work: Any)
     private class ObservedCall(val call: BoundCall, val phase: CallPhase)
     private class Rejected(val code: String) : Exception(code)
     private class AudioReadback(
         val active: Boolean, val downBytes: Long, val upBytes: Long, val downPeak: Int, val rxDevice: Int,
         val txDevice: Int, val microphoneRestored: Boolean, val reason: String,
+        val clientSilencedKnown: Boolean, val clientSilenced: Boolean, val clientSilencedEver: Boolean,
+        val clientSource: Int, val clientRate: Int, val clientChannels: Int, val clientEncoding: Int,
+        val deviceRate: Int, val deviceChannels: Int, val deviceEncoding: Int,
     )
 
     private class Report(dir: File) {
@@ -359,11 +422,23 @@ class CallDeviceLiveTest {
         fun put(key: String, value: Number) { fields[key] = JsonPrimitive(value) }
         fun put(key: String, value: String) { fields[key] = JsonPrimitive(value) }
 
+        fun putMediaCounters(counters: Map<String, Long>) {
+            fields["media_counters"] = buildJsonObject {
+                counters.forEach { (name, value) -> put(name, value) }
+            }
+        }
+
         fun putAudio(stats: AudioReadback) {
             fields["audio_stats"] = buildJsonObject {
                 put("downBytes", stats.downBytes); put("upBytes", stats.upBytes); put("downPeak", stats.downPeak)
                 put("rxDevice", stats.rxDevice); put("txDevice", stats.txDevice)
                 put("microphoneRestored", stats.microphoneRestored); put("reason", stats.reason)
+                put("clientSilencedKnown", stats.clientSilencedKnown)
+                put("clientSilenced", stats.clientSilenced); put("clientSilencedEver", stats.clientSilencedEver)
+                put("clientSource", stats.clientSource); put("clientRate", stats.clientRate)
+                put("clientChannels", stats.clientChannels); put("clientEncoding", stats.clientEncoding)
+                put("deviceRate", stats.deviceRate); put("deviceChannels", stats.deviceChannels)
+                put("deviceEncoding", stats.deviceEncoding)
             }
         }
 

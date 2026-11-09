@@ -20,7 +20,6 @@ import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import android.system.StructPollfd
-import android.util.Log
 import java.io.FileDescriptor
 import java.lang.reflect.InvocationTargetException
 import kotlin.math.abs
@@ -92,12 +91,6 @@ internal class ShellCallAudio(private val context: Context) {
                 return start(backend, owner)
             } catch (e: Exception) {
                 errors.add("${if (backend == DIRECT) "Direct" else "Redirect"}: ${describe(e)}")
-                // Do not take a second mute lease if cleanup of the first one failed.
-                if (lastOwner == owner && lastStats?.getBoolean("microphoneRestored") == false) {
-                    return failure(errors.joinToString("; ")).apply {
-                        putBoolean("microphoneRestored", false)
-                    }
-                }
             }
             if (!owner.isBinderAlive || !inPstnCall()) break
         }
@@ -148,7 +141,7 @@ internal class ShellCallAudio(private val context: Context) {
             session = created
             owner.linkToDeath(created.death, 0)
             check(inPstnCall() && owner.isBinderAlive) { "Cellular call or its owner ended." }
-            created.acquireMicrophoneMute()
+            created.requireCallMicrophoneMute()
             record.startRecording()
             check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Downlink did not start." }
             track.play()
@@ -223,6 +216,18 @@ internal class ShellCallAudio(private val context: Context) {
         active = null
     }
 
+    // Retain only scalar observations; the recording configuration may disappear after stop.
+    private data class RecordingDiagnostics(
+        val silenced: Boolean,
+        val source: Int,
+        val clientRate: Int,
+        val clientChannels: Int,
+        val clientEncoding: Int,
+        val deviceRate: Int,
+        val deviceChannels: Int,
+        val deviceEncoding: Int,
+    )
+
     private inner class Session(
         val owner: IBinder,
         private val backend: Int,
@@ -233,13 +238,13 @@ internal class ShellCallAudio(private val context: Context) {
     ) {
         private val io = Any()
         private var closed = false
-        private var restoreMicrophone = false
-        private var microphoneRestored = true
         private var downBytes = 0L
         private var upBytes = 0L
         private var downPeak = 0
         private var rxDevice = -1
         private var txDevice = -1
+        private var recordingDiagnostics: RecordingDiagnostics? = null
+        private var clientSilencedEver = false
         private var downSize = 0
         private var downOffset = 0
         private var upSize = 0
@@ -253,12 +258,10 @@ internal class ShellCallAudio(private val context: Context) {
         private val descriptors = arrayOf(checkUp, checkDown)
         val death = IBinder.DeathRecipient { finish(this, "Call audio owner died.") }
 
-        fun acquireMicrophoneMute() {
-            if (!manager.isMicrophoneMute) {
-                restoreMicrophone = true
-                manager.isMicrophoneMute = true
-                check(manager.isMicrophoneMute) { "Android refused to mute the handset microphone." }
-            }
+        fun requireCallMicrophoneMute() {
+            // Telecom owns this state. AudioManager writes race its authoritative state,
+            // and could re-mute after the user has explicitly taken control.
+            check(manager.isMicrophoneMute) { "Telecom has not muted the handset microphone." }
         }
 
         fun establishRoute() {
@@ -288,6 +291,26 @@ internal class ShellCallAudio(private val context: Context) {
         private fun updateRoutes() {
             rxDevice = record.routedDevice?.type ?: -1
             txDevice = track.routedDevice?.type ?: -1
+            try {
+                record.activeRecordingConfiguration?.let { config ->
+                    val client = config.clientFormat
+                    val device = config.format
+                    val observation = RecordingDiagnostics(
+                        config.isClientSilenced,
+                        config.clientAudioSource,
+                        client.sampleRate,
+                        client.channelCount,
+                        client.encoding,
+                        device.sampleRate,
+                        device.channelCount,
+                        device.encoding,
+                    )
+                    recordingDiagnostics = observation
+                    clientSilencedEver = clientSilencedEver || observation.silenced
+                }
+            } catch (_: Exception) {
+                // Diagnostics may be unavailable on a vendor ROM. Keep the last good observation.
+            }
             check(rxDevice < 0 || rxDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
                 "Downlink unexpectedly routed to device type $rxDevice."
             }
@@ -409,7 +432,20 @@ internal class ShellCallAudio(private val context: Context) {
                 putInt("downPeak", downPeak)
                 putInt("rxDevice", rxDevice)
                 putInt("txDevice", txDevice)
-                putBoolean("microphoneRestored", !alive && microphoneRestored)
+                val config = recordingDiagnostics
+                putBoolean("clientSilencedKnown", config != null)
+                putBoolean("clientSilenced", config?.silenced == true)
+                putBoolean("clientSilencedEver", clientSilencedEver)
+                putInt("clientSource", config?.source ?: -1)
+                putInt("clientRate", config?.clientRate?.takeIf { it > 0 } ?: -1)
+                putInt("clientChannels", config?.clientChannels?.takeIf { it > 0 } ?: -1)
+                putInt("clientEncoding", config?.clientEncoding?.takeIf { it > 0 } ?: -1)
+                putInt("deviceRate", config?.deviceRate?.takeIf { it > 0 } ?: -1)
+                putInt("deviceChannels", config?.deviceChannels?.takeIf { it > 0 } ?: -1)
+                putInt("deviceEncoding", config?.deviceEncoding?.takeIf { it > 0 } ?: -1)
+                // This helper never changes the microphone. The runtime separately releases
+                // and verifies its Telecom mute lease after the audio streams are closed.
+                putBoolean("microphoneRestored", !alive)
             }
         }
 
@@ -424,12 +460,6 @@ internal class ShellCallAudio(private val context: Context) {
             runCatching { track.release() }
             runCatching { record.stop() }
             runCatching { record.release() }
-            if (restoreMicrophone) {
-                microphoneRestored = runCatching {
-                    if (manager.isMicrophoneMute) manager.isMicrophoneMute = false
-                    check(!manager.isMicrophoneMute) { "Microphone is still muted." }
-                }.onFailure { Log.w(TAG, "Could not restore the microphone state: ${describe(it)}") }.isSuccess
-            }
         }
     }
 
@@ -491,7 +521,6 @@ internal class ShellCallAudio(private val context: Context) {
         const val AUTO = 0
         const val DIRECT = 1
         const val REDIRECT = 2
-        private const val TAG = "MikaCellularAudio"
         private const val CAPTURE_RATE = 16000
         private const val PLAY_RATE = 24000
         private const val DEVICE_CHECK_MS = 100L

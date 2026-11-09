@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.wangzan101.mika.MikaApp
+import com.wangzan101.mika.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,14 +36,15 @@ internal class CallNotifications(private val context: Context) {
         val takeOverIntent = Intent(context, CallNotificationAction::class.java)
             .setAction(ACTION).setData(Uri.fromParts("mika-call", callId, null))
         val takeOver = PendingIntent.getBroadcast(context, 0, takeOverIntent, PendingIntent.FLAG_IMMUTABLE)
+        val openCalls = PendingIntent.getActivity(context, ID, Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(MainActivity.EXTRA_OPEN_CALLS, true), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = Notification.Builder(context, CHANNEL)
             .setContentTitle("Mika AI 电话").setContentText(message)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setOnlyAlertOnce(true).setOngoing(true).setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setContentIntent(openCalls)
             .addAction(Notification.Action.Builder(null, if (ringing) "取消 AI 接听" else "手动接管", takeOver).build())
-        context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { intent ->
-            builder.setContentIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE))
-        }
         manager?.notify(ID, builder.build()) ?: return false
         true
     }.getOrDefault(false)
