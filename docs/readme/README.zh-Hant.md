@@ -1,4 +1,25 @@
-<!-- translated-from: README.md @ 46f11aa3f1a8 -->
+<!-- translated-from: README.md @ 11a04e85328b -->
+
+# Flash phone
+
+獨立的 Android AI 電話助理：自動接聽、按目標撥出、人工接管與通話紀錄。首頁分為 **接聽 / 電話任務 / 紀錄 / 設定** 四個分頁，以 [Mika](https://github.com/wangzan101/Mika) 為基礎開發。
+
+[下載 Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [電話功能與裝置需求](../ai-phone-calls.md) · [應用程式更新與發行](../app-updates.md)
+
+- **接聽**：依規則接聽、暫停自動接聽、將重要來電留給本人接聽，也可在通話中手動接管。
+- **電話任務**：填寫號碼、目標、必問事項、背景與限制，確認 SIM 後撥出；通話紀錄會保留這次的任務單。
+- **紀錄**：分別查看任務與逐字稿，可將舊任務複用為新草稿。
+- **更新**：開啟應用程式時檢查，背景定期提醒，在應用程式內下載後由 Android 確認安裝。不需自行架設更新伺服器。
+
+已安裝早期的電話實驗版時，可直接覆蓋升級，保留設定與紀錄；原版 Mika 可同時保留。請使用本儲存庫發行的 **FlashPhone** APK，勿先解除安裝電話實驗版。首次升級後，應用程式會顯示為 Flash phone，並從本儲存庫檢查後續版本。
+
+目前是早期版本。先前已實測電信通話的雙向對話；此版本的導覽與覆蓋升級仍需在實機上驗證。聲音複製需另行開通服務，Codex 對話需要可用帳號或 API 金鑰；下載應用程式不會自動開通這些服務。
+
+保留上游 Apache-2.0 授權條款、作者及第三方元件致謝。下方上游專案說明的下載連結指向原版 Mika。
+
+<details>
+<summary>上游 Mika 專案說明</summary>
+
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
@@ -182,3 +203,5 @@
 ## 授權條款
 
 [Apache-2.0](../../LICENSE) · [NOTICE](../../NOTICE) · [第三方元件](../../licenses/THIRD_PARTY_NOTICES.md)
+
+</details>

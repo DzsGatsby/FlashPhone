@@ -1,4 +1,25 @@
-<!-- translated-from: README.md @ 46f11aa3f1a8 -->
+<!-- translated-from: README.md @ 11a04e85328b -->
+
+# Flash phone
+
+Un asistente de llamadas con IA para Android, independiente, que contesta llamadas entrantes, llama con un objetivo concreto, permite tomar el control y conserva un registro de las llamadas. La pantalla de inicio tiene cuatro pestañas: **Recepción / Tareas de llamada / Registros / Ajustes**. Está desarrollado a partir de [Mika](https://github.com/wangzan101/Mika).
+
+[Descargar Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [Funciones de llamada y requisitos del dispositivo](../ai-phone-calls.md) · [Actualizaciones y versiones de la aplicación](../app-updates.md)
+
+- **Recepción**: Contesta según tus reglas. Puedes pausar la respuesta automática, dejar las llamadas importantes para atenderlas tú y tomar el control durante una llamada.
+- **Tareas de llamada**: Introduce el número, el objetivo, las preguntas, el contexto y los límites. Confirma la SIM antes de llamar. El registro conserva las instrucciones de esa tarea.
+- **Registros**: Consulta por separado la tarea y la transcripción original, y reutiliza una tarea anterior como borrador.
+- **Actualizaciones**: Busca novedades al abrir la aplicación y recibe avisos periódicos en segundo plano. Descarga la actualización en la aplicación y confirma la instalación en Android. No hace falta un servidor de actualizaciones propio.
+
+Si ya tienes la versión experimental para llamadas, instala esta versión sobre la anterior para conservar tus ajustes y registros. Puedes mantener instalada la aplicación original Mika. Usa el APK **FlashPhone** publicado en este repositorio y no desinstales primero la versión experimental. Después de la primera actualización, la aplicación se mostrará como Flash phone y buscará las versiones futuras en este repositorio.
+
+Esta es una versión inicial. Ya se ha probado la conversación bidireccional en una llamada mediante la red móvil; aún queda por verificar en un dispositivo la navegación y la instalación sobre la versión anterior. La clonación de voz requiere activar el servicio por separado. El chat de Codex requiere una cuenta habilitada o una clave API. Descargar la aplicación no activa ninguno de los dos servicios.
+
+Se conservan la licencia Apache-2.0 del proyecto original, los créditos de autoría y los agradecimientos a terceros. Los enlaces de descarga del README que figura abajo corresponden a la aplicación original Mika.
+
+<details>
+<summary>README del proyecto original Mika</summary>
+
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
@@ -184,3 +205,5 @@ Gracias a todas las personas que han participado en Mika:
 ## Licencia
 
 [Apache-2.0](../../LICENSE) · [NOTICE](../../NOTICE) · [Componentes de terceros](../../licenses/THIRD_PARTY_NOTICES.md)
+
+</details>

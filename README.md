@@ -1,22 +1,22 @@
 # Flash phone
 
-独立的 Android AI 电话助手：自动接听、按目标拨出、人工接管与通话记录。首页按 **接听 / 电话任务 / 记录 / 设置** 组织，基于 [Mika](https://github.com/wangzan101/Mika) 开发。
+A standalone Android AI calling assistant that answers incoming calls, places calls with a specific goal, lets you take over, and keeps call records. The home screen has four tabs: **Answering / Call tasks / Records / Settings**. Flash phone is built on [Mika](https://github.com/wangzan101/Mika).
 
-[下载 Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [电话功能与设备要求](docs/ai-phone-calls.md) · [应用更新与发布](docs/app-updates.md)
+[Download Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [Calling features and device requirements](docs/ai-phone-calls.md) · [App updates and releases](docs/app-updates.md)
 
-- **接听**：按规则接听、临时暂停、重要来电例外和手动接管。
-- **电话任务**：填写号码、目标、必问事项、背景与约束，确认 SIM 后执行；记录保留本次任务单。
-- **记录**：任务与原文分层查看，可复用为新的草稿。
-- **更新**：打开时检查、后台定时提醒、应用内下载后交给 Android 确认安装。无需自建更新服务器。
+- **Answering**: Answer according to your rules, pause automatic answering, leave important callers for you to answer, and take over a call manually.
+- **Call tasks**: Enter a number, goal, questions to ask, background, and limits. Confirm the SIM before placing the call. The call record retains the task brief.
+- **Records**: Review the task and original transcript separately, and reuse a past task as a new draft.
+- **Updates**: Check on launch, receive periodic reminders in the background, and download in the app before confirming installation in Android. No separate update server is needed.
 
-已有电话实验版可直接覆盖升级，保留设置与记录；原版 Mika 可并存。请使用本仓库发布的 **FlashPhone** 安装包，勿先卸载。首次升级后名称显示为 Flash phone，并接入本仓库更新源。
+If you have the earlier experimental calling app, install this release over it to keep your settings and records. The original Mika app can remain installed alongside it. Use the **FlashPhone** APK from this repository and do not uninstall the earlier calling app first. After the first update, the app is named Flash phone and checks this repository for future releases.
 
-当前为早期版本。此前已实测运营商电话双向问答；本版导航和覆盖安装流程仍需真机验收。音色复刻需单独开通服务，Codex 对话需配置可用账号或密钥；这些不由下载本应用自动开通。
+This is an early release. Two-way conversation over a carrier call has already been tested; the navigation and in-place upgrade in this release still need testing on a device. Voice cloning requires separate service activation. Codex chat requires an eligible account or API key. Downloading the app does not activate either service.
 
-保留上游 Apache-2.0 许可证、作者和第三方组件致谢。以下是上游项目说明，其中下载链接属于原版 Mika。
+The upstream Apache-2.0 license, author credits, and third-party acknowledgments are preserved. The download links in the upstream README below are for the original Mika app.
 
 <details>
-<summary>上游 Mika 项目说明</summary>
+<summary>Upstream Mika README</summary>
 
 <div align="center">
 
