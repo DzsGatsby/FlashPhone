@@ -183,8 +183,13 @@ def verify_release(release, tag, commit, name, size, digest, *, draft):
         raise ReleaseError("GitHub release does not contain exactly one APK asset")
     asset = assets[0]
     expected_url = f"https://{GITHUB}/releases/download/{tag}/{name}"
+    # GitHub assigns a temporary untagged URL before a new draft is published.
+    # The asset bytes, owner/repo, filename and draft target still have to match exactly.
+    url = asset.get("browser_download_url", "")
+    url_matches = url == expected_url or (draft and isinstance(url, str) and re.fullmatch(
+        re.escape(f"https://{GITHUB}/releases/download/") + r"untagged-[0-9a-f]+/" + re.escape(name), url) is not None)
     if (asset.get("name") != name or asset.get("size") != size or asset.get("state") != "uploaded" or
-            asset.get("digest") != f"sha256:{digest}" or asset.get("browser_download_url") != expected_url):
+            asset.get("digest") != f"sha256:{digest}" or not url_matches):
         raise ReleaseError("GitHub APK name, size, SHA-256, or download URL did not match the checked build")
 
 
