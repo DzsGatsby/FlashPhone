@@ -23,6 +23,15 @@ internal class CallMediaCounters {
     private var assistantTextEndedEvents = 0L
     private var assistantAudioEvents = 0L
     private var assistantAudioBytes = 0L
+    private var playbackWrittenBytes = 0L
+    private var playbackMaxQueuedBytes = 0L
+    private var playbackRejectedPackets = 0L
+    private var playbackShellAcceptedBytes = -1L
+    private var shellWriteZeroCount = -1L
+    private var shellWriteZeroMaxMs = -1L
+    private var shellLastWriteAgeMs = -1L
+    private var shellPlaybackHeadFrames = -1L
+    private var shellFlushMaxMs = -1L
     private var providerFailedEvents = 0L
     private var providerClosedEvents = 0L
 
@@ -56,6 +65,35 @@ internal class CallMediaCounters {
             }
         }
     }
+
+    @Synchronized fun outputWritten(bytes: Int) { playbackWrittenBytes += bytes }
+    @Synchronized fun outputQueued(bytes: Int) { playbackMaxQueuedBytes = maxOf(playbackMaxQueuedBytes, bytes.toLong()) }
+    @Synchronized fun outputRejected() { playbackRejectedPackets++ }
+    @Synchronized
+    fun outputShellAccepted(
+        bytes: Long,
+        zeroCount: Long = -1L,
+        zeroMaxMs: Long = -1L,
+        lastWriteAgeMs: Long = -1L,
+        playbackHeadFrames: Long = -1L,
+        flushMaxMs: Long = -1L,
+    ) {
+        playbackShellAcceptedBytes = maxOf(playbackShellAcceptedBytes, bytes)
+        shellWriteZeroCount = maxOf(shellWriteZeroCount, zeroCount)
+        shellWriteZeroMaxMs = maxOf(shellWriteZeroMaxMs, zeroMaxMs)
+        if (lastWriteAgeMs >= 0) shellLastWriteAgeMs = lastWriteAgeMs
+        if (playbackHeadFrames >= 0) shellPlaybackHeadFrames = playbackHeadFrames
+        shellFlushMaxMs = maxOf(shellFlushMaxMs, flushMaxMs)
+    }
+
+    /** Only numeric fields; a successful pipe or AudioTrack write does not prove the far end heard audio. */
+    @Synchronized
+    fun playbackDiagnostic(): String? = if (assistantAudioBytes == 0L && playbackShellAcceptedBytes < 0) null else
+        "provider_bytes=$assistantAudioBytes pipe_written_bytes=$playbackWrittenBytes " +
+            "peak_queued_bytes=$playbackMaxQueuedBytes rejected_packets=$playbackRejectedPackets " +
+            "shell_up_bytes=$playbackShellAcceptedBytes shell_write_zero_count=$shellWriteZeroCount " +
+            "shell_write_zero_max_ms=$shellWriteZeroMaxMs shell_last_write_age_ms=$shellLastWriteAgeMs " +
+            "shell_playback_head_frames=$shellPlaybackHeadFrames shell_flush_max_ms=$shellFlushMaxMs"
 
     @Synchronized
     fun eventReceived(event: VolcRealtimeEvent) {
@@ -99,6 +137,15 @@ internal class CallMediaCounters {
         "assistant_text_ended_events" to assistantTextEndedEvents,
         "assistant_audio_events" to assistantAudioEvents,
         "assistant_audio_bytes" to assistantAudioBytes,
+        "playback_written_bytes" to playbackWrittenBytes,
+        "playback_max_queued_bytes" to playbackMaxQueuedBytes,
+        "playback_rejected_packets" to playbackRejectedPackets,
+        "playback_shell_accepted_bytes" to playbackShellAcceptedBytes,
+        "playback_shell_write_zero_count" to shellWriteZeroCount,
+        "playback_shell_write_zero_max_ms" to shellWriteZeroMaxMs,
+        "playback_shell_last_write_age_ms" to shellLastWriteAgeMs,
+        "playback_shell_head_frames" to shellPlaybackHeadFrames,
+        "playback_shell_flush_max_ms" to shellFlushMaxMs,
         "provider_failed_events" to providerFailedEvents,
         "provider_closed_events" to providerClosedEvents,
     )

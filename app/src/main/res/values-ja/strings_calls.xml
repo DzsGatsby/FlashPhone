@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">AI 応答を取り消す</string>
     <string name="calls_notification_settings">通知設定を開く</string>
     <string name="calls_speaker_edit_note">クローン音声は「音声クローン」で選択してください。空欄にすると既定の声に戻ります。</string>
+    <string name="calls_greeting_hint">入力したとおりに読み上げます。空欄の場合は相手が話し始めるまで待ちます。</string>
 </resources>

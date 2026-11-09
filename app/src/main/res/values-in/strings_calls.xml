@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">Batalkan jawaban AI</string>
     <string name="calls_notification_settings">Buka pengaturan notifikasi</string>
     <string name="calls_speaker_edit_note">Pilih suara hasil kloning di Kloning suara. Kosongkan kolom untuk memulihkan suara default.</string>
+    <string name="calls_greeting_hint">Teks dibacakan apa adanya. Kosongkan agar lawan bicara berbicara terlebih dahulu.</string>
 </resources>

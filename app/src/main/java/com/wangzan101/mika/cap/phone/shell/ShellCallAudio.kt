@@ -228,6 +228,53 @@ internal class ShellCallAudio(private val context: Context) {
         val deviceEncoding: Int,
     )
 
+    /** Scalar uplink observations only. Session serializes access under its I/O lock. */
+    internal class PlaybackDiagnostics {
+        var writeZeroCount = 0L
+            private set
+        var playbackHeadFrames = -1L
+            private set
+        var flushMaxMs = 0L
+            private set
+        private var zeroSinceMs = -1L
+        private var completedZeroMaxMs = 0L
+        private var lastWriteMs = -1L
+        private var stoppedAtMs = -1L
+
+        fun recordWrite(bytes: Int, atMs: Long) {
+            if (bytes == 0) {
+                writeZeroCount++
+                if (zeroSinceMs < 0L) zeroSinceMs = atMs
+            } else if (bytes > 0) {
+                endZeroStreak(atMs)
+                lastWriteMs = atMs
+            }
+        }
+
+        fun endZeroStreak(atMs: Long) {
+            completedZeroMaxMs = zeroMaxMs(atMs)
+            zeroSinceMs = -1L
+        }
+
+        fun zeroMaxMs(nowMs: Long): Long = if (zeroSinceMs < 0L) completedZeroMaxMs
+            else maxOf(completedZeroMaxMs, observationTime(nowMs) - zeroSinceMs)
+
+        fun lastWriteAgeMs(nowMs: Long): Long = if (lastWriteMs < 0L) -1L else observationTime(nowMs) - lastWriteMs
+
+        fun recordPlaybackHead(rawFrames: Int) { playbackHeadFrames = rawFrames.toLong() and 0xffff_ffffL }
+
+        fun resetPlaybackHead() { playbackHeadFrames = -1L }
+
+        fun recordFlush(durationMs: Long) { flushMaxMs = maxOf(flushMaxMs, durationMs) }
+
+        fun stop(atMs: Long) {
+            endZeroStreak(atMs)
+            stoppedAtMs = atMs
+        }
+
+        private fun observationTime(nowMs: Long) = stoppedAtMs.takeIf { it >= 0L } ?: nowMs
+    }
+
     private inner class Session(
         val owner: IBinder,
         private val backend: Int,
@@ -237,6 +284,7 @@ internal class ShellCallAudio(private val context: Context) {
         private val up: ParcelFileDescriptor,
     ) {
         private val io = Any()
+        private val playbackDiagnostics = PlaybackDiagnostics()
         private var closed = false
         private var downBytes = 0L
         private var upBytes = 0L
@@ -377,6 +425,7 @@ internal class ShellCallAudio(private val context: Context) {
             // never send non-silence while the actual sink is unknown or a handset speaker.
             val safeToWrite = backend == REDIRECT || txDevice == AudioDeviceInfo.TYPE_TELEPHONY
             if (!safeToWrite) {
+                playbackDiagnostics.endZeroStreak(now)
                 if (routeMissingSince == 0L) routeMissingSince = now
                 check(txDevice < 0 && now - routeMissingSince < ROUTE_TIMEOUT_MS) {
                     "Uplink did not route to the telephony device (actual type $txDevice)."
@@ -394,6 +443,7 @@ internal class ShellCallAudio(private val context: Context) {
             if (sampleBytes > 0) {
                 val count = track.write(upBuffer, upOffset, sampleBytes, AudioTrack.WRITE_NON_BLOCKING)
                 check(count >= 0) { "Uplink write failed ($count)." }
+                playbackDiagnostics.recordWrite(count, SystemClock.elapsedRealtime())
                 upOffset += count
                 upBytes += count
                 progressed = progressed || count > 0
@@ -401,27 +451,46 @@ internal class ShellCallAudio(private val context: Context) {
             return progressed
         }
 
-        fun flush() = synchronized(io) {
-            check(!closed)
-            // Remove bytes already waiting in the kernel as well as AudioTrack's queue.
-            // The app invalidates its corresponding model generation before invoking this.
-            upOffset = 0
-            upSize = 0
-            val scratch = ByteArray(4096)
-            var drained = 0
-            do {
-                val n = noWouldBlock { Os.read(up.fileDescriptor, scratch, 0, scratch.size) }
-                drained += n
-                check(drained <= MAX_FLUSH_BYTES) { "Uplink writer kept sending during the interruption." }
-            } while (n > 0)
-            track.pause()
-            track.flush()
-            txDevice = -1
-            track.play()
-            primePlayback()
+        fun flush() {
+            val started = SystemClock.elapsedRealtime()
+            synchronized(io) {
+                check(!closed)
+                playbackDiagnostics.endZeroStreak(SystemClock.elapsedRealtime())
+                try {
+                    // Remove bytes already waiting in the kernel as well as AudioTrack's queue.
+                    // The app invalidates its corresponding model generation before invoking this.
+                    upOffset = 0
+                    upSize = 0
+                    val scratch = ByteArray(4096)
+                    var drained = 0
+                    do {
+                        val n = noWouldBlock { Os.read(up.fileDescriptor, scratch, 0, scratch.size) }
+                        drained += n
+                        check(drained <= MAX_FLUSH_BYTES) { "Uplink writer kept sending during the interruption." }
+                    } while (n > 0)
+                    track.pause()
+                    track.flush()
+                    playbackDiagnostics.resetPlaybackHead()
+                    txDevice = -1
+                    track.play()
+                    primePlayback()
+                } finally {
+                    playbackDiagnostics.recordFlush(SystemClock.elapsedRealtime() - started)
+                }
+            }
+        }
+
+        private fun samplePlaybackHead() {
+            try {
+                playbackDiagnostics.recordPlaybackHead(track.playbackHeadPosition)
+            } catch (_: Exception) {
+                // Vendor tracks may not expose a head position. Keep only the last good value for this track epoch.
+            }
         }
 
         fun snapshot(alive: Boolean, reason: String): Bundle = synchronized(io) {
+            if (alive && !closed) samplePlaybackHead()
+            val now = SystemClock.elapsedRealtime()
             Bundle().apply {
                 putBoolean("active", alive)
                 putBoolean("verified", false)
@@ -429,6 +498,11 @@ internal class ShellCallAudio(private val context: Context) {
                 putInt("mode", backend)
                 putLong("downBytes", downBytes)
                 putLong("upBytes", upBytes)
+                putLong("upWriteZeroCount", playbackDiagnostics.writeZeroCount)
+                putLong("upWriteZeroMaxMs", playbackDiagnostics.zeroMaxMs(now))
+                putLong("upLastWriteAgeMs", playbackDiagnostics.lastWriteAgeMs(now))
+                putLong("upPlaybackHeadFrames", playbackDiagnostics.playbackHeadFrames)
+                putLong("upFlushMaxMs", playbackDiagnostics.flushMaxMs)
                 putInt("downPeak", downPeak)
                 putInt("rxDevice", rxDevice)
                 putInt("txDevice", txDevice)
@@ -451,6 +525,8 @@ internal class ShellCallAudio(private val context: Context) {
 
         fun release() = synchronized(io) {
             if (closed) return@synchronized
+            playbackDiagnostics.stop(SystemClock.elapsedRealtime())
+            samplePlaybackHead()
             closed = true
             runCatching { owner.unlinkToDeath(death, 0) }
             runCatching { down.close() }

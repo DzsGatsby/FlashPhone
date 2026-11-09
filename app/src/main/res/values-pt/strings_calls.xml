@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">Cancelar atendimento com IA</string>
     <string name="calls_notification_settings">Abrir configurações de notificação</string>
     <string name="calls_speaker_edit_note">Escolha vozes clonadas em Clonagem de voz. Deixe em branco para restaurar a voz padrão.</string>
+    <string name="calls_greeting_hint">O texto será lido tal como foi escrito. Deixe em branco para a outra pessoa falar primeiro.</string>
 </resources>

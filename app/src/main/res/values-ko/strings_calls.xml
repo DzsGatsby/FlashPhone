@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">AI 받기 취소</string>
     <string name="calls_notification_settings">알림 설정 열기</string>
     <string name="calls_speaker_edit_note">복제 음색은 음성 복제에서 선택하세요. 기본 음색으로 되돌리려면 이 칸을 비우세요.</string>
+    <string name="calls_greeting_hint">입력한 그대로 읽습니다. 비워 두면 상대방이 먼저 말할 때까지 기다립니다.</string>
 </resources>

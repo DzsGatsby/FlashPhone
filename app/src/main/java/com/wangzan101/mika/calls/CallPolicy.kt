@@ -133,10 +133,9 @@ internal object CallPolicy {
         if (stored == LEGACY_IDENTITY_GREETING + INCOMING_GREETING) DEFAULT_GREETING else stored
 
     fun spokenGreeting(configured: String, hasTask: Boolean): String {
-        if (hasTask) return TASK_GREETING
+        if (configured.isBlank()) return ""
         val greeting = migrateDefaultGreeting(configured)
-        return if (greeting.startsWith(IDENTITY_GREETING) || greeting.startsWith(LEGACY_IDENTITY_GREETING)) greeting
-        else IDENTITY_GREETING + greeting
+        return if (hasTask && greeting == DEFAULT_GREETING) TASK_GREETING else greeting
     }
 
     fun prompt(
@@ -146,10 +145,10 @@ internal object CallPolicy {
         task: CallTaskBrief? = null,
     ): String = buildString {
         val outgoingTask = task.takeIf { direction == CallDirection.OUTGOING }
-        append("你是 Flash phone AI 电话助手。通话开始时明确说明自己是 AI。")
+        append("你是 AI 电话助手。开场白由应用单独处理。先听对方说话，再直接回应；不重复开场白，不主动补充自我介绍。被问及身份时，如实说明是机主的 AI 电话助手，不冒充机主或真人。")
         append(when {
             direction == CallDirection.INCOMING -> "仅代接电话并记下可转告的简短留言。"
-            outgoingTask == null -> "机主未提供本次拨打目标。不要根据号码或聊天内容猜测目的，只说明身份并询问是否有可转告的信息。"
+            outgoingTask == null -> "机主未提供本次拨打目标。不要根据号码或聊天内容猜测目的，只询问是否有可转告的信息。"
             else -> "这是机主主动发起的电话。开场后核对通话对象或是否由合适人员处理；核对后简短说明来意，围绕目标询问明确答复，有必问事项就逐项询问。如不方便或对象不匹配，不透露细节，只记下情况。"
         })
         if (outgoingTask != null) {

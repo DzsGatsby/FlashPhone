@@ -12,7 +12,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.concurrent.atomic.AtomicInteger
 
 /** Pipes carry 16 kHz input and 24 kHz output, PCM16 LE mono. Nothing is written to storage. */
 internal class CallPcmBridge(
@@ -20,8 +19,6 @@ internal class CallPcmBridge(
     private val playback: OutputStream,
     private val interruptPlayback: suspend () -> Boolean,
 ) {
-    private data class Frame(val generation: Int, val pcm: ByteArray)
-
     suspend fun run(
         session: VolcRealtimeSession,
         greeting: String,
@@ -29,8 +26,7 @@ internal class CallPcmBridge(
         onTranscript: (String, String) -> Unit,
         onFinalTranscript: (String, String) -> Unit = { _, _ -> },
     ): Unit = coroutineScope {
-        val playbackQueue = Channel<Frame>(16)
-        val generation = AtomicInteger(0)
+        val playbackQueue = CallPlaybackQueue()
         val writerLock = Mutex()
         val assistantText = StringBuilder()
         fun flushAssistantText(completed: Boolean = false) {
@@ -43,22 +39,23 @@ internal class CallPcmBridge(
         }
         // The separate writer leaves model event collection responsive when a pipe is full.
         val output = launch(Dispatchers.IO) {
-            for (frame in playbackQueue) {
-                var written = 0
-                while (written < frame.pcm.size && generation.get() == frame.generation) {
-                    val count = (frame.pcm.size - written).coerceAtMost(960) // 20 ms
-                    val accepted = writerLock.withLock {
-                        if (generation.get() != frame.generation) return@withLock false
-                        callPipeIo { playback.write(frame.pcm, written, count) }
-                        true
+            val pcm = ByteArray(CallPlaybackQueue.WRITE_BYTES)
+            while (true) {
+                val block = playbackQueue.take(pcm) ?: break
+                try {
+                    writerLock.withLock {
+                        if (playbackQueue.isCurrent(block)) {
+                            callPipeIo { playback.write(pcm, 0, block.byteCount) }
+                            counters?.outputWritten(block.byteCount)
+                        }
                     }
-                    if (!accepted) break
-                    written += count
+                } finally {
+                    playbackQueue.release(block)
                 }
             }
         }
         try {
-            if (!session.setMuted(false) || !session.sendGreeting(greeting)) {
+            if (!session.setMuted(false) || (greeting.isNotBlank() && !session.sendGreeting(greeting))) {
                 throw CallMediaFailure("火山未接受本次通话的开场白")
             }
             val input = launch(Dispatchers.IO) {
@@ -80,13 +77,16 @@ internal class CallPcmBridge(
                 session.events.collect { event ->
                     counters?.eventReceived(event)
                     when (event) {
-                        is VolcRealtimeEvent.Audio -> if (event.pcm.isNotEmpty() &&
-                            !playbackQueue.trySend(Frame(generation.get(), event.pcm)).isSuccess) {
-                            throw CallMediaFailure("通话音频输出拥塞，已交还系统")
+                        is VolcRealtimeEvent.Audio -> {
+                            val queuedBytes = playbackQueue.offer(event.pcm)
+                            if (queuedBytes == null) {
+                                counters?.outputRejected()
+                                throw CallMediaFailure("通话待播音频积压超过安全上限，已交还系统")
+                            }
+                            counters?.outputQueued(queuedBytes)
                         }
                         VolcRealtimeEvent.UserSpeaking, VolcRealtimeEvent.AssistantInterrupted -> {
-                            generation.incrementAndGet()
-                            while (playbackQueue.tryReceive().isSuccess) Unit
+                            playbackQueue.invalidate()
                             // First release any writer blocked on a full pipe. Flush again under
                             // the writer lock to remove the last chunk that raced the first flush.
                             val cleared = interruptPlayback() && withTimeoutOrNull(750) {
@@ -116,13 +116,94 @@ internal class CallPcmBridge(
             }
         } finally {
             // Closing both FDs is what releases a blocking read or write in a cancelled child.
-            playbackQueue.cancel()
+            playbackQueue.close()
             output.cancel()
             runCatching { capture.close() }
             runCatching { playback.close() }
         }
     }
 }
+
+/** Bounded by time at 24 kHz PCM16 mono, independent of cloud packet boundaries. */
+internal class CallPlaybackQueue(capacityBytes: Int = MAX_PENDING_BYTES) {
+    data class Block(val generation: Int, val byteCount: Int)
+
+    private val lock = Any()
+    private val pcm = ByteArray(capacityBytes)
+    private val signal = Channel<Unit>(Channel.CONFLATED)
+    private var head = 0
+    private var pending = 0
+    private var writing = 0
+    @Volatile private var generation = 0
+    private var closed = false
+
+    init { require(capacityBytes > 0 && capacityBytes % 2 == 0) }
+
+    /** Returns occupied bytes, including the in-flight block; null means the packet did not fit. */
+    fun offer(bytes: ByteArray): Int? = synchronized(lock) {
+        if (closed || bytes.size % 2 != 0 || bytes.size > pcm.size - pending - writing) return null
+        if (bytes.isEmpty()) return pending + writing
+        val tail = (head + pending) % pcm.size
+        val first = minOf(pcm.size - tail, bytes.size)
+        bytes.copyInto(pcm, tail, 0, first)
+        if (first < bytes.size) bytes.copyInto(pcm, 0, first)
+        pending += bytes.size
+        signal.trySend(Unit)
+        pending + writing
+    }
+
+    /** One writer, at most one 20 ms block outside the ring. */
+    suspend fun take(into: ByteArray): Block? {
+        require(into.isNotEmpty() && into.size % 2 == 0)
+        while (true) {
+            synchronized(lock) {
+                if (closed) return null
+                check(writing == 0)
+                if (pending > 0) {
+                    val count = minOf(pending, into.size, WRITE_BYTES)
+                    val first = minOf(pcm.size - head, count)
+                    pcm.copyInto(into, 0, head, head + first)
+                    if (first < count) pcm.copyInto(into, first, 0, count - first)
+                    head = (head + count) % pcm.size
+                    pending -= count
+                    writing = count
+                    return Block(generation, count)
+                }
+            }
+            if (signal.receiveCatching().isClosed) return null
+        }
+    }
+
+    fun isCurrent(block: Block): Boolean = generation == block.generation
+
+    fun release(block: Block) = synchronized(lock) {
+        if (isCurrent(block)) writing = 0
+    }
+
+    fun invalidate() = synchronized(lock) {
+        generation++
+        head = 0
+        pending = 0
+        writing = 0
+    }
+
+    fun close() = synchronized(lock) {
+        closed = true
+        invalidate()
+        signal.close()
+        Unit
+    }
+
+    companion object {
+        private const val BYTES_PER_SECOND = VolcRealtimeClient.OUTPUT_SAMPLE_RATE * 2
+        const val WRITE_BYTES = BYTES_PER_SECOND / 50
+        // Covers short responses delivered faster than playback without an unbounded audio delay.
+        const val MAX_PENDING_BYTES = BYTES_PER_SECOND * 8
+    }
+}
+
+internal fun callAudioHasStarted(greeting: String, downBytes: Long, upBytes: Long): Boolean =
+    downBytes > 0 && (greeting.isBlank() || upBytes > 0)
 
 /** Closing a cancelled worker's pipe is expected; its IOException must not replace the cancellation. */
 internal suspend inline fun <T> callPipeIo(action: () -> T): T {

@@ -947,7 +947,7 @@ private fun CallCredentialsDialog(runtime: CallRuntime, onDismiss: () -> Unit, o
 @Composable
 private fun CallProfileDialog(config: CallConfig, onDismiss: () -> Unit, onSave: suspend (CallConfig) -> Boolean) {
     var greeting by rememberSaveable { mutableStateOf(config.greeting) }
-    var prompt by remember { mutableStateOf(config.systemPrompt) }
+    var prompt by rememberSaveable { mutableStateOf(config.systemPrompt) }
     var seconds by rememberSaveable { mutableStateOf(config.maxCallSeconds.toString()) }
     var speaker by rememberSaveable { mutableStateOf(config.speaker) }
     var mode by rememberSaveable { mutableStateOf(config.audioMode) }
@@ -963,7 +963,8 @@ private fun CallProfileDialog(config: CallConfig, onDismiss: () -> Unit, onSave:
             Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(greeting, { greeting = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.calls_greeting)) }, maxLines = 3, enabled = !busy)
+                    label = { Text(stringResource(R.string.calls_greeting)) }, maxLines = 3, enabled = !busy,
+                    supportingText = { Text(stringResource(R.string.calls_greeting_hint)) })
                 OutlinedTextField(prompt, { prompt = it }, modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.calls_instructions)) }, maxLines = 5, enabled = !busy)
                 OutlinedTextField(seconds, { seconds = it.filter(Char::isDigit).take(3) }, modifier = Modifier.fillMaxWidth(),

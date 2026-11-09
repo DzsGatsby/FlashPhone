@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">取消 AI 接听</string>
     <string name="calls_notification_settings">打开通知设置</string>
     <string name="calls_speaker_edit_note">请在「音色复刻」中选择复刻音色。清空此栏可恢复默认音色。</string>
+    <string name="calls_greeting_hint">按填写的内容播报；留空则等对方先开口。</string>
 </resources>

@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">Отменить ответ ИИ</string>
     <string name="calls_notification_settings">Открыть настройки уведомлений</string>
     <string name="calls_speaker_edit_note">Выбирайте клонированные голоса в разделе «Клонирование голоса». Оставьте поле пустым, чтобы вернуть голос по умолчанию.</string>
+    <string name="calls_greeting_hint">Текст будет прочитан дословно. Оставьте поле пустым, чтобы собеседник заговорил первым.</string>
 </resources>

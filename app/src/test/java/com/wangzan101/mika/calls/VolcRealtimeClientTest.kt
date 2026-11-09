@@ -76,10 +76,11 @@ class VolcRealtimeClientTest {
             val observed = Channel<VolcRealtimeEvent>(32)
             val collect = async { session.events.collect { observed.send(it) } }
 
-            assertTrue(session.sendGreeting("您好"))
+            val config = CallConfig(greeting = "你好")
+            assertTrue(session.sendGreeting(CallPolicy.spokenGreeting(config.greeting, hasTask = false)))
             val greet = withTimeout(3_000) { messages.receive() }
             assertEquals("speech_text_buffer.commit", greet.type)
-            assertEquals("您好", greet.getValue("text").jsonPrimitive.content)
+            assertEquals("你好", greet.getValue("text").jsonPrimitive.content)
             val pcm = ByteArray(VolcRealtimeClient.INPUT_CHUNK_BYTES + 4) { it.toByte() }
             assertFalse(session.sendPcm16(pcm, 3))
             assertTrue(session.sendPcm16(pcm, VolcRealtimeClient.INPUT_CHUNK_BYTES))

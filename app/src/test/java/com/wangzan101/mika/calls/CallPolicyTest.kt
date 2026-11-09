@@ -110,17 +110,32 @@ class CallPolicyTest {
     @Test fun flashPhoneGreetingMigratesOnlyTheExactOldDefault() {
         val oldDefault = "您好，我是 Mika 的 AI 电话助手。请问有什么需要我转告？"
         val customWithOldName = "您好，我是 Mika 的 AI 电话助手。请留下可回拨的时间。"
-        val plainCustom = "请留下想转达的事情。"
         val currentDefault = "您好，我是 Flash phone AI 电话助手。请问有什么需要我转告？"
         assertEquals(currentDefault, CallConfig().greeting)
         assertEquals(currentDefault, CallPolicy.migrateDefaultGreeting(oldDefault))
         assertEquals(currentDefault, CallPolicy.spokenGreeting(oldDefault, hasTask = false))
         assertEquals(customWithOldName, CallPolicy.migrateDefaultGreeting(customWithOldName))
         assertEquals(customWithOldName, CallPolicy.spokenGreeting(customWithOldName, hasTask = false))
-        assertEquals(plainCustom, CallPolicy.migrateDefaultGreeting(plainCustom))
-        assertTrue(CallPolicy.spokenGreeting(plainCustom, hasTask = false).endsWith(plainCustom))
         assertEquals("您好，我是 Flash phone AI 电话助手。请问现在方便通话吗？",
-            CallPolicy.spokenGreeting(plainCustom, hasTask = true))
+            CallPolicy.spokenGreeting(currentDefault, hasTask = true))
+    }
+
+    @Test fun explicitGreetingIsUsedExactlyAndBlankMeansSilence() {
+        for (hasTask in listOf(false, true)) {
+            assertEquals("你好", CallPolicy.spokenGreeting("你好", hasTask))
+            assertEquals("", CallPolicy.spokenGreeting("", hasTask))
+            assertEquals("", CallPolicy.spokenGreeting(" \n\t", hasTask))
+        }
+    }
+
+    @Test fun dialogueDoesNotDemandAnotherIntroductionAfterTheConfiguredGreeting() {
+        for (direction in CallDirection.entries) {
+            val prompt = CallPolicy.prompt("你好", direction)
+            assertTrue(prompt.contains("你好"))
+            assertFalse(prompt.contains("通话开始时明确说明自己是 AI"))
+            assertFalse(prompt.contains("Flash phone"))
+            assertTrue(prompt.contains("被问及身份时，如实说明是机主的 AI 电话助手"))
+        }
     }
 
     @Test fun explicitSimOverridesPreferenceAndMissingPreferenceNeverFallsBack() {

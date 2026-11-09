@@ -50,7 +50,7 @@ class CallSettings(
                 CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS,
             ),
             maxCallSeconds = config.maxCallSeconds.coerceIn(15, CallPolicy.MAX_SECONDS),
-            greeting = config.greeting.trim().ifBlank { defaults.greeting },
+            greeting = config.greeting.trim(), // An explicitly empty greeting is different from a missing preference.
             systemPrompt = config.systemPrompt.trim(),
             speaker = speaker,
             credentialsConfigured = previous.credentialsConfigured,

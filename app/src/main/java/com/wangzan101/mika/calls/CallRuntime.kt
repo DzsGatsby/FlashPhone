@@ -628,6 +628,7 @@ class CallRuntime(private val app: MikaApp) {
                 w.mediaStage = MediaStage.RELEASE
                 runCatching { w.session?.close() }.onFailure { debugMediaException(w, it) }
                 val restored = restoreAudio(w)
+                w.mediaCounters?.playbackDiagnostic()?.let { Log.d("MikaCallMedia", "playback $it") }
                 w.track?.let {
                     if (w.telecomActionIssued) {
                         val record = CallRecord(w.id, it.number, w.direction, w.activeAt ?: it.createdAt,
@@ -665,7 +666,8 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     private suspend fun runAudio(w: Work, helper: IMikaShell, session: VolcRealtimeSession) {
-        val notification = "AI 已接通，可随时手动接管"
+        val greeting = CallPolicy.spokenGreeting(w.config.greeting, hasTask = w.task != null)
+        val notification = if (greeting.isBlank()) "AI 已接通，正在等待对方说话，可随时接管" else "AI 已接通，可随时手动接管"
         if (!notifications.show(w.id, "正在连接通话音频", ringing = false)) {
             throw CallProblem("电话通知不可用，已交还系统")
         }
@@ -708,7 +710,6 @@ class CallRuntime(private val app: MikaApp) {
             !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
             throw CallProblem("通话状态或静音已变更，未发送语音")
         }
-        val greeting = CallPolicy.spokenGreeting(w.config.greeting, hasTask = w.task != null)
         val remaining = (w.config.maxCallSeconds * 1_000L - (SystemClock.elapsedRealtime() - w.activeElapsed)).coerceAtLeast(1)
         w.mediaStage = MediaStage.PCM_BRIDGE
         val completed = withTimeoutOrNull(remaining) {
@@ -727,14 +728,15 @@ class CallRuntime(private val app: MikaApp) {
                         }
                         val bytes = stats.getLong("downBytes")
                         if (!w.aiActive) {
-                            if (bytes > 0 && stats.getLong("upBytes") > 0) {
+                            if (callAudioHasStarted(greeting, bytes, stats.getLong("upBytes"))) {
                                 if (!notifications.show(w.id, notification, ringing = false)) {
                                     throw CallProblem("电话通知不可用，已交还系统")
                                 }
                                 w.aiActive = true
                                 detail = notification
                                 if (w.direction == CallDirection.INCOMING) {
-                                    w.result.complete(ok("Android 已接听，双向音频桥已开始传输"))
+                                    w.result.complete(ok(if (greeting.isBlank()) "Android 已接听，AI 正在等待对方说话"
+                                        else "Android 已接听，双向音频桥已开始传输"))
                                 }
                                 publish()
                             } else if (SystemClock.elapsedRealtime() - w.activeElapsed >= 7_000) {
@@ -874,6 +876,14 @@ class CallRuntime(private val app: MikaApp) {
         runCatching {
             helper.stopCallAudio(w.audioOwner)
             val stats = helper.callAudioStats(w.audioOwner) ?: return@runCatching false
+            w.mediaCounters?.outputShellAccepted(
+                bytes = stats.getLong("upBytes", -1L),
+                zeroCount = stats.getLong("upWriteZeroCount", -1L),
+                zeroMaxMs = stats.getLong("upWriteZeroMaxMs", -1L),
+                lastWriteAgeMs = stats.getLong("upLastWriteAgeMs", -1L),
+                playbackHeadFrames = stats.getLong("upPlaybackHeadFrames", -1L),
+                flushMaxMs = stats.getLong("upFlushMaxMs", -1L),
+            )
             !stats.getBoolean("active") && stats.getBoolean("microphoneRestored")
         }.onFailure { debugMediaException(w, it) }.getOrDefault(false).also {
             if (it) w.audioHelper = null

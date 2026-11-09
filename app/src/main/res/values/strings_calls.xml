@@ -124,4 +124,5 @@
     <string name="calls_cancel_ai_answer">Cancel AI answer</string>
     <string name="calls_notification_settings">Open notification settings</string>
     <string name="calls_speaker_edit_note">Choose cloned voices in Voice cloning. Leave blank to restore the default voice.</string>
+    <string name="calls_greeting_hint">Read as written. Leave blank to let the other person speak first.</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.wangzan101.mika.calls
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CallMediaCountersTest {
@@ -43,6 +44,23 @@ class CallMediaCountersTest {
         assertEquals(1L, result["assistant_audio_started_events"])
         assertEquals(2L, result["assistant_audio_events"])
         assertEquals(20L, result["assistant_audio_bytes"])
+    }
+
+    @Test fun distinguishesReceivedQueuedWrittenAndShellAcceptedPlayback() {
+        val counters = CallMediaCounters()
+        assertNull(counters.playbackDiagnostic())
+        counters.eventReceived(VolcRealtimeEvent.Audio(ByteArray(1920)))
+        counters.outputQueued(1920)
+        counters.outputWritten(960)
+        counters.outputQueued(960)
+        counters.outputRejected()
+        counters.outputShellAccepted(640)
+        val result = counters.snapshot()
+        assertEquals(1920L, result["assistant_audio_bytes"])
+        assertEquals(1920L, result["playback_max_queued_bytes"])
+        assertEquals(960L, result["playback_written_bytes"])
+        assertEquals(1L, result["playback_rejected_packets"])
+        assertEquals(640L, result["playback_shell_accepted_bytes"])
     }
 
     private fun pcm(vararg samples: Int): ByteArray = ByteArray(samples.size * 2) { index ->
