@@ -39,6 +39,9 @@ class CallPolicyTest {
 
     @Test fun capturesAppOpBaselineWithoutGuessingOnUnknownOutput() {
         assertEquals("default", CallPolicy.previousAppOpMode("No operations.\n"))
+        assertEquals("default", CallPolicy.previousAppOpMode("No operations.\nDefault mode: default\n"))
+        assertNull(CallPolicy.previousAppOpMode("No operations.\nDefault mode: allow"))
+        assertNull(CallPolicy.previousAppOpMode("No operations.\nPermission denial"))
         assertEquals("allow", CallPolicy.previousAppOpMode("MANAGE_ONGOING_CALLS: allow; time=1s"))
         assertEquals("ignore", CallPolicy.previousAppOpMode("Uid mode: MANAGE_ONGOING_CALLS: ignore"))
         assertNull(CallPolicy.previousAppOpMode("Permission denial"))

@@ -66,8 +66,13 @@ internal object CallPolicy {
 
     fun previousAppOpMode(output: String): String? {
         val modes = output.lineSequence().mapNotNull { appOpMode.matchEntire(it)?.groupValues?.get(1) }.toList()
+        // Some OEM builds append the operation's default when no explicit mode exists.
+        // Only recognize this exact baseline; unknown output must never become permission.
+        val baseline = output.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        val noOverride = baseline == listOf("No operations.") ||
+            baseline == listOf("No operations.", "Default mode: default")
         return modes.distinct().singleOrNull()
-            ?: "default".takeIf { modes.isEmpty() && output.trim() == "No operations." }
+            ?: "default".takeIf { modes.isEmpty() && noOverride }
     }
 
     fun prompt(custom: String, direction: CallDirection): String = buildString {

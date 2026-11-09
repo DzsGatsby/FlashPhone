@@ -43,10 +43,10 @@ internal class CallTelecomAccess(private val context: Context) {
         val restoreOp = journal.getString(PREVIOUS_OP, null)
         if (original != "allow") {
             if (!journal.edit().putString(PREVIOUS_OP, original).commit()) return "无法保存电话权限还原信息"
-            if (!command(shell, "cmd appops set --user $user $pkg MANAGE_ONGOING_CALLS allow") ||
-                readOp(shell) != "allow" || !managePermission()) {
+            val change = command(shell, "cmd appops set --user $user $pkg MANAGE_ONGOING_CALLS allow")
+            if (change != CallTelecomCommandOutcome.OK || readOp(shell) != "allow" || !managePermission()) {
                 rollback(shell)
-                return "系统未授予管理通话权限"
+                return change.appOpsFailureMessage
             }
         } else if (!managePermission()) {
             return "此系统不允许 Mika 管理运营商通话"
@@ -58,7 +58,7 @@ internal class CallTelecomAccess(private val context: Context) {
                 rollback(shell)
                 return "无法保存电话伴侣还原信息"
             }
-            if (!command(shell, "cmd telecom add-or-remove-call-companion-app $pkg 1")) {
+            if (command(shell, "cmd telecom add-or-remove-call-companion-app $pkg 1") != CallTelecomCommandOutcome.OK) {
                 rollback(shell)
                 return "此系统未接受电话伴侣注册"
             }
@@ -82,7 +82,7 @@ internal class CallTelecomAccess(private val context: Context) {
         if (shell == null) return false
         var restored = disabled
         if (journal.getBoolean(COMPANION, false)) {
-            if (command(shell, "cmd telecom add-or-remove-call-companion-app $pkg 0")) {
+            if (command(shell, "cmd telecom add-or-remove-call-companion-app $pkg 0") == CallTelecomCommandOutcome.OK) {
                 if (!journal.edit().remove(COMPANION).commit()) restored = false
             } else restored = false
         }
@@ -92,7 +92,7 @@ internal class CallTelecomAccess(private val context: Context) {
             val normalized = if (original == "errored") "deny" else original
             // If the user changed the mode themselves after prepare, keep that newer choice.
             val reverted = current != null && (current != "allow" ||
-                (command(shell, "cmd appops set --user $user $pkg MANAGE_ONGOING_CALLS $normalized") &&
+                (command(shell, "cmd appops set --user $user $pkg MANAGE_ONGOING_CALLS $normalized") == CallTelecomCommandOutcome.OK &&
                     readOp(shell) == original))
             if (reverted) {
                 if (!journal.edit().remove(PREVIOUS_OP).commit()) restored = false
@@ -106,16 +106,42 @@ internal class CallTelecomAccess(private val context: Context) {
             .getOrNull()?.takeIf { it.getInt("exitCode", -1) == 0 }?.getString("output")
             ?.let(CallPolicy::previousAppOpMode)
 
-    private fun command(shell: IMikaShell, command: String): Boolean {
-        val result = runCatching { shell.runCommand(command) }.getOrNull() ?: return false
-        val output = result.getString("output").orEmpty()
-        return result.getInt("exitCode", -1) == 0 && !commandError.containsMatchIn(output)
+    private fun command(shell: IMikaShell, command: String): CallTelecomCommandOutcome {
+        val result = runCatching { shell.runCommand(command) }.getOrNull() ?: return CallTelecomCommandOutcome.FAILED
+        return CallTelecomCommandOutcome.classify(result.getInt("exitCode", -1), result.getString("output").orEmpty())
     }
 
     private companion object {
         const val PREPARED = "prepared_boot"
         const val PREVIOUS_OP = "previous_call_op"
         const val COMPANION = "owns_companion"
-        val commandError = Regex("(?im)^\\s*(unknown command|error[: ]|command\\[.*]\\s*:\\s*error|exception|permission denial|securityexception)")
+    }
+}
+
+/** Only a fixed diagnostic leaves this classifier; shell output is never retained or displayed. */
+internal enum class CallTelecomCommandOutcome {
+    OK,
+    FAILED,
+    SHELL_APP_OPS_DENIED;
+
+    val appOpsFailureMessage: String
+        get() = when (this) {
+            SHELL_APP_OPS_DENIED -> "系统限制 ADB 修改通话管理权限（缺少 MANAGE_APP_OPS_MODES），无法启用电话伴侣"
+            else -> "系统未授予管理通话权限"
+        }
+
+    companion object {
+        private val shellAppOpsDenied = Regex(
+            """(?im)^\h*(?:java\.lang\.)?SecurityException:\h*uid\h+2000\h+does not have\h+android\.permission\.MANAGE_APP_OPS_MODES\b""",
+        )
+        private val commandError = Regex(
+            """(?im)^\s*(unknown command|error[: ]|command\[.*]\s*:\s*error|exception|permission denial|securityexception)""",
+        )
+
+        fun classify(exitCode: Int, output: String): CallTelecomCommandOutcome = when {
+            shellAppOpsDenied.containsMatchIn(output) -> SHELL_APP_OPS_DENIED
+            exitCode != 0 || commandError.containsMatchIn(output) -> FAILED
+            else -> OK
+        }
     }
 }
