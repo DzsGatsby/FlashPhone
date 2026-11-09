@@ -244,3 +244,13 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## OpenAI Codex App Server
+
+- Project: https://github.com/openai/codex
+- Version: `rust-v0.167.0`, official ARM64 Linux musl App Server executable.
+- License: Apache-2.0; see `licenses/codex-LICENSE`.
+- Usage: Optional native owner-instruction conversation engine packaged as `libmika_codex.so`.
+  Build preparation pins the official archive SHA-256 in `tools/codex/prepare-runtime.py`;
+  no credentials or downloaded binary are committed. Android is not an officially supported upstream target.
+- Copyright: OpenAI and contributors, as stated in the upstream distribution.

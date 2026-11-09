@@ -21,30 +21,49 @@ class CallSettings(
     @Synchronized
     fun save(config: CallConfig): CallConfig {
         val defaults = CallConfig()
+        val previous = mutable.value
+        require(config.defaultOutgoingSimId == null || CallPolicy.isRememberedSimId(config.defaultOutgoingSimId)) {
+            "保存的拨号 SIM 无效，请重新选择"
+        }
         require(config.allowedIncomingNumbers.size <= CallPolicy.MAX_ALLOWED_NUMBERS) { "最多可设置 100 个来电号码" }
         val numbers = config.allowedIncomingNumbers.map {
             requireNotNull(CallPolicy.incomingNumber(it)) { "自动接听名单中包含无效号码" }
-        }.toSet()
+        }.distinctBy(CallPolicy::incomingMatchKey).toSet()
+        require(config.bypassIncomingNumbers.size <= CallPolicy.MAX_ALLOWED_NUMBERS) { "最多可设置 100 个本人接听号码" }
+        val bypass = config.bypassIncomingNumbers.map {
+            requireNotNull(CallPolicy.incomingNumber(it)) { "本人接听名单中包含无效号码" }
+        }.distinctBy(CallPolicy::incomingMatchKey).toSet()
         require(config.greeting.length <= CallPolicy.MAX_GREETING_CHARS) { "开场白过长" }
         require(config.systemPrompt.length <= CallPolicy.MAX_PROMPT_CHARS) { "通话说明过长" }
         val speaker = config.speaker.trim().ifBlank { defaults.speaker }
         require(speaker.length <= CallPolicy.MAX_SPEAKER_CHARS && speaker.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in "_-" }) {
             "无效的火山音色编号"
         }
+        val audioVerified = config.audioVerified && config.audioMode == previous.audioMode
         val next = config.copy(
             allowedIncomingNumbers = numbers,
-            audioVerified = config.audioVerified && config.audioMode == mutable.value.audioMode,
+            bypassIncomingNumbers = bypass,
+            autoAnswerPausedUntilMs = config.autoAnswerPausedUntilMs?.takeIf { it > System.currentTimeMillis() },
+            audioVerified = audioVerified,
+            autoAnswer = config.enabled && audioVerified && config.autoAnswer,
+            autoAnswerDelaySeconds = config.autoAnswerDelaySeconds.coerceIn(
+                CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS,
+            ),
             maxCallSeconds = config.maxCallSeconds.coerceIn(15, CallPolicy.MAX_SECONDS),
             greeting = config.greeting.trim().ifBlank { defaults.greeting },
             systemPrompt = config.systemPrompt.trim(),
             speaker = speaker,
-            credentialsConfigured = mutable.value.credentialsConfigured,
+            credentialsConfigured = previous.credentialsConfigured,
         )
         val committed = prefs.edit()
             .putBoolean("enabled", next.enabled)
             .putBoolean("auto_answer", next.autoAnswer)
+            .putInt("auto_answer_delay_seconds", next.autoAnswerDelaySeconds)
+            .putString("default_outgoing_sim_id", next.defaultOutgoingSimId)
             .putBoolean("allow_all", next.allowAllIncoming)
             .putStringSet("allowlist", numbers)
+            .putStringSet("bypass_incoming", bypass)
+            .putLong("auto_answer_paused_until_ms", next.autoAnswerPausedUntilMs ?: 0L)
             .putInt("max_seconds", next.maxCallSeconds)
             .putString("audio_mode", next.audioMode.name)
             .putString("audio_verified_build", Build.FINGERPRINT.takeIf { next.audioVerified })
@@ -52,7 +71,8 @@ class CallSettings(
             .putString("prompt", next.systemPrompt)
             .putString("speaker", next.speaker)
             .commit()
-        if (!next.enabled || committed) mutable.value = next
+        // A failed write may not leave auto-answer running with a policy the user tried to change.
+        mutable.value = if (committed) next else previous.copy(enabled = next.enabled && previous.enabled, autoAnswer = false)
         check(committed) { "无法保存电话设置" }
         return next
     }
@@ -72,7 +92,7 @@ class CallSettings(
         }
         val edit = prefs.edit()
         if (clear) {
-            edit.remove(CREDENTIALS)
+            edit.remove(CREDENTIALS).putBoolean("auto_answer", false)
         } else {
             val bytes = "${modern}\n${legacyId}\n${legacyKey}".toByteArray()
             try {
@@ -84,7 +104,8 @@ class CallSettings(
         }
         val committed = edit.commit()
         if (committed || clear) {
-            mutable.value = mutable.value.copy(credentialsConfigured = !clear)
+            mutable.value = mutable.value.copy(credentialsConfigured = !clear,
+                autoAnswer = !clear && mutable.value.autoAnswer)
             credentialsRevision.value++
         }
         check(committed) { "无法保存火山凭据" }
@@ -105,15 +126,26 @@ class CallSettings(
 
     private fun read(): CallConfig = runCatching {
         val defaults = CallConfig()
+        val enabled = prefs.getBoolean("enabled", false)
+        val verified = prefs.getString("audio_verified_build", null)?.let { it == Build.FINGERPRINT } == true
         CallConfig(
-            enabled = prefs.getBoolean("enabled", false),
-            autoAnswer = prefs.getBoolean("auto_answer", false),
+            enabled = enabled,
+            autoAnswer = enabled && verified && prefs.getBoolean("auto_answer", false),
+            autoAnswerDelaySeconds = prefs.getInt("auto_answer_delay_seconds", defaults.autoAnswerDelaySeconds)
+                .coerceIn(CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS),
+            defaultOutgoingSimId = prefs.getString("default_outgoing_sim_id", null),
             allowAllIncoming = prefs.getBoolean("allow_all", false),
             allowedIncomingNumbers = prefs.getStringSet("allowlist", emptySet()).orEmpty()
-                .mapNotNull(CallPolicy::incomingNumber).take(CallPolicy.MAX_ALLOWED_NUMBERS).toSet(),
+                .mapNotNull(CallPolicy::incomingNumber).distinctBy(CallPolicy::incomingMatchKey)
+                .take(CallPolicy.MAX_ALLOWED_NUMBERS).toSet(),
+            bypassIncomingNumbers = prefs.getStringSet("bypass_incoming", emptySet()).orEmpty()
+                .mapNotNull(CallPolicy::incomingNumber).distinctBy(CallPolicy::incomingMatchKey)
+                .take(CallPolicy.MAX_ALLOWED_NUMBERS).toSet(),
+            autoAnswerPausedUntilMs = prefs.getLong("auto_answer_paused_until_ms", 0L)
+                .takeIf { it > System.currentTimeMillis() },
             maxCallSeconds = prefs.getInt("max_seconds", CallPolicy.DEFAULT_SECONDS).coerceIn(15, CallPolicy.MAX_SECONDS),
             audioMode = prefs.getString("audio_mode", null)?.let(CallAudioMode::valueOf) ?: defaults.audioMode,
-            audioVerified = prefs.getString("audio_verified_build", null)?.let { it == Build.FINGERPRINT } == true,
+            audioVerified = verified,
             credentialsConfigured = credentials() != null,
             greeting = prefs.getString("greeting", defaults.greeting).orEmpty().take(CallPolicy.MAX_GREETING_CHARS),
             systemPrompt = prefs.getString("prompt", "").orEmpty().take(CallPolicy.MAX_PROMPT_CHARS),

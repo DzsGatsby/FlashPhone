@@ -10,6 +10,25 @@ val gitHash: String = runCatching {
     providers.exec { commandLine("git", "rev-parse", "--short=7", "HEAD") }.standardOutput.asText.get().trim()
 }.getOrNull()?.takeIf { it.isNotEmpty() } ?: "dev"
 
+// Real Codex App Server is bundled only from a pinned, checksum-verified official archive.
+// Use -PphoneCodex=false for a lightweight developer build without the owner conversation engine.
+val phoneCodexEnabled = providers.gradleProperty("phoneCodex").map { it.toBooleanStrict() }.orElse(true)
+val phoneCodexJni = layout.buildDirectory.dir("generated/phoneCodexJni")
+val preparePhoneCodex = tasks.register<Exec>("preparePhoneCodex") {
+    val script = rootProject.file("tools/codex/prepare-runtime.py")
+    inputs.file(script)
+    inputs.property("version", "0.167.0")
+    outputs.dir(phoneCodexJni)
+    onlyIf { phoneCodexEnabled.get() }
+    doFirst {
+        val arguments = mutableListOf("python3", script.absolutePath, "--output",
+            phoneCodexJni.get().asFile.absolutePath, "--cache",
+            layout.buildDirectory.dir("phoneCodexCache").get().asFile.absolutePath)
+        providers.gradleProperty("phoneCodexArchive").orNull?.let { arguments += listOf("--archive", it) }
+        commandLine(arguments)
+    }
+}
+
 android {
     namespace = "com.wangzan101.mika"
     compileSdk = 36
@@ -28,7 +47,11 @@ android {
 
     // 沙箱程序只有 arm64 版本(jniLibs/arm64-v8a);APK 不限 ABI,别的设备照常安装、显示「此设备不支持沙箱」。
     // 沙箱程序要从 nativeLibraryDir 直接执行,安装时必须解到磁盘
-    packaging { jniLibs { useLegacyPackaging = true } }
+    packaging { jniLibs {
+        useLegacyPackaging = true
+        keepDebugSymbols += "**/libmika_codex.so"
+    } }
+    if (phoneCodexEnabled.get()) sourceSets.getByName("main").jniLibs.srcDir(phoneCodexJni)
 
     // 发布用的包(perf、release)按架构再出一份:除了全架构包,另出只带 arm64-v8a 原生库的小包。
     // 两个包代码、资源、版本号、签名都一样,只差 lib/ 下的其他架构;各自是完整 APK,不是一起安装的拆分包。
@@ -120,4 +143,9 @@ dependencies {
 // LicensesTest 读仓库的 licenses/THIRD_PARTY_NOTICES.md:让它参与测试的增量判断
 tasks.withType<Test>().configureEach {
     inputs.file(rootProject.file("licenses/THIRD_PARTY_NOTICES.md")).withPropertyName("thirdPartyNotices")
+}
+
+// Unit tests do not need to download a native runtime; actual APK packaging does.
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+    if (phoneCodexEnabled.get()) dependsOn(preparePhoneCodex)
 }

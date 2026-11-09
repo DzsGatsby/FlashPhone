@@ -37,6 +37,89 @@ class CallPolicyTest {
         assertNull(CallPolicy.chooseSim(listOf(sim1), "missing"))
     }
 
+    @Test fun mainlandMobileAllowlistAcceptsOnlyCompleteEquivalentNumbers() {
+        val local = "13800138000"
+        val enabled = CallConfig(enabled = true, autoAnswer = true, credentialsConfigured = true, audioVerified = true)
+        for (allowed in listOf(local, "+8613800138000", "008613800138000")) {
+            val config = enabled.copy(allowedIncomingNumbers = setOf(allowed))
+            assertTrue(CallPolicy.callerAllowed(config, local))
+            assertTrue(CallPolicy.callerAllowed(config, "+86 138 0013 8000"))
+            assertTrue(CallPolicy.callerAllowed(config, "0086-138-0013-8000"))
+            assertFalse(CallPolicy.callerAllowed(config, "800138000"))
+            assertFalse(CallPolicy.callerAllowed(config, "8613800138000"))
+            assertFalse(CallPolicy.callerAllowed(config, "+113800138000"))
+            assertFalse(CallPolicy.callerAllowed(config, "13800138001"))
+        }
+        val all = enabled.copy(allowAllIncoming = true)
+        assertFalse(CallPolicy.callerAllowed(all, "*#06#"))
+        assertFalse(CallPolicy.callerAllowed(all, "13800138000;22"))
+    }
+
+    @Test fun delayedStartupCannotAuthorizeAnExistingCallOrBroadenItsPolicy() {
+        val number = "13800138000"
+        val ready = CallConfig(enabled = true, autoAnswer = true, credentialsConfigured = true,
+            audioVerified = true, allowedIncomingNumbers = setOf("+8613800138000"))
+        assertTrue(CallPolicy.canStartAutoAnswer(ready, ready, number, CallPolicy.AUTO_START_WINDOW_MS))
+        assertFalse(CallPolicy.canStartAutoAnswer(ready, ready, number, CallPolicy.AUTO_START_WINDOW_MS + 1))
+        assertFalse(CallPolicy.canStartAutoAnswer(ready.copy(autoAnswer = false), ready, number, 100L))
+        assertFalse(CallPolicy.canStartAutoAnswer(ready.copy(allowedIncomingNumbers = emptySet()), ready, number, 100L))
+        assertFalse(CallPolicy.canStartAutoAnswer(ready, ready.copy(allowedIncomingNumbers = emptySet()), number, 100L))
+        assertFalse(CallPolicy.canStartAutoAnswer(ready, ready.copy(audioMode = CallAudioMode.REDIRECT), number, 100L))
+    }
+
+    @Test fun bypassWinsOverBothAllowAllAndExplicitAllowlist() {
+        val ready = CallConfig(enabled = true, autoAnswer = true, credentialsConfigured = true, audioVerified = true,
+            allowedIncomingNumbers = setOf("13800138000", "028-8123-4567"),
+            bypassIncomingNumbers = setOf("+86 138 0013 8000", "0086 28 8123 4567"))
+        for (allowAll in listOf(false, true)) {
+            val config = ready.copy(allowAllIncoming = allowAll)
+            for (number in listOf("13800138000", "008613800138000", "+8613800138000", "02881234567", "+862881234567")) {
+                assertTrue(CallPolicy.isBypassed(config, number))
+                assertFalse(CallPolicy.callerAllowed(config, number))
+            }
+        }
+        for (number in listOf(null, "800138000", "81234567", "+113800138000", "13800138001")) {
+            assertFalse(CallPolicy.isBypassed(ready, number))
+        }
+        assertTrue(CallPolicy.callerAllowed(ready.copy(allowAllIncoming = true), "13800138001"))
+    }
+
+    @Test fun pauseExpiresForNewCallsWithoutAnsweringCallsThatArrivedDuringIt() {
+        val deadline = 100_000L
+        val paused = CallConfig(enabled = true, autoAnswer = true, credentialsConfigured = true, audioVerified = true,
+            allowAllIncoming = true, autoAnswerPausedUntilMs = deadline)
+        val resumed = paused.copy(autoAnswerPausedUntilMs = null)
+        assertEquals(1L, CallPolicy.autoAnswerPauseRemainingMs(paused, deadline - 1L))
+        assertEquals(0L, CallPolicy.autoAnswerPauseRemainingMs(paused, deadline))
+        assertFalse(CallPolicy.callerAllowed(paused, null, deadline - 1L))
+        assertTrue(CallPolicy.callerAllowed(paused, null, deadline))
+        assertFalse(CallPolicy.canStartAutoAnswer(paused, resumed, null, 1L, nowMs = deadline))
+        assertFalse(CallPolicy.canStartAutoAnswer(resumed, paused, null, 1L, nowMs = deadline - 1L))
+        assertTrue(CallPolicy.canStartAutoAnswer(paused, paused, null, 1L, nowMs = deadline + 1L))
+    }
+
+    @Test fun ownerRulesArePassedAsAnExplicitSectionOfTheBoundedCallPrompt() {
+        val ownerRules = "仅在来电者说包裹到了时，请对方留下取件地点。"
+        val prompt = CallPolicy.prompt("确认对方称呼。", CallDirection.INCOMING, ownerRules)
+        assertTrue(prompt.indexOf("不得索取或透露密码") in 0 until prompt.indexOf(ownerRules))
+        assertTrue(prompt.contains("机主明确保存的通话规则"))
+        assertTrue(prompt.contains("确认对方称呼。"))
+        assertFalse(CallPolicy.prompt("", CallDirection.INCOMING).contains("机主明确保存的通话规则"))
+    }
+
+    @Test fun explicitSimOverridesPreferenceAndMissingPreferenceNeverFallsBack() {
+        val first = CallSim("sim-1", "SIM 1", true)
+        val second = CallSim("sim-2", "SIM 2", false)
+        val both = listOf(first, second)
+        assertEquals(second, CallPolicy.chooseOutgoingSim(both, null, second.id))
+        assertEquals(first, CallPolicy.chooseOutgoingSim(both, first.id, second.id))
+        assertEquals(first, CallPolicy.chooseOutgoingSim(both, "default", second.id))
+        assertEquals(first, CallPolicy.chooseOutgoingSim(both, "default", "sim-404"))
+        assertNull(CallPolicy.chooseOutgoingSim(listOf(first), null, second.id))
+        assertNull(CallPolicy.chooseOutgoingSim(both, "sim-404", second.id))
+        assertNull(CallPolicy.chooseOutgoingSim(both, null, null))
+    }
+
     @Test fun capturesAppOpBaselineWithoutGuessingOnUnknownOutput() {
         assertEquals("default", CallPolicy.previousAppOpMode("No operations.\n"))
         assertEquals("default", CallPolicy.previousAppOpMode("No operations.\nDefault mode: default\n"))

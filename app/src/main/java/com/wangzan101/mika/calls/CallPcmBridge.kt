@@ -24,13 +24,18 @@ internal class CallPcmBridge(
         greeting: String,
         counters: CallMediaCounters?,
         onTranscript: (String, String) -> Unit,
+        onFinalTranscript: (String, String) -> Unit = { _, _ -> },
     ): Unit = coroutineScope {
         val playbackQueue = Channel<Frame>(16)
         val generation = AtomicInteger(0)
         val writerLock = Mutex()
         val assistantText = StringBuilder()
-        fun flushAssistantText() {
-            if (assistantText.isNotBlank()) onTranscript("assistant", assistantText.toString())
+        fun flushAssistantText(completed: Boolean = false) {
+            if (assistantText.isNotBlank()) {
+                val text = assistantText.toString()
+                onTranscript("assistant", text)
+                if (completed) onFinalTranscript("assistant", text)
+            }
             assistantText.clear()
         }
         // The separate writer leaves model event collection responsive when a pipe is full.
@@ -87,12 +92,15 @@ internal class CallPcmBridge(
                             if (!cleared) throw CallMediaFailure("通话音频无法及时停止，已交还系统")
                             flushAssistantText()
                         }
-                        is VolcRealtimeEvent.UserTranscript -> if (event.isFinal) onTranscript("caller", event.text)
+                        is VolcRealtimeEvent.UserTranscript -> if (event.isFinal) {
+                            onTranscript("caller", event.text)
+                            onFinalTranscript("caller", event.text)
+                        }
                         is VolcRealtimeEvent.AssistantTranscript -> {
                             val room = CallHistory.MAX_LINE_LENGTH - assistantText.length
                             if (room > 0) assistantText.append(event.delta.take(room))
                         }
-                        VolcRealtimeEvent.AssistantTextEnded -> flushAssistantText()
+                        VolcRealtimeEvent.AssistantTextEnded -> flushAssistantText(completed = true)
                         is VolcRealtimeEvent.Failed -> throw event.error
                         VolcRealtimeEvent.Closed -> throw CallMediaFailure("火山语音会话已结束，电话由系统处理")
                         else -> Unit
