@@ -196,7 +196,7 @@ def verify_release(release, tag, commit, name, size, digest, *, draft):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("apk", type=Path, help="Candidate universal APK; normally app/build/outputs/apk/debug/app-debug.apk")
-    parser.add_argument("version", help="Exact versionName, such as 0.1.39 (no v prefix)")
+    parser.add_argument("version", help="Exact versionName, such as 1.0.0 (no v prefix)")
     parser.add_argument("commit", help="Full 40-character SHA of the checked-out source commit")
     signer = parser.add_mutually_exclusive_group(required=True)
     signer.add_argument("--reference-apk", type=Path, help="An older APK already verified on the intended device")

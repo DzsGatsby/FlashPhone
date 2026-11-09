@@ -1,10 +1,12 @@
 # Flash phone：应用更新与发布
 
-Flash phone 直接从 [GitHub Releases](https://github.com/DzsGatsby/Mika/releases) 检查版本和下载 APK，不需要自建更新服务器。首个版本为 `0.1.39`（Android 版本代码 `40`），发布标签为 `v0.1.39`，附件为完整的 `FlashPhone-v0.1.39.apk`。
+Flash phone 直接从 [GitHub Releases](https://github.com/DzsGatsby/Mika/releases) 检查版本和下载 APK，不需要自建更新服务器。首个版本为 `1.0.0`（Android 版本代码 `41`），发布标签为 `v1.0.0`，附件为完整的 `FlashPhone-v1.0.0.apk`。
+
+Flash phone 使用独立的产品版本，从 `1.0.0` 开始；历史迁移构建 `0.1.39` 使用了底座编号，不作为 Flash phone 的产品版本。Android 内部版本代码仅用于保证原安装可以无损覆盖升级。
 
 ## 已安装用户怎么更新
 
-- 如果目前安装的是此前的电话实验版本，请先从本仓库发布页下载并覆盖安装 `0.1.39`，让应用切换到新的更新源。保留原有安装和数据，直接打开 APK 完成系统确认；不要先卸载。
+- 如果目前安装的是此前的电话实验版本，请先从本仓库发布页下载并覆盖安装 `1.0.0`，让应用切换到新的更新源。保留原有安装和数据，直接打开 APK 完成系统确认；不要先卸载。
 - 此后打开应用可触发检查，也可使用应用中的检查更新入口。后台会向 Android 申请约每 15 分钟检查一次；这是系统调度间隔，省电、网络限制或强行停止应用会推迟检查。安装需要用户在 Android 系统页面确认。
 - 原有正式 Mika 应用可并存。Flash phone 沿用历史应用 ID `com.wangzan101.mika.dev` 和签名，只为了让此前同包、同签名的安装可以覆盖升级并保留数据。两者使用不同的发布源和安装包。
 
@@ -23,7 +25,7 @@ Flash phone 直接从 [GitHub Releases](https://github.com/DzsGatsby/Mika/releas
 
 ```sh
 python3 tools/release/publish-flash.py \
-  app/build/outputs/apk/debug/app-debug.apk 0.1.39 "$(git rev-parse HEAD)" \
+  app/build/outputs/apk/debug/app-debug.apk 1.0.0 "$(git rev-parse HEAD)" \
   --branch feat/ai-phone-calls --reference-apk "$REFERENCE_APK"
 ```
 
