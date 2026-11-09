@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · 별은 언제나 환영이에요</string>
     <string name="about_guide">가이드 및 기여 방법</string>
     <string name="about_guide_sub">시작하기, 코딩을 몰라도 앱 지식을 추가할 수 있어요</string>
-    <string name="about_data_note">%1$s에 보내는 내용(메시지, 화면 내용, 스크린샷)은 직접 설정한 모델 제공업체에게만 전달돼요. %1$s는 자체 서버가 없고 데이터를 수집하지 않아요. 업데이트 확인은 GitHub에만 연결해요.</string>
+    <string name="about_data_note">AI가 통화를 처리하는 동안에만 설정된 음성 서비스로 통화 음성이 전송됩니다. 녹음은 저장되지 않으며 텍스트 기록은 기기에 암호화되어 저장됩니다. 업데이트 확인은 GitHub에 연결합니다.</string>
     <string name="about_license_link">Apache-2.0 라이선스</string>
     <string name="about_author">Wang Zan이 개발한 Mika 기반 · © 2026</string>
     <string name="about_license_title">Apache-2.0 라이선스</string>

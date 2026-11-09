@@ -1,8 +1,8 @@
-<!-- translated-from: README.md @ 11a04e85328b -->
+<!-- translated-from: README.md @ 59fa62ede314 -->
 
 # Flash phone
 
-Un asistente de llamadas con IA para Android, independiente, que contesta llamadas entrantes, llama con un objetivo concreto, permite tomar el control y conserva un registro de las llamadas. La pantalla de inicio tiene cuatro pestañas: **Recepción / Tareas de llamada / Registros / Ajustes**. Está desarrollado a partir de [Mika](https://github.com/wangzan101/Mika).
+Un asistente de llamadas con IA para Android, independiente, que contesta llamadas entrantes, llama con un objetivo concreto, permite tomar el control y conserva un registro de las llamadas. La pantalla de inicio tiene cuatro pestañas: **Recepción / Tareas de llamada / Registros / Ajustes**. Está desarrollado a partir de [Mika](https://github.com/wangzan101/Mika). La espera en segundo plano permite atender con el teléfono bloqueado y programar un solo intento de llamada tras bloquearlo para una tarea ya confirmada.
 
 [Descargar Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [Funciones de llamada y requisitos del dispositivo](../ai-phone-calls.md) · [Actualizaciones y versiones de la aplicación](../app-updates.md)
 
@@ -13,7 +13,7 @@ Un asistente de llamadas con IA para Android, independiente, que contesta llamad
 
 Si ya tienes la versión experimental para llamadas, instala esta versión sobre la anterior para conservar tus ajustes y registros. Puedes mantener instalada la aplicación original Mika. Usa el APK **FlashPhone** publicado en este repositorio y no desinstales primero la versión experimental. Después de la primera actualización, la aplicación se mostrará como Flash phone y buscará las versiones futuras en este repositorio.
 
-Esta es una versión inicial. Ya se ha probado la conversación bidireccional en una llamada mediante la red móvil; aún queda por verificar en un dispositivo la navegación y la instalación sobre la versión anterior. La clonación de voz requiere activar el servicio por separado. El chat de Codex requiere una cuenta habilitada o una clave API. Descargar la aplicación no activa ninguno de los dos servicios.
+Esta es una versión inicial. Se han probado la conversación bidireccional en la red móvil, la navegación y la actualización sobre la instalación previa. La nueva atención con el teléfono bloqueado y la llamada de un solo intento aún requieren pruebas en un dispositivo. La clonación de voz requiere activar el servicio; para consultar las instrucciones de llamada con Codex se necesita una clave API habilitada. La descarga no activa esos servicios.
 
 Se conservan la licencia Apache-2.0 del proyecto original, los créditos de autoría y los agradecimientos a terceros. Los enlaces de descarga del README que figura abajo corresponden a la aplicación original Mika.
 

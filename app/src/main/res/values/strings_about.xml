@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · stars welcome</string>
     <string name="about_guide">Guide &amp; how to contribute</string>
     <string name="about_guide_sub">Getting started; add app knowledge even without coding</string>
-    <string name="about_data_note">What you send %1$s — messages, screen content and screenshots — goes only to the model provider you set up. %1$s has no servers of its own and collects none of your data; checking for updates only contacts GitHub.</string>
+    <string name="about_data_note">During AI handling, call audio goes to your configured voice provider. No audio recording is saved; transcripts are encrypted on this phone. Update checks contact GitHub.</string>
     <string name="about_license_link">Apache-2.0 license</string>
     <string name="about_author">Based on Mika by Wang Zan · © 2026</string>
     <string name="about_license_title">Apache-2.0 License</string>

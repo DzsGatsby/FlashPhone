@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · звёзды приветствуются</string>
     <string name="about_guide">Руководство и как помочь проекту</string>
     <string name="about_guide_sub">С чего начать; можно добавлять знания о приложениях и без программирования</string>
-    <string name="about_data_note">Всё, что вы отправляете %1$s (сообщения, содержимое экрана и снимки экрана), уходит только провайдеру модели, которого вы настроили. У %1$s нет собственных серверов, и она не собирает ваши данные; при проверке обновлений обращение идёт только к GitHub.</string>
+    <string name="about_data_note">Во время обработки вызова ИИ передаёт звук настроенной голосовой службе. Аудиозаписи не сохраняются, расшифровки шифруются на телефоне. Для проверки обновлений используется GitHub.</string>
     <string name="about_license_link">Лицензия Apache-2.0</string>
     <string name="about_author">На основе Mika, автор Wang Zan · © 2026</string>
     <string name="about_license_title">Лицензия Apache-2.0</string>

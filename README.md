@@ -1,6 +1,6 @@
 # Flash phone
 
-A standalone Android AI calling assistant that answers incoming calls, places calls with a specific goal, lets you take over, and keeps call records. The home screen has four tabs: **Answering / Call tasks / Records / Settings**. Flash phone is built on [Mika](https://github.com/wangzan101/Mika).
+A standalone Android AI calling assistant that answers incoming calls, places calls with a specific goal, lets you take over, keeps call records, and provides an explicit background standby for locked-screen answering. A reviewed task can also be queued for one attempt after locking the phone. The home screen has four tabs: **Answering / Call tasks / Records / Settings**. Flash phone is built on [Mika](https://github.com/wangzan101/Mika).
 
 [Download Flash phone](https://github.com/DzsGatsby/Mika/releases/latest) · [Calling features and device requirements](docs/ai-phone-calls.md) · [App updates and releases](docs/app-updates.md)
 
@@ -11,7 +11,7 @@ A standalone Android AI calling assistant that answers incoming calls, places ca
 
 If you have the earlier experimental calling app, install this release over it to keep your settings and records. The original Mika app can remain installed alongside it. Use the **FlashPhone** APK from this repository and do not uninstall the earlier calling app first. After the first update, the app is named Flash phone and checks this repository for future releases.
 
-This is an early release. Two-way conversation over a carrier call has already been tested; the navigation and in-place upgrade in this release still need testing on a device. Voice cloning requires separate service activation. Codex chat requires an eligible account or API key. Downloading the app does not activate either service.
+This is an early release. Two-way conversation over a carrier call has already been tested; navigation and an in-place update have been tested on a device; the new locked-screen standby and one-shot dialing still require carrier-call verification. Voice cloning requires separate service activation. Discussing call instructions with Codex requires an eligible API key. Downloading the app does not activate either service.
 
 The upstream Apache-2.0 license, author credits, and third-party acknowledgments are preserved. The download links in the upstream README below are for the original Mika app.
 

@@ -46,6 +46,7 @@ class CallSettings(
             autoAnswerPausedUntilMs = config.autoAnswerPausedUntilMs?.takeIf { it > System.currentTimeMillis() },
             audioVerified = audioVerified,
             autoAnswer = config.enabled && audioVerified && config.autoAnswer,
+            backgroundStandbyAuthorized = previous.backgroundStandbyAuthorized && config.enabled && audioVerified && config.autoAnswer,
             autoAnswerDelaySeconds = config.autoAnswerDelaySeconds.coerceIn(
                 CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS,
             ),
@@ -58,6 +59,7 @@ class CallSettings(
         val committed = prefs.edit()
             .putBoolean("enabled", next.enabled)
             .putBoolean("auto_answer", next.autoAnswer)
+            .putBoolean(BACKGROUND_AUTHORIZED, next.backgroundStandbyAuthorized)
             .putInt("auto_answer_delay_seconds", next.autoAnswerDelaySeconds)
             .putString("default_outgoing_sim_id", next.defaultOutgoingSimId)
             .putBoolean("allow_all", next.allowAllIncoming)
@@ -72,9 +74,20 @@ class CallSettings(
             .putString("speaker", next.speaker)
             .commit()
         // A failed write may not leave auto-answer running with a policy the user tried to change.
-        mutable.value = if (committed) next else previous.copy(enabled = next.enabled && previous.enabled, autoAnswer = false)
+        mutable.value = if (committed) next else previous.copy(enabled = next.enabled && previous.enabled, autoAnswer = false, backgroundStandbyAuthorized = false)
         check(committed) { "无法保存电话设置" }
         return next
+    }
+
+    /** Called only by the foreground standby action. A live service is checked separately. */
+    @Synchronized
+    internal fun authorizeBackgroundStandby(): Boolean {
+        val config = mutable.value
+        if (!config.enabled || !config.autoAnswer || !config.audioVerified || !config.credentialsConfigured) return false
+        if (config.backgroundStandbyAuthorized) return true
+        if (!prefs.edit().putBoolean(BACKGROUND_AUTHORIZED, true).commit()) return false
+        mutable.value = config.copy(backgroundStandbyAuthorized = true)
+        return true
     }
 
     @Synchronized
@@ -92,7 +105,7 @@ class CallSettings(
         }
         val edit = prefs.edit()
         if (clear) {
-            edit.remove(CREDENTIALS).putBoolean("auto_answer", false)
+            edit.remove(CREDENTIALS).putBoolean("auto_answer", false).putBoolean(BACKGROUND_AUTHORIZED, false)
         } else {
             val bytes = "${modern}\n${legacyId}\n${legacyKey}".toByteArray()
             try {
@@ -105,7 +118,8 @@ class CallSettings(
         val committed = edit.commit()
         if (committed || clear) {
             mutable.value = mutable.value.copy(credentialsConfigured = !clear,
-                autoAnswer = !clear && mutable.value.autoAnswer)
+                autoAnswer = !clear && mutable.value.autoAnswer,
+                backgroundStandbyAuthorized = !clear && mutable.value.backgroundStandbyAuthorized)
             credentialsRevision.value++
         }
         check(committed) { "无法保存火山凭据" }
@@ -131,6 +145,8 @@ class CallSettings(
         CallConfig(
             enabled = enabled,
             autoAnswer = enabled && verified && prefs.getBoolean("auto_answer", false),
+            backgroundStandbyAuthorized = enabled && verified && prefs.getBoolean("auto_answer", false) &&
+                prefs.getBoolean(BACKGROUND_AUTHORIZED, false),
             autoAnswerDelaySeconds = prefs.getInt("auto_answer_delay_seconds", defaults.autoAnswerDelaySeconds)
                 .coerceIn(CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS),
             defaultOutgoingSimId = prefs.getString("default_outgoing_sim_id", null),
@@ -156,6 +172,7 @@ class CallSettings(
 
     companion object {
         private const val CREDENTIALS = "volc_credentials_v1"
+        internal const val BACKGROUND_AUTHORIZED = "background_standby_authorized"
 
         fun create(context: Context): CallSettings =
             CallSettings(context.getSharedPreferences("mika_call_settings", Context.MODE_PRIVATE))

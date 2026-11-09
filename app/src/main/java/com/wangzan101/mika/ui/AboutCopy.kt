@@ -45,7 +45,7 @@ object AboutCopy {
     val GUIDE: String get() = tr(R.string.about_guide)
     val GUIDE_SUB: String get() = tr(R.string.about_guide_sub)
 
-    val DATA_NOTE: String get() = tr(R.string.about_data_note, APP_NAME)
+    val DATA_NOTE: String get() = tr(R.string.about_data_note)
     val LICENSE_LINK: String get() = tr(R.string.about_license_link)
     val AUTHOR: String get() = tr(R.string.about_author)
     val LICENSE_TITLE: String get() = tr(R.string.about_license_title)

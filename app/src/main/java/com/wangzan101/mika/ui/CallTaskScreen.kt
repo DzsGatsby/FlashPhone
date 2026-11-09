@@ -1,6 +1,7 @@
 package com.wangzan101.mika.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -8,7 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -80,6 +83,7 @@ internal fun CallTaskScreen(
     draft: CallTaskDraft, config: CallConfig, state: CallRuntimeState, ready: Boolean,
     editable: Boolean, canDial: Boolean, feedback: CallActionResult?,
     onSetup: () -> Unit, onConfirm: (CallTaskSubmission) -> Unit,
+    onConfirmLocked: (CallTaskSubmission) -> Unit,
 ) {
     var contextOpen by rememberSaveable { mutableStateOf(false) }
     var constraintsOpen by rememberSaveable { mutableStateOf(false) }
@@ -195,7 +199,12 @@ internal fun CallTaskScreen(
         CallTaskReviewDialog(
             submission, allowed,
             onDismiss = { review = null },
-            onDial = { if (allowed) { review = null; onConfirm(submission) } },
+            onDial = { locked ->
+                if (allowed) {
+                    review = null
+                    if (locked) onConfirmLocked(submission) else onConfirm(submission)
+                }
+            },
         )
     }
 }
@@ -244,7 +253,8 @@ private fun CallTaskSimDialog(
 }
 
 @Composable
-private fun CallTaskReviewDialog(submission: CallTaskSubmission, canDial: Boolean, onDismiss: () -> Unit, onDial: () -> Unit) {
+private fun CallTaskReviewDialog(submission: CallTaskSubmission, canDial: Boolean, onDismiss: () -> Unit, onDial: (Boolean) -> Unit) {
+    var locked by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.calls_task_review)) },
@@ -261,13 +271,30 @@ private fun CallTaskReviewDialog(submission: CallTaskSubmission, canDial: Boolea
                 }
                 if (submission.brief.context.isNotBlank()) TaskReviewField(stringResource(R.string.calls_task_context), submission.brief.context)
                 if (submission.brief.constraints.isNotBlank()) TaskReviewField(stringResource(R.string.calls_task_constraints), submission.brief.constraints)
-                Text(stringResource(if (canDial) R.string.calls_task_confirm_note else R.string.calls_task_review_blocked),
+                if (canDial) {
+                    for (mode in listOf(false, true)) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .testTag(if (mode) "call-mode-lock" else "call-mode-now")
+                            .selectable(selected = locked == mode, role = Role.RadioButton) { locked = mode },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RadioButton(selected = locked == mode, onClick = null)
+                            Text(stringResource(if (mode) R.string.calls_task_dial_locked else R.string.calls_task_dial_now))
+                        }
+                    }
+                }
+                Text(stringResource(when {
+                    !canDial -> R.string.calls_task_review_blocked
+                    locked -> R.string.calls_task_dial_locked_note
+                    else -> R.string.calls_task_confirm_note
+                }),
                     style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
             }
         },
         confirmButton = {
-            TextButton(onClick = onDial, enabled = canDial, modifier = Modifier.testTag("call-dial")) {
-                Text(stringResource(R.string.calls_task_confirm_dial))
+            TextButton(onClick = { onDial(locked) }, enabled = canDial,
+                modifier = Modifier.testTag(if (locked) "call-dial-locked" else "call-dial")) {
+                Text(stringResource(if (locked) R.string.calls_task_dial_locked_confirm else R.string.calls_task_confirm_dial))
             }
         },
         dismissButton = {

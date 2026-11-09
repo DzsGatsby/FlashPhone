@@ -64,6 +64,8 @@ internal class CallNotifications(private val context: Context) {
 
     companion object {
         const val ACTION = "com.wangzan101.mika.calls.TAKEOVER"
+        const val ACTION_CANCEL_LOCKED_DIAL = "com.wangzan101.mika.calls.CANCEL_LOCKED_DIAL"
+        const val LOCKED_DIAL_SCHEME = "mika-locked-dial"
         const val CHANNEL = "mika_ai_calls"
         private const val ID = 90_117
     }
@@ -71,13 +73,17 @@ internal class CallNotifications(private val context: Context) {
 
 class CallNotificationAction : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != CallNotifications.ACTION || intent.data?.scheme != "mika-call") return
-        val callId = intent.data?.schemeSpecificPart ?: return
+        val action = intent.action
+        val uri = intent.data ?: return
+        if (!((action == CallNotifications.ACTION && uri.scheme == "mika-call") ||
+                (action == CallNotifications.ACTION_CANCEL_LOCKED_DIAL && uri.scheme == CallNotifications.LOCKED_DIAL_SCHEME))) return
+        val id = uri.schemeSpecificPart ?: return
         val app = context.applicationContext as? MikaApp ?: return
         val pending = goAsync()
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                app.calls.takeover(callId)
+                if (action == CallNotifications.ACTION_CANCEL_LOCKED_DIAL) app.calls.cancelLockedDial(id)
+                else app.calls.takeover(id)
             } finally {
                 pending.finish()
             }

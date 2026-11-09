@@ -33,7 +33,7 @@ import com.wangzan101.mika.a11y.MikaAccessibilityService
  */
 private const val OP_RESTRICTED_SETTINGS = "android:access_restricted_settings"
 
-class SystemStatusMonitor(context: Context, private val shell: BuiltinShellControl) {
+class SystemStatusMonitor(context: Context, private val shell: BuiltinShellControl, private val callsOnly: Boolean = false) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val _status = MutableStateFlow(read())
@@ -47,10 +47,12 @@ class SystemStatusMonitor(context: Context, private val shell: BuiltinShellContr
     fun start() {
         if (scope != null) return
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { scope = it }
-        app.contentResolver.registerContentObserver(
-            Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, a11ySetting,
-        )
-        ScreenAccessibility.instance.onEach { refresh() }.launchIn(s)
+        if (!callsOnly) {
+            app.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, a11ySetting,
+            )
+            ScreenAccessibility.instance.onEach { refresh() }.launchIn(s)
+        }
         // 引导页要实时跟着系统开关走:用户在系统设置里打开后,回来就看到下一步
         app.contentResolver.registerContentObserver(DeveloperSettings.developerOptionsUri, false, a11ySetting)
         app.contentResolver.registerContentObserver(DeveloperSettings.wirelessDebuggingUri, false, a11ySetting)
@@ -72,22 +74,22 @@ class SystemStatusMonitor(context: Context, private val shell: BuiltinShellContr
     private fun read() = SystemStatus(
         sdkInt = Build.VERSION.SDK_INT,
         builtinShell = shell.status.value,
-        accessibility = accessibilityState(),
+        accessibility = if (callsOnly) AccessibilityState.Off else accessibilityState(),
         userLocked = userLocked(),
         notificationsAllowed = app.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
-        attentionLowered = channelLowered(TaskService.CHANNEL_ATTENTION),
-        resultLowered = channelLowered(TaskService.CHANNEL_RESULT),
+        attentionLowered = !callsOnly && channelLowered(TaskService.CHANNEL_ATTENTION),
+        resultLowered = !callsOnly && channelLowered(TaskService.CHANNEL_RESULT),
         // 先建好频道:配对前就能看出它是不是被关了或调低了,也能直接打开它的设置页
         pairingChannel = PairingNotifier.ensureChannel(app).health,
-        attentionImportance = channelImportance(TaskService.CHANNEL_ATTENTION),
-        resultImportance = channelImportance(TaskService.CHANNEL_RESULT),
-        progressImportance = channelImportance(TaskService.CHANNEL_PROGRESS),
+        attentionImportance = if (callsOnly) null else channelImportance(TaskService.CHANNEL_ATTENTION),
+        resultImportance = if (callsOnly) null else channelImportance(TaskService.CHANNEL_RESULT),
+        progressImportance = if (callsOnly) null else channelImportance(TaskService.CHANNEL_PROGRESS),
         developerOptions = DeveloperSettings.developerOptions(app.contentResolver),
         wirelessDebugging = DeveloperSettings.wirelessDebugging(app.contentResolver),
         wirelessDebuggingMissing = DeveloperSettings.wirelessDebuggingMissing(app.contentResolver),
         developerSettingsMissing = DeveloperSettings.developerOptionsPageMissing(app.packageManager),
         usbDebugging = DeveloperSettings.usbDebugging(app.contentResolver),
-        restrictedSettings = restrictedSettings(),
+        restrictedSettings = !callsOnly && restrictedSettings(),
         helperRestart = shell.restart,
         rootStart = shell.rootStart,
     )

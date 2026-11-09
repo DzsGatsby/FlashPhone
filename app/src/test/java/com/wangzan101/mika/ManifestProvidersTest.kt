@@ -49,19 +49,22 @@ class ManifestProvidersTest {
         assertEquals("\${applicationId}.helper", p.getAttributeNS(androidNs, "authorities"))
     }
 
-    /** 电脑连接的服务对外开放只为让 adb shell 起它:普通 App 没有这个权限,起不了、也开关不了 USB 方式。 */
     @Test
-    fun computerAccessServiceIsOnlyStartableWithShellLevelPermission() {
+    fun lockScreenStandbyIsInternalAndTelecomStillOwnsIncomingUi() {
         val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
             .newDocumentBuilder().parse(File("src/main/AndroidManifest.xml"))
         val services = doc.getElementsByTagName("service")
-        val s = (0 until services.length).map { services.item(it) as Element }
-            .single { it.getAttributeNS(androidNs, "name") == ".mcp.McpService" }
-        assertEquals("true", s.getAttributeNS(androidNs, "exported"))
-        assertEquals("android.permission.INTERACT_ACROSS_USERS_FULL", s.getAttributeNS(androidNs, "permission"))
-        assertEquals("specialUse", s.getAttributeNS(androidNs, "foregroundServiceType"))
-        // 没有 intent-filter:只能按组件名显式起
-        assertEquals(0, s.getElementsByTagName("intent-filter").length)
+        val byName = (0 until services.length).map { services.item(it) as Element }
+            .associateBy { it.getAttributeNS(androidNs, "name") }
+        val standby = byName.getValue(".calls.CallStandbyService")
+        assertEquals("false", standby.getAttributeNS(androidNs, "exported"))
+        assertEquals("specialUse", standby.getAttributeNS(androidNs, "foregroundServiceType"))
+        assertEquals(0, standby.getElementsByTagName("intent-filter").length)
+        val telecom = byName.getValue(".calls.MikaInCallService")
+        assertEquals("android.permission.BIND_INCALL_SERVICE", telecom.getAttributeNS(androidNs, "permission"))
+        val metadata = telecom.getElementsByTagName("meta-data").item(0) as Element
+        assertEquals("android.telecom.IN_CALL_SERVICE_UI", metadata.getAttributeNS(androidNs, "name"))
+        assertEquals("false", metadata.getAttributeNS(androidNs, "value"))
     }
 
     /** 清单里登记的组件都按全名找得到类(搬了代码的入口留着同名的薄壳)。 */
@@ -99,56 +102,22 @@ class ManifestProvidersTest {
         }
     }
 
-    /**
-     * 拍照附件走系统相机:声明用到相机、但不是必需(没有相机的设备照常安装)。这条声明不能删:
-     * 有的系统按 APK 特征给应用分类,没有它时 Mika 可能被当成游戏、限制刷新率。
-     */
     @Test
-    fun cameraIsDeclaredAsOptionalFeature() {
+    fun phoneApkDoesNotExposeGeneralAssistantEntryPointsOrPermissions() {
         val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
             .newDocumentBuilder().parse(File("src/main/AndroidManifest.xml"))
-        val features = doc.getElementsByTagName("uses-feature")
-        val camera = (0 until features.length).map { features.item(it) as Element }
-            .singleOrNull { it.getAttributeNS(androidNs, "name") == "android.hardware.camera" }
-        assertTrue("uses-feature android.hardware.camera is missing", camera != null)
-        assertEquals("false", camera!!.getAttributeNS(androidNs, "required"))
-    }
-
-    /**
-     * 定位权限隐含「需要定位硬件」;网页定位不是必需功能,声明成非必需,没有 GPS 的设备也能装。
-     */
-    @Test
-    fun locationIsDeclaredAsAnOptionalFeature() {
-        val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-            .newDocumentBuilder().parse(File("src/main/AndroidManifest.xml"))
-        val nodes = doc.getElementsByTagName("uses-feature")
-        val features = (0 until nodes.length).map { nodes.item(it) as Element }
-            .associateBy { it.getAttributeNS(androidNs, "name") }
-        for (name in listOf("android.hardware.location", "android.hardware.location.gps")) {
-            val feature = features[name]
-            assertTrue("uses-feature $name is missing", feature != null)
-            assertEquals(name, "false", feature!!.getAttributeNS(androidNs, "required"))
+        fun names(tag: String): Set<String> {
+            val nodes = doc.getElementsByTagName(tag)
+            return (0 until nodes.length).map { (nodes.item(it) as Element).getAttributeNS(androidNs, "name") }.toSet()
         }
-    }
-
-    /**
-     * 兼容性自检的测试页对外开放只为让内置助手(shell)开它:调用方必须持有 INTERACT_ACROSS_USERS_FULL,普通 App 打不开;
-     * 没有 intent-filter,只能按组件名开;单独一个任务、不进最近任务。助手认的类名和清单一致。
-     */
-    @Test
-    fun selfCheckTargetIsOnlyStartableWithShellLevelPermission() {
-        val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-            .newDocumentBuilder().parse(File("src/main/AndroidManifest.xml"))
-        val activities = doc.getElementsByTagName("activity")
-        val a = (0 until activities.length).map { activities.item(it) as Element }
-            .single { it.getAttributeNS(androidNs, "name") == ".selfcheck.SelfCheckTargetActivity" }
-        assertEquals("true", a.getAttributeNS(androidNs, "exported"))
-        assertEquals("android.permission.INTERACT_ACROSS_USERS_FULL", a.getAttributeNS(androidNs, "permission"))
-        assertEquals(0, a.getElementsByTagName("intent-filter").length)
-        assertEquals(com.wangzan101.mika.cap.phone.shell.SystemIntents.OWN_PAGE_CLASS, "com.wangzan101.mika" + a.getAttributeNS(androidNs, "name"))
-        assertEquals("true", a.getAttributeNS(androidNs, "excludeFromRecents"))
-        assertTrue(a.hasAttributeNS(androidNs, "taskAffinity"))
-        assertEquals("", a.getAttributeNS(androidNs, "taskAffinity"))
+        assertEquals(setOf(".ui.MainActivity"), names("activity"))
+        assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".about.UpdateJobService"), names("service"))
+        assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver"), names("receiver"))
+        assertTrue("Unrelated permission is declared", names("uses-permission").intersect(setOf(
+            "android.permission.CAMERA", "android.permission.SYSTEM_ALERT_WINDOW",
+            "android.permission.READ_CALENDAR", "android.permission.READ_MEDIA_IMAGES",
+            "android.permission.ACCESS_FINE_LOCATION", "android.permission.WRITE_SECURE_SETTINGS",
+        )).isEmpty())
     }
 
     /** 内置助手进程按这个全名启动。 */

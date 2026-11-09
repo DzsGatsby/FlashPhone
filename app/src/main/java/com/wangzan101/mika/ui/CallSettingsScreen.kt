@@ -1,16 +1,5 @@
 package com.wangzan101.mika.ui
 
-import android.Manifest
-import android.app.NotificationManager
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -57,7 +46,7 @@ import java.util.Date
 /** The current call and receiving controls come first; the rest expands without changing pages. */
 @Composable
 fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = null, onBack: () -> Unit,
-    standalone: Boolean = false, onAppSettings: () -> Unit = {}, onAbout: () -> Unit = {},
+    standalone: Boolean = false, onHelperSetup: () -> Unit = {}, onAbout: () -> Unit = {},
     updateAvailable: Boolean = false, focusRequest: Int = 0) {
     var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
     var instructionsOpen by rememberSaveable { mutableStateOf(false) }
@@ -76,7 +65,7 @@ fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = nul
         instructionsOpen -> CallInstructionsScreen(runtime) { instructionsOpen = false }
         else -> workspaceState.SaveableStateProvider("call-workspace") {
             CallSettingsWorkspace(runtime, taskDraft, onBack, onInstructions ?: { instructionsOpen = true },
-                standalone, onAppSettings, onAbout, updateAvailable, focusRequest) {
+                standalone, onHelperSetup, onAbout, updateAvailable, focusRequest) {
                 voiceCloneOpen = true
             }
         }
@@ -87,11 +76,10 @@ fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = nul
 private fun CallSettingsWorkspace(
     runtime: CallRuntime, taskDraft: CallTaskDraft,
     onBack: () -> Unit, onInstructions: () -> Unit,
-    standalone: Boolean, onAppSettings: () -> Unit, onAbout: () -> Unit, updateAvailable: Boolean,
+    standalone: Boolean, onHelperSetup: () -> Unit, onAbout: () -> Unit, updateAvailable: Boolean,
     focusRequest: Int,
     onVoiceClone: () -> Unit,
 ) {
-    val context = LocalContext.current
     val config by runtime.settings.state.collectAsState()
     val state by runtime.state.collectAsState()
     val history by runtime.history.collectAsState()
@@ -99,9 +87,8 @@ private fun CallSettingsWorkspace(
     var busy by remember { mutableStateOf(false) }
     var controlBusy by remember { mutableStateOf(false) }
     var settingsBusy by remember { mutableStateOf(false) }
-    var notificationPermissionDenied by rememberSaveable { mutableStateOf(false) }
-    var notificationRefreshEpoch by remember { mutableIntStateOf(0) }
     var lastAction by remember { mutableIntStateOf(0) }
+    var lastActionWasLockedDial by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<CallActionResult?>(null) }
     var tab by rememberSaveable { mutableStateOf(CallWorkspaceTab.Receive) }
     val tabStates = rememberSaveableStateHolder()
@@ -115,9 +102,14 @@ private fun CallSettingsWorkspace(
     var pendingReuse by remember { mutableStateOf<Pair<String, CallTaskBrief>?>(null) }
     var dialog by rememberSaveable { mutableStateOf<CallDialog?>(null) }
     val idle = state.phase == CallPhase.IDLE
-    val ready = config.enabled && state.prepared && state.shellConnected &&
-        state.notificationsAvailable && config.credentialsConfigured && state.audioReady
+    val pendingLockedDial = state.lockedDialRequestId
     val failureText = stringResource(R.string.calls_action_failed)
+    val settingsErrorText = stringResource(R.string.calls_device_system_settings_failed)
+    val device = rememberCallDeviceControls(runtime) { feedback = CallActionResult(false, settingsErrorText) }
+    val ready = config.enabled && state.prepared && state.shellConnected && device.readiness.phoneAllowed &&
+        device.readiness.callNotificationsAllowed && state.notificationsAvailable && config.credentialsConfigured && state.audioReady
+    val canStartStandby = ready && config.audioVerified && config.autoAnswer && idle && pendingLockedDial == null &&
+        device.readiness.standbyNotificationsAllowed && !busy && !controlBusy && !settingsBusy
 
     LaunchedEffect(focusRequest) {
         if (focusRequest > 0 && focusRequest != handledFocusRequest) {
@@ -127,10 +119,11 @@ private fun CallSettingsWorkspace(
         }
     }
 
-    fun perform(priority: Boolean = false, action: suspend () -> CallActionResult) {
+    fun perform(priority: Boolean = false, lockedDial: Boolean = false, action: suspend () -> CallActionResult) {
         if (if (priority) controlBusy else busy || controlBusy) return
         if (priority) controlBusy = true else busy = true
         val sequence = ++lastAction
+        lastActionWasLockedDial = lockedDial
         feedback = null
         scope.launch {
             try {
@@ -164,45 +157,14 @@ private fun CallSettingsWorkspace(
         }
     }
 
-    val repairNotifications = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        notificationRefreshEpoch++
-        scope.launch { runtime.refresh() }
-    }
-    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        if (Build.VERSION.SDK_INT >= 33 && Manifest.permission.POST_NOTIFICATIONS in granted) {
-            notificationPermissionDenied = granted[Manifest.permission.POST_NOTIFICATIONS] == false
-        }
-        if (granted.isNotEmpty() && granted.values.all { it }) {
-            perform {
-                if (!runtime.settings.state.value.enabled && !save { it.copy(enabled = true) }) {
-                    CallActionResult(false, failureText)
-                } else runtime.prepare()
-            }
-        } else feedback = CallActionResult(false, context.getString(R.string.calls_permissions_required))
-    }
-    val notificationsNeedSettings = remember(context, state.notificationsAvailable, notificationPermissionDenied, notificationRefreshEpoch) {
-        !state.notificationsAvailable && notificationSettingsIntent(context, notificationPermissionDenied) != null
-    }
     val prepare: () -> Unit = {
-        val repair = notificationSettingsIntent(context, notificationPermissionDenied)
-        if (repair != null) {
-            try {
-                repairNotifications.launch(repair)
-            } catch (_: ActivityNotFoundException) {
-                runCatching {
-                    repairNotifications.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", context.packageName, null)))
-                }.onFailure { feedback = CallActionResult(false, failureText) }
-            }
-        } else {
-            permissions.launch(buildList {
-                add(Manifest.permission.READ_PHONE_STATE)
-                add(Manifest.permission.CALL_PHONE)
-                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            }.toTypedArray())
+        perform {
+            if (!runtime.settings.state.value.enabled && !save { it.copy(enabled = true) }) {
+                CallActionResult(false, failureText)
+            } else runtime.prepare()
         }
     }
-    LaunchedEffect(runtime) { runtime.refresh() }
+    val startStandby: () -> Unit = { perform { runtime.startBackgroundStandby() } }
     fun reuse(number: String, brief: CallTaskBrief) {
         taskDraft.fill(number, brief)
         tab = CallWorkspaceTab.Task
@@ -216,8 +178,8 @@ private fun CallSettingsWorkspace(
 
     PageBackground(Modifier.testTag("call-settings")) {
         Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
-            if (standalone) TopBar(stringResource(R.string.app_name), MikaIcons.Gear, onAppSettings,
-                stringResource(R.string.settings_title), right = {
+            if (standalone) TopBar(stringResource(R.string.app_name), MikaIcons.Gear, ::openDeviceSettings,
+                stringResource(R.string.calls_tab_settings), right = {
                     BarIconButton(MikaIcons.Info, stringResource(R.string.about_check), onAbout, badge = updateAvailable)
                 })
             else TopBar(stringResource(R.string.calls_title), MikaIcons.Back, onBack, stringResource(R.string.back))
@@ -246,6 +208,11 @@ private fun CallSettingsWorkspace(
                     },
                 )
             }
+            if (pendingLockedDial != null) {
+                CallLockedDialPendingRow(state, enabled = !controlBusy) {
+                    perform(priority = true, lockedDial = true) { runtime.cancelLockedDial(pendingLockedDial) }
+                }
+            }
             CallWorkspaceTabs(tab) { tab = it }
             tabStates.SaveableStateProvider(tab.name) {
                 val scroll = rememberScrollState()
@@ -271,14 +238,27 @@ private fun CallSettingsWorkspace(
                         .padding(horizontal = MikaSpace.Page).padding(top = 8.dp, bottom = 24.dp)
                         .testTag("call-page-" + tab.name.lowercase()),
                 ) {
-                    val visibleFeedback = feedback?.takeIf { idle }
+                    val visibleFeedback = feedback?.takeIf {
+                        idle && !(lastActionWasLockedDial && it.ok && state.lockedDialDetail != null)
+                    }
+                    if (tab == CallWorkspaceTab.Task && idle && pendingLockedDial == null && visibleFeedback == null) {
+                        state.lockedDialDetail?.let { FooterNote(it) }
+                    }
                     if (tab != CallWorkspaceTab.Task) visibleFeedback?.let { CallFeedback(it) }
                     when (tab) {
                         CallWorkspaceTab.Receive -> CallReceivePage(
                             config, state, ready,
-                            controlsEnabled = !settingsBusy && !controlBusy,
+                            controlsEnabled = !settingsBusy && !controlBusy && (!busy || config.autoAnswer),
+                            canStartStandby = canStartStandby,
+                            standbyNeedsSetup = ready && !device.readiness.standbyNotificationsAllowed,
                             onSetup = ::openDeviceSettings,
-                            onToggle = { checked -> scope.launch { save { it.copy(autoAnswer = checked) } } },
+                            onToggle = { checked ->
+                                scope.launch {
+                                    if (save { it.copy(autoAnswer = checked) } && checked &&
+                                        device.readiness.standbyNotificationsAllowed) startStandby()
+                                }
+                            },
+                            onStartStandby = startStandby,
                             onRules = { dialog = CallDialog.Rules },
                             onBypass = { dialog = CallDialog.Bypass },
                             onPause = { minutes -> perform(priority = true) { runtime.pauseAutoAnswer(minutes) } },
@@ -287,25 +267,32 @@ private fun CallSettingsWorkspace(
                         )
                         CallWorkspaceTab.Task -> CallTaskScreen(
                             taskDraft, config, state, ready,
-                            editable = !busy && !controlBusy, canDial = idle && !busy && !controlBusy,
+                            editable = pendingLockedDial == null && !busy && !controlBusy,
+                            canDial = idle && pendingLockedDial == null && !busy && !controlBusy,
                             feedback = visibleFeedback, onSetup = ::openDeviceSettings,
                             onConfirm = { submission ->
                                 perform {
                                     runtime.dial(submission.number, simId = submission.simId, task = submission.brief)
                                 }
                             },
+                            onConfirmLocked = { submission ->
+                                perform(lockedDial = true) {
+                                    runtime.queueLockedDial(submission.number, simId = submission.simId, task = submission.brief)
+                                }
+                            },
                         )
                         CallWorkspaceTab.History -> CallHistorySection(
                             history, state.historyWriteFailed, onMark = runtime::setHistoryHandled, onDelete = runtime::deleteHistory,
-                            onReuseTask = if (busy || controlBusy) null else { number, brief ->
+                            onReuseTask = if (pendingLockedDial != null || busy || controlBusy) null else { number, brief ->
                                 if (taskDraft.hasContent) pendingReuse = number to brief else reuse(number, brief)
                             },
                         )
                         CallWorkspaceTab.Settings -> CallPreferencesPage(
                             config, state, ready, deviceNavigation,
-                            canConfigure = idle && !busy && !controlBusy && !settingsBusy,
-                            stopBusy = controlBusy || settingsBusy, notificationsNeedSettings = notificationsNeedSettings,
+                            canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
+                            stopBusy = controlBusy || settingsBusy, device = device, canStartStandby = canStartStandby,
                             onPrepare = prepare, onStop = { perform(priority = true) { runtime.stop() } },
+                            onHelperSetup = onHelperSetup, onStartStandby = startStandby,
                             onCredentials = { dialog = CallDialog.Credentials }, onProfile = { dialog = CallDialog.Profile },
                             onVoiceClone = onVoiceClone,
                             onVerifyAudio = { verified ->
@@ -341,6 +328,7 @@ private fun CallSettingsWorkspace(
             save { it.copy(bypassIncomingNumbers = numbers) }
         }
         CallDialog.Credentials -> CallCredentialsDialog(runtime, onDismiss = { dialog = null }) {
+            lastActionWasLockedDial = false
             feedback = CallActionResult(true, it)
         }
         CallDialog.Profile -> CallProfileDialog(config, onDismiss = { dialog = null }, onSave = { edits ->
@@ -352,22 +340,6 @@ private fun CallSettingsWorkspace(
         })
         null -> Unit
     }
-}
-
-private fun notificationSettingsIntent(context: Context, permissionDenied: Boolean): Intent? {
-    if (Build.VERSION.SDK_INT >= 33 &&
-        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    ) {
-        return if (permissionDenied) Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) else null
-    }
-    val manager = context.getSystemService(NotificationManager::class.java) ?: return null
-    return when {
-        !manager.areNotificationsEnabled() -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-        manager.getNotificationChannel(CallNotifications.CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE ->
-            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_CHANNEL_ID, CallNotifications.CHANNEL)
-        else -> return null
-    }.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
 }
 
 private enum class CallDialog { Rules, Bypass, Credentials, Profile }
@@ -502,8 +474,9 @@ private fun LiveCallTranscript(callId: String?, lines: List<CallTranscriptLine>)
 @Composable
 private fun CallReceivePage(
     config: CallConfig, state: CallRuntimeState, ready: Boolean, controlsEnabled: Boolean,
+    canStartStandby: Boolean, standbyNeedsSetup: Boolean,
     onSetup: () -> Unit, onToggle: (Boolean) -> Unit, onRules: () -> Unit, onBypass: () -> Unit,
-    onPause: (Int) -> Unit, onResume: () -> Unit, onInstructions: () -> Unit,
+    onPause: (Int) -> Unit, onResume: () -> Unit, onInstructions: () -> Unit, onStartStandby: () -> Unit,
 ) {
     var scopeOpen by rememberSaveable { mutableStateOf(false) }
     var importantOpen by rememberSaveable { mutableStateOf(false) }
@@ -543,6 +516,9 @@ private fun CallReceivePage(
             ListRow(MikaIcons.Gear, stringResource(R.string.calls_device_and_permissions),
                 stringResource(if (!ready) R.string.calls_needs_setup else R.string.calls_verify_note),
                 onClick = onSetup) { RowChevron() }
+        }
+        if (config.autoAnswer) {
+            CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby, onSetup.takeIf { standbyNeedsSetup })
         }
     }
 
@@ -603,11 +579,13 @@ private fun CallReceivePage(
 @Composable
 private fun CallPreferencesPage(
     config: CallConfig, state: CallRuntimeState, ready: Boolean, openDeviceRequest: Int,
-    canConfigure: Boolean, stopBusy: Boolean, notificationsNeedSettings: Boolean,
+    canConfigure: Boolean, stopBusy: Boolean, device: CallDeviceControls, canStartStandby: Boolean,
     onPrepare: () -> Unit, onStop: () -> Unit, onCredentials: () -> Unit, onProfile: () -> Unit,
     onVoiceClone: () -> Unit, onVerifyAudio: (Boolean) -> Unit, onDefaultSim: (String?) -> Unit,
+    onHelperSetup: () -> Unit, onStartStandby: () -> Unit,
 ) {
-    var deviceOpen by rememberSaveable { mutableStateOf(!ready) }
+    var deviceOpen by rememberSaveable { mutableStateOf(!ready || !config.audioVerified) }
+    var backgroundOpen by rememberSaveable { mutableStateOf(false) }
     var voiceOpen by rememberSaveable { mutableStateOf(false) }
     var simOpen by rememberSaveable { mutableStateOf(false) }
     var lastDeviceRequest by rememberSaveable { mutableIntStateOf(0) }
@@ -619,12 +597,12 @@ private fun CallPreferencesPage(
     }
     GroupCard {
         CallFoldRow(MikaIcons.Gear, stringResource(R.string.calls_device_and_permissions), deviceOpen, "call-settings-device",
-            subtitle = stringResource(if (ready) R.string.calls_ready else R.string.calls_needs_setup)) { deviceOpen = !deviceOpen }
+            subtitle = stringResource(readinessSummary(config, ready))) { deviceOpen = !deviceOpen }
         if (deviceOpen) {
-            HorizontalDivider()
-            CallReadinessCard(config, state, ready, canConfigure, stopBusy, notificationsNeedSettings,
+            CallPermissionRows(device, state.shellConnected, canConfigure, onHelperSetup)
+            CallReadinessActions(config, state, ready, canConfigure, stopBusy, device.readiness,
                 onPrepare, onStop, onCredentials)
-            val canVerify = canConfigure && state.audioReady
+            val canVerify = canConfigure && (ready || config.audioVerified)
             Row(
                 Modifier.fillMaxWidth().toggleable(config.audioVerified, enabled = canVerify, role = Role.Checkbox,
                     onValueChange = onVerifyAudio).padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 48.dp),
@@ -638,6 +616,26 @@ private fun CallPreferencesPage(
                 }
             }
             state.audioDetail?.let { FooterNote(it) }
+        }
+    }
+
+    GroupCard {
+        CallFoldRow(MikaIcons.Bell, stringResource(R.string.calls_background_settings), backgroundOpen, "call-settings-background",
+            subtitle = stringResource(backgroundStandbyStatus(config, state))) { backgroundOpen = !backgroundOpen }
+        if (backgroundOpen) {
+            if (config.autoAnswer) {
+                CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby)
+                if (!state.backgroundStandbyStarting) {
+                    state.backgroundStandbyBlockedReason?.let { FooterNote(it) }
+                }
+            }
+            CallBatterySettingsRow(device, canConfigure)
+            FooterNote(stringResource(R.string.calls_background_lock_screen_note))
+            if (device.readiness.callNotificationsAllowed) {
+                TextButton(onClick = device.callChannelAction, enabled = canConfigure, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.calls_notification_settings))
+                }
+            }
         }
     }
 
@@ -681,63 +679,46 @@ private fun CallPreferencesPage(
 }
 
 @Composable
-private fun CallReadinessCard(
+private fun CallReadinessActions(
     config: CallConfig, state: CallRuntimeState, ready: Boolean, enabled: Boolean, stopBusy: Boolean,
-    notificationsNeedSettings: Boolean,
+    device: CallDeviceReadiness,
     onPrepare: () -> Unit, onStop: () -> Unit, onCredentials: () -> Unit,
 ) {
+    val canPrepare = state.shellConnected && device.phoneAllowed && device.callNotificationsAllowed
     Column(Modifier.fillMaxWidth().testTag("call-readiness").padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IconTile(MikaIcons.Phone, if (ready) TileTone.Ok else if (config.enabled) TileTone.Warn else TileTone.Neutral)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(when {
-                            ready -> R.string.calls_ready
-                            config.enabled -> R.string.calls_needs_setup
-                            else -> R.string.calls_disabled
-                        }),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        when {
-                            notificationsNeedSettings -> stringResource(R.string.calls_permissions_required)
-                            !config.enabled -> stringResource(R.string.calls_system_default)
-                            !state.shellConnected -> stringResource(R.string.calls_setup_shell)
-                            !state.notificationsAvailable -> stringResource(R.string.calls_permissions_required)
-                            !config.credentialsConfigured -> stringResource(R.string.calls_setup_credentials)
-                            !ready -> state.audioDetail ?: stringResource(R.string.calls_needs_setup)
-                            else -> stringResource(R.string.calls_limits, config.maxCallSeconds)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MikaTheme.colors.ink3,
-                    )
+        Text(
+            when {
+                !config.enabled -> stringResource(R.string.calls_system_default)
+                ready -> stringResource(R.string.calls_limits, config.maxCallSeconds)
+                else -> stringResource(R.string.calls_needs_setup)
+            },
+            style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3,
+        )
+        if (canPrepare && state.prepared && !config.credentialsConfigured) {
+            CallPrimaryButton(stringResource(R.string.calls_credentials), enabled, onCredentials)
+        } else if (canPrepare && !ready) {
+            CallPrimaryButton(stringResource(if (config.enabled) R.string.calls_prepare else R.string.calls_enable),
+                enabled, onPrepare, Modifier.testTag("call-enable"))
+        }
+        if (config.enabled) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (ready) TextButton(onClick = onPrepare, enabled = enabled, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.calls_prepare))
                 }
-            }
-            if (!ready && config.enabled && !config.credentialsConfigured && state.prepared && state.shellConnected &&
-                state.notificationsAvailable) {
-                CallPrimaryButton(stringResource(R.string.calls_credentials), enabled, onCredentials)
-            } else if (!ready) {
-                val actionLabel = when {
-                    notificationsNeedSettings -> R.string.calls_notification_settings
-                    config.enabled -> R.string.calls_prepare
-                    else -> R.string.calls_enable
-                }
-                CallPrimaryButton(stringResource(actionLabel), enabled, onPrepare, Modifier.testTag("call-enable"))
-            }
-            if (config.enabled) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (ready) {
-                        TextButton(onClick = onPrepare, enabled = enabled, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.calls_prepare))
-                        }
-                    }
-                    TextButton(onClick = onStop, enabled = !stopBusy, modifier = Modifier.weight(1f).testTag("call-disable")) {
-                        Text(stringResource(R.string.calls_disable_short))
-                    }
+                TextButton(onClick = onStop, enabled = !stopBusy, modifier = Modifier.weight(1f).testTag("call-disable")) {
+                    Text(stringResource(R.string.calls_disable_short))
                 }
             }
         }
+    }
+}
+
+private fun readinessSummary(config: CallConfig, ready: Boolean): Int = when {
+    !config.enabled -> R.string.calls_disabled
+    !ready -> R.string.calls_needs_setup
+    !config.audioVerified -> R.string.calls_device_ready_to_test
+    else -> R.string.calls_ready
 }
 
 @Composable

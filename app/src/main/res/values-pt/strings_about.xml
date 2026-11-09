@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · estrelas são bem-vindas</string>
     <string name="about_guide">Guia e como contribuir</string>
     <string name="about_guide_sub">Primeiros passos; adicione conhecimento sobre apps mesmo sem programar</string>
-    <string name="about_data_note">O que você envia ao %1$s — mensagens, conteúdo da tela e capturas de tela — vai apenas para o provedor de modelo que você configurou. O %1$s não tem servidores próprios e não coleta nenhum dado seu; a verificação de atualizações só acessa o GitHub.</string>
+    <string name="about_data_note">Durante o atendimento por IA, o áudio vai para o serviço de voz configurado. Não são guardadas gravações; as transcrições são criptografadas no telefone. A verificação de atualizações conecta-se ao GitHub.</string>
     <string name="about_license_link">Licença Apache-2.0</string>
     <string name="about_author">Baseado no Mika, de Wang Zan · © 2026</string>
     <string name="about_license_title">Licença Apache-2.0</string>

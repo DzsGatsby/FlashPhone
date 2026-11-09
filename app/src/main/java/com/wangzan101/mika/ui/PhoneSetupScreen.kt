@@ -104,7 +104,8 @@ private val StepSetSaver = Saver<Set<SetupStep>, String>(
  * [repair] 是从设置页「重新配对」进来的。
  */
 @Composable
-fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit, onboarding: Boolean = false, onClose: () -> Unit) {
+fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit, onboarding: Boolean = false,
+    callOnly: Boolean = false, onClose: () -> Unit) {
     val context = LocalContext.current
     val phone = remember { PhoneServices.of(context) }
     val pairing = phone.pairing
@@ -123,8 +124,10 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
     var usbAsked by rememberSaveable { mutableStateOf(false) }
     var stalledMs by remember { mutableLongStateOf(0L) }
 
-    val inputs = status.setupInputs(discovery, repairing, accessibilitySkipped, confirmed, revisit, stalledMs, usbAsked)
-    val view = PhoneSetupFlow.view(inputs)
+    val inputs = status.setupInputs(discovery, repairing, callOnly || accessibilitySkipped, confirmed, revisit, stalledMs, usbAsked)
+    val view = PhoneSetupFlow.view(inputs).let {
+        if (callOnly) it.copy(marks = it.marks - SetupStep.Accessibility) else it
+    }
     // 停在同一处没有进展时计时,换了地方从头算;到了时限就不用再数
     val stallPoint = PhoneSetupFlow.stallPoint(view)
     LaunchedEffect(stallPoint) {
@@ -208,7 +211,7 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
         },
         onAllowNotifications = { onFix(Fix.AllowNotifications) },
         onOpenPairingChannel = { onFix(Fix.OpenPairingChannel) },
-        headsUpLowered = status.notificationsAllowed && (status.attentionLowered || status.resultLowered),
+        headsUpLowered = !callOnly && status.notificationsAllowed && (status.attentionLowered || status.resultLowered),
         onOpenHeadsUp = { onFix(if (status.attentionLowered) Fix.OpenAttentionChannel else Fix.OpenResultChannel) },
         onConfirmStep = { step -> confirmed = confirmed + step; revisit = null },
         onSubmit = { code, port -> pairing.submit(code, port) },
@@ -228,6 +231,7 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
         usbCommand = usbCommand,
         onAskUsb = { usbAsked = true },
         onCopyUsbCommand = copyUsbCommand,
+        barTitle = if (callOnly) stringResource(R.string.calls_device_pair_helper) else PhoneSetupCopy.BAR_TITLE,
     )
     // 卡在哪一步都能把诊断信息发给作者:用的是引导页此刻的输入,用户确认过的步骤也在里面
     if (diagnosticsOpen) {
@@ -269,14 +273,15 @@ fun PhoneSetupContent(
     usbCommand: String? = null,
     onAskUsb: () -> Unit = {},
     onCopyUsbCommand: () -> Unit = {},
+    barTitle: String = PhoneSetupCopy.BAR_TITLE,
 ) {
     val canRevisit = view.phase == SetupPhase.Guide || view.phase == SetupPhase.Failed
     fun revisitable(step: SetupStep) = canRevisit && step != view.current && step in PhoneSetupFlow.REVISITABLE &&
-        view.marks.getValue(step) in setOf(StepMark.Done, StepMark.Skipped, StepMark.Failed)
+        view.marks[step] in setOf(StepMark.Done, StepMark.Skipped, StepMark.Failed)
     val c = MikaTheme.colors
     PageBackground {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
-            TopBar(PhoneSetupCopy.BAR_TITLE, MikaIcons.Back, onClose, stringResource(R.string.back))
+            TopBar(barTitle, MikaIcons.Back, onClose, stringResource(R.string.back))
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                 if (view.phase == SetupPhase.Unavailable) {
                     // 这个环境没有能起助手的路:只说明,不列走不通的步骤
@@ -302,7 +307,7 @@ fun PhoneSetupContent(
                         )
                     }
                     GroupCard {
-                        SetupStep.entries.forEach { step ->
+                        SetupStep.entries.filter(view.marks::containsKey).forEach { step ->
                             StepRow(
                                 step, view.marks.getValue(step), current = step == view.current, first = step.ordinal == 0,
                                 onClick = if (revisitable(step)) ({ onRevisit(step) }) else null,

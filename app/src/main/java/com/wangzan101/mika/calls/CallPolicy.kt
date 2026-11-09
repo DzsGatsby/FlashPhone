@@ -23,6 +23,7 @@ data class CallConfig(
     val defaultOutgoingSimId: String? = null,
     val bypassIncomingNumbers: Set<String> = emptySet(),
     val autoAnswerPausedUntilMs: Long? = null,
+    internal val backgroundStandbyAuthorized: Boolean = false,
 ) {
     companion object {
         const val MIN_AUTO_ANSWER_DELAY_SECONDS = 3

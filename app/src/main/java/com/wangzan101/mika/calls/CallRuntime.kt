@@ -1,13 +1,16 @@
 package com.wangzan101.mika.calls
 
 import android.annotation.SuppressLint
+import android.app.KeyguardManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.os.SystemClock
+import android.os.UserManager
 import android.telecom.Call
 import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
@@ -69,6 +72,13 @@ data class CallRuntimeState(
     val canAnswer: Boolean = false,
     val canHangUp: Boolean = false,
     val canTakeOver: Boolean = false,
+    val backgroundStandbyRunning: Boolean = false,
+    val backgroundStandbyStarting: Boolean = false,
+    val backgroundStandbyBlockedReason: String? = null,
+    val lockedDialRequestId: String? = null,
+    val lockedDialRemainingSeconds: Int? = null,
+    val lockedDialPreparing: Boolean = false,
+    val lockedDialDetail: String? = null,
 ) {
     override fun toString(): String =
         "CallRuntimeState(prepared=$prepared, phase=$phase, direction=$direction, aiActive=$aiActive, pendingAutoAnswer=$pendingAutoAnswer)"
@@ -103,6 +113,16 @@ class CallRuntime(private val app: MikaApp) {
     private var probeEpoch = 0
     private var unobservedManagedCall = false
     private var autoPauseWriting = false
+    private var standbyService: CallStandbyService? = null
+    private var standbyStarting = false
+    private var standbyStartError: String? = null
+    private var standbyIncomingRequested = false
+    private var standbyStartId: String? = null
+    private var standbyStartTimeout: Job? = null
+    private val standbyRunning = MutableStateFlow(false)
+    private val lockedDialGate = LockedDialGate(SystemClock::elapsedRealtime)
+    private var lockedDial: PendingLockedDial? = null
+    private var lockedDialDetail: String? = null
     private var liveTranscriptCallId: String? = null
     private val liveTranscript = mutableListOf<CallTranscriptLine>()
 
@@ -110,7 +130,10 @@ class CallRuntime(private val app: MikaApp) {
     init {
         scope.launch {
             app.phone.hub.shell.collect { current ->
-                if (shell != null && shell !== current) cancelWork("内置助手已断开，电话由系统处理")
+                if (shell != null && shell !== current) {
+                    lockedDial?.let { finishLockedDial(it, "内置助手断开，未执行锁屏拨出") }
+                    cancelWork("内置助手已断开，电话由系统处理")
+                }
                 shell = current
                 audioReady = false
                 audioDetail = null
@@ -123,6 +146,10 @@ class CallRuntime(private val app: MikaApp) {
             var previousMode: CallAudioMode? = null
             var previousEnabled = false
             settings.state.collect { config ->
+                lockedDial?.takeIf { !config.enabled || !config.credentialsConfigured || config.audioMode != it.config.audioMode }
+                    ?.let { finishLockedDial(it, "电话设置已变更，未执行锁屏拨出") }
+                if (!hasAuthorizedIncomingStandby()) standbyService?.revokeIncomingAuthorization()
+                stopBackgroundStandbyIfUnneeded()
                 val active = work
                 if (active != null && (!config.enabled || !config.credentialsConfigured ||
                         config.audioMode != active.config.audioMode ||
@@ -144,7 +171,10 @@ class CallRuntime(private val app: MikaApp) {
         scope.launch {
             var previous = settings.credentialsRevision.value
             settings.credentialsRevision.collect { current ->
-                if (previous != current) cancelWork("火山凭据已变更，电话由系统处理")
+                if (previous != current) {
+                    lockedDial?.let { finishLockedDial(it, "火山凭据已变更，未执行锁屏拨出") }
+                    cancelWork("火山凭据已变更，电话由系统处理")
+                }
                 previous = current
             }
         }
@@ -152,15 +182,22 @@ class CallRuntime(private val app: MikaApp) {
         scope.launch { records.writeFailed.collect { publish() } }
         scope.launch(Dispatchers.IO) { instructions.load() }
         scope.launch {
-            // The wall-clock deadline is persisted; seconds refresh only while Mika is visible.
+            // While the UI is hidden, only one expiry wake-up is needed for the standby notification.
             val pause = settings.state.map { config ->
                 config.autoAnswerPausedUntilMs.takeIf { config.enabled && config.autoAnswer }
             }.distinctUntilChanged()
-            combine(pause, app.foreground.visible) { until, visible -> until to visible }
-                .collectLatest { (until, visible) ->
-                    if (!visible) return@collectLatest
+            combine(pause, app.foreground.visible, standbyRunning) { until, visible, running -> Triple(until, visible, running) }
+                .collectLatest { (until, visible, running) ->
+                    cancelPendingIfStandbyLost()
                     publish()
                     if (until == null) return@collectLatest
+                    if (!visible) {
+                        if (running) {
+                            delay((until - System.currentTimeMillis()).coerceAtLeast(0L))
+                            publish()
+                        }
+                        return@collectLatest
+                    }
                     while (true) {
                         val remaining = until - System.currentTimeMillis()
                         if (remaining <= 0L) {
@@ -179,6 +216,142 @@ class CallRuntime(private val app: MikaApp) {
             maybeStartAutoAnswer()
         }
     }
+
+    /** Explicit user action in the unlocked phone UI. This never starts from a receiver or an incoming call. */
+    suspend fun startBackgroundStandby(): CallActionResult = onMain {
+        val config = settings.state.value
+        if (!interactiveForeground() || !userUnlocked()) return@onMain fail("请解锁手机并在电话页面启动后台待命")
+        if (!CallStandbyPolicy.optedIn(config, userUnlocked())) return@onMain fail("请先开启自动接听并完成通话配置")
+        autoAnswerBlocker(config)?.let { return@onMain fail(it) }
+        if (!CallStandbyService.notificationsAvailable(app, create = true)) return@onMain fail("请允许后台待命通知")
+        if (isIncomingStandbyRunning()) return@onMain ok("后台待命已启动")
+        if (standbyStarting) return@onMain fail("Android 正在启动后台待命")
+        if (!settings.authorizeBackgroundStandby()) return@onMain fail("无法保存后台接听授权，请重试")
+        if (!requestCallForegroundService(incoming = true)) return@onMain fail(standbyStartError ?: "后台待命未启动")
+        state.first { !it.backgroundStandbyStarting }
+        if (isIncomingStandbyRunning()) ok("后台待命已启动") else fail(standbyStartError ?: "后台待命未启动")
+    }
+
+    private fun requestCallForegroundService(incoming: Boolean): Boolean {
+        if (standbyStarting) return !incoming || standbyIncomingRequested
+        standbyIncomingRequested = incoming
+        standbyStarting = true
+        standbyStartError = null
+        val startId = UUID.randomUUID().toString()
+        standbyStartId = startId
+        publish()
+        if (runCatching {
+            val intent = CallStandbyService.startIntent(app, startId)
+            if (standbyService != null) app.startService(intent) else app.startForegroundService(intent)
+        }.getOrNull() == null) {
+            onStandbyStartFailed("Android 未允许启动后台待命，请在应用中重试")
+            return false
+        }
+        // This deadline belongs to the runtime, even if the initiating screen is dismissed.
+        standbyStartTimeout = scope.launch {
+            delay(STANDBY_START_MS)
+            if (standbyStarting) {
+                standbyStartTimeout = null
+                onStandbyStartFailed("Android 尚未确认后台待命启动，请重试")
+            }
+        }
+        return true
+    }
+
+    private fun isStandbyOptedIn(): Boolean = CallStandbyPolicy.optedIn(settings.state.value, userUnlocked())
+
+    internal fun hasAuthorizedIncomingStandby(): Boolean = isStandbyOptedIn() && settings.state.value.backgroundStandbyAuthorized
+
+    private fun isIncomingStandbyRunning(): Boolean = standbyService?.stickyAutoAnswer == true && hasAuthorizedIncomingStandby()
+
+    internal fun hasLockedDialForegroundWork(): Boolean = userUnlocked() && settings.state.value.enabled &&
+        (lockedDial != null || work?.lockedDialTicket != null)
+
+    internal fun isStandbyStartRequested(requestId: String?): Boolean = standbyStarting && requestId != null && requestId == standbyStartId
+
+    internal fun isIncomingStandbyStartRequested(): Boolean = standbyIncomingRequested
+
+    internal fun onStandbyStarted(service: CallStandbyService) {
+        standbyStartTimeout?.cancel()
+        standbyStartTimeout = null
+        standbyService = service
+        standbyStarting = false
+        standbyIncomingRequested = false
+        standbyStartId = null
+        standbyStartError = null
+        standbyRunning.value = true
+        publish()
+    }
+
+    internal fun onStandbyStartFailed(reason: String) {
+        standbyStartTimeout?.cancel()
+        standbyStartTimeout = null
+        standbyStarting = false
+        standbyIncomingRequested = false
+        standbyStartId = null
+        standbyStartError = reason
+        lockedDial?.let { finishLockedDial(it, "后台电话服务未启动，未执行锁屏拨出") }
+        publish()
+    }
+
+    internal fun onStandbyStopped(service: CallStandbyService) {
+        if (standbyService !== service) return
+        standbyService = null
+        standbyRunning.value = false
+        lockedDial?.let { finishLockedDial(it, "后台电话服务停止，未执行锁屏拨出") }
+        if (work?.let { (it.lockedDialTicket != null && it.placed) || (it.automatic && it.answerSent) } == true && !interactiveForeground()) {
+            cancelWork("后台电话服务已停止，通话由系统处理")
+        }
+        cancelPendingIfStandbyLost()
+        publish()
+    }
+
+    private fun stopBackgroundStandby() {
+        val running = standbyService != null
+        standbyStartTimeout?.cancel()
+        standbyStartTimeout = null
+        standbyStarting = false
+        standbyIncomingRequested = false
+        standbyStartId = null
+        standbyService = null
+        standbyRunning.value = false
+        // Android can crash the process if a startForegroundService request is stopped before
+        // it is acknowledged with startForeground. An in-flight request acknowledges then stops itself.
+        if (running) runCatching { app.stopService(CallStandbyService.startIntent(app)) }
+        cancelPendingIfStandbyLost()
+    }
+
+    private fun stopBackgroundStandbyIfUnneeded() {
+        if (!hasLockedDialForegroundWork() && (standbyService != null || standbyStarting) &&
+            !(hasAuthorizedIncomingStandby() && (standbyService?.stickyAutoAnswer == true || standbyIncomingRequested))) {
+            stopBackgroundStandby()
+        }
+    }
+
+    private fun cancelPendingIfStandbyLost() {
+        if (!canAutomaticallyAnswerHere() && work?.let { it.automatic && !it.answerSent && it.stopReason.value == null } == true) {
+            cancelWork("后台待命不可用，本次来电由系统电话处理")
+        }
+    }
+
+    private fun userUnlocked(): Boolean =
+        runCatching { app.getSystemService(UserManager::class.java)?.isUserUnlocked == true }.getOrDefault(false)
+
+    private fun interactiveForeground(): Boolean = runCatching {
+        CallStandbyPolicy.interactiveForeground(
+            visible = app.foreground.visible.value,
+            interactive = app.getSystemService(PowerManager::class.java)?.isInteractive == true,
+            keyguardShowing = app.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false,
+        )
+    }.getOrDefault(false)
+
+    private fun keyguardLocked(): Boolean =
+        runCatching { app.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true }.getOrDefault(false)
+
+    private fun canAutomaticallyAnswerHere(): Boolean = CallStandbyPolicy.allowsAutomaticAnswer(
+        userUnlocked = userUnlocked(), interactiveForeground = interactiveForeground(), serviceRunning = isIncomingStandbyRunning(),
+        notificationsAllowed = standbyService != null && CallStandbyService.notificationsAvailable(app),
+    )
 
     suspend fun pauseAutoAnswer(minutes: Int): CallActionResult = onMain {
         if (minutes !in 1..CallPolicy.MAX_AUTO_ANSWER_PAUSE_MINUTES) {
@@ -284,6 +457,8 @@ class CallRuntime(private val app: MikaApp) {
             armed = false
             configuring = true
             val active = cancelWork("AI 电话已关闭，电话由系统处理")
+            lockedDial?.let { finishLockedDial(it, "AI 电话已关闭，未执行锁屏拨出") }
+            stopBackgroundStandby()
             publish()
             val saved: Boolean
             val audioRestored: Boolean
@@ -321,6 +496,7 @@ class CallRuntime(private val app: MikaApp) {
             return@onMain report(e.message ?: "本次拨打交代无效")
         }
         prerequisite()?.let { return@onMain report(it) }
+        if (lockedDial != null) return@onMain report("请先取消已安排的锁屏拨出")
         val normalized = CallPolicy.outgoingNumber(number) ?: return@onMain report("仅支持普通号码，不支持紧急号码、短号或控制代码")
         if (isEmergency(normalized) != false) return@onMain report("紧急号码或无法确认安全的号码不能拨打")
         if (liveCalls().isNotEmpty() || work != null || managedCallPresent() != false) {
@@ -328,6 +504,7 @@ class CallRuntime(private val app: MikaApp) {
         }
         readSims()
         prerequisite()?.let { return@onMain report(it) }
+        if (lockedDial != null) return@onMain report("请先取消已安排的锁屏拨出")
         if (liveCalls().isNotEmpty() || work != null || managedCallPresent() != false) {
             return@onMain report("已有通话或无法确认空闲，未拨号")
         }
@@ -342,6 +519,140 @@ class CallRuntime(private val app: MikaApp) {
         val attempt = Work(CallDirection.OUTGOING, config, requestedNumber = normalized, sim = sim, task = taskSnapshot)
         startWork(attempt)
         awaitResult(attempt)
+    }
+
+    /** Takes effect only after the owner confirms this specific task while the app is visible. */
+    suspend fun queueLockedDial(number: String, simId: String? = null, task: CallTaskBrief): CallActionResult = onMain {
+        if (!interactiveForeground() || !userUnlocked()) return@onMain fail("请解锁手机并在电话页面确认本次拨号")
+        if (!secureDeviceLock()) return@onMain fail("请先为手机设置 PIN、图案或密码锁")
+        if (lockedDial != null) return@onMain fail("已有一次锁屏拨出，请先取消")
+        val snapshot = try { task.validatedSnapshot() } catch (e: IllegalArgumentException) {
+            return@onMain fail(e.message ?: "本次拨打交代无效")
+        }
+        prerequisite()?.let { return@onMain fail(it) }
+        val normalized = CallPolicy.outgoingNumber(number) ?: return@onMain fail("仅支持普通号码，不支持紧急号码、短号或控制代码")
+        if (isEmergency(normalized) != false) return@onMain fail("紧急号码或无法确认安全的号码不能拨打")
+        if (!lockedDialIdle()) return@onMain fail("已有通话或无法确认空闲，未安排拨号")
+        readSims()
+        if (!withContext(Dispatchers.IO) { access.ready() }) return@onMain fail("系统通话管理权限不可用")
+        if (!interactiveForeground() || !userUnlocked() || !secureDeviceLock()) {
+            return@onMain fail("请在手机解锁时确认安排锁屏拨出")
+        }
+        prerequisite()?.let { return@onMain fail(it) }
+        if (lockedDial != null || !lockedDialIdle()) return@onMain fail("已有拨号安排或通话，未安排拨号")
+        val config = settings.state.value
+        val picked = CallPolicy.chooseOutgoingSim(sims.map { it.info }, simId, config.defaultOutgoingSimId)
+            ?: return@onMain fail(if (simId == null && config.defaultOutgoingSimId != null) "保存的默认拨号 SIM 已不可用，请重新选择"
+                else "请选择一张有效的 SIM，或明确选择可用的系统默认 SIM")
+        val sim = sims.single { it.info.id == picked.id }
+        if (!CallStandbyService.notificationsAvailable(app, create = true)) return@onMain fail("请允许后台待命通知，以便取消锁屏拨出")
+        val ticket = lockedDialGate.arm(normalized, picked.id, snapshot) ?: return@onMain fail("未能安排本次锁屏拨出")
+        val pending = PendingLockedDial(ticket, config, sim, settings.credentialsRevision.value)
+        lockedDial = pending
+        lockedDialDetail = "已安排锁屏拨出，请在 45 秒内锁屏"
+        // A short one-shot lock keeps the confirmation window ticking as the screen turns off.
+        // There is no indefinite standby wake lock and no attempt to wake or unlock the display.
+        pending.wakeLock = runCatching {
+            val power = checkNotNull(app.getSystemService(PowerManager::class.java))
+            power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FlashPhone:LockedDial").apply {
+                setReferenceCounted(false)
+                acquire((ticket.expiresAtMs - SystemClock.elapsedRealtime() + 1_000L).coerceIn(1L, 46_000L))
+            }
+        }.getOrNull()
+        if (pending.wakeLock == null) {
+            finishLockedDial(pending, "无法保持锁屏拨号确认窗口，未安排拨号")
+            return@onMain fail(lockedDialDetail.orEmpty())
+        }
+        if (standbyService == null && !requestCallForegroundService(incoming = false)) {
+            return@onMain fail(lockedDialDetail ?: "后台电话服务未启动")
+        }
+        pending.job = scope.launch(start = CoroutineStart.LAZY) { observeLockedDial(pending) }
+        pending.job?.start()
+        publish()
+        if (lockedDial === pending) ok("已安排一次锁屏拨出；Android 尚未拨号")
+        else fail(lockedDialDetail ?: "本次锁屏拨出未安排")
+    }
+
+    suspend fun cancelLockedDial(requestId: String): CallActionResult = onMain {
+        val pending = lockedDial?.takeIf { it.ticket.id == requestId }
+            ?: return@onMain fail("该锁屏拨出已结束或已提交系统")
+        finishLockedDial(pending, "已取消本次锁屏拨出")
+        ok("已取消本次锁屏拨出")
+    }
+
+    private fun secureDeviceLock(): Boolean =
+        runCatching { app.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true }.getOrDefault(false)
+
+    private fun lockedDialIdle(pending: PendingLockedDial? = null): Boolean =
+        (work == null || pending != null && work?.lockedDialTicket === pending.ticket) &&
+            liveCalls().isEmpty() && managedCallPresent() == false
+
+    private fun lockedDialEligible(pending: PendingLockedDial): Boolean = userUnlocked() && secureDeviceLock() &&
+        (standbyService != null || standbyStarting) && settings.state.value.audioMode == pending.config.audioMode &&
+        settings.credentialsRevision.value == pending.credentialsRevision &&
+        prerequisite(ignoreWork = true) == null && CallStandbyService.notificationsAvailable(app) && lockedDialIdle(pending)
+
+    private suspend fun observeLockedDial(pending: PendingLockedDial) {
+        while (lockedDial === pending) {
+            val remaining = pending.ticket.expiresAtMs - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) {
+                finishLockedDial(pending, "锁屏拨出安排已过期，未拨号")
+                return
+            }
+            val deviceLocked = keyguardLocked()
+            val eligible = lockedDialEligible(pending)
+            if (pending.claimed) {
+                if (!deviceLocked || !eligible || standbyService == null) {
+                    finishLockedDial(pending, "手机已解锁或通话条件变化，未执行锁屏拨出")
+                    return
+                }
+            } else when (val decision = lockedDialGate.poll(pending.ticket, deviceLocked && standbyService != null, eligible)) {
+                LockedDialGate.Decision.WaitingForLock -> Unit
+                is LockedDialGate.Decision.Rejected -> {
+                    finishLockedDial(pending, if (decision.reason == LockedDialGate.Rejection.EXPIRED) "锁屏拨出安排已过期，未拨号"
+                        else "电话条件变化，未执行锁屏拨出")
+                    return
+                }
+                is LockedDialGate.Decision.Claimed -> {
+                    pending.claimed = true
+                    lockedDialDetail = "手机已锁屏，正在准备拨号"
+                    val request = decision.request
+                    startWork(Work(CallDirection.OUTGOING, pending.config, requestedNumber = request.number,
+                        sim = pending.sim, task = request.task, lockedDialTicket = pending.ticket))
+                }
+            }
+            if (mutable.value.lockedDialRemainingSeconds != remainingSeconds(pending)) publish()
+            delay(minOf(250L, remaining))
+        }
+    }
+
+    private fun remainingSeconds(pending: PendingLockedDial): Int =
+        ((pending.ticket.expiresAtMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L) + 999L).div(1_000L).toInt()
+
+    private fun finishLockedDial(pending: PendingLockedDial, reason: String, cancelUnplacedWork: Boolean = true) {
+        if (lockedDial !== pending) return
+        lockedDial = null
+        lockedDialGate.cancel(pending.ticket)
+        pending.job?.cancel()
+        runCatching { pending.wakeLock?.takeIf { it.isHeld }?.release() }
+        pending.wakeLock = null
+        lockedDialDetail = reason
+        if (cancelUnplacedWork && work?.let { it.lockedDialTicket === pending.ticket && !it.placed } == true) cancelWork(reason)
+        stopBackgroundStandbyIfUnneeded()
+        publish()
+    }
+
+    private fun validateLockedDial(w: Work) {
+        val ticket = w.lockedDialTicket ?: return
+        val pending = lockedDial?.takeIf { it.ticket === ticket && it.claimed }
+            ?: throw CallProblem("锁屏拨出已取消，未拨号")
+        when (lockedDialGate.submissionRejection(ticket) {
+            standbyService != null && lockedDialEligible(pending) && keyguardLocked()
+        }) {
+            LockedDialGate.Rejection.EXPIRED -> throw CallProblem("锁屏拨出安排已过期，未拨号")
+            null -> Unit
+            else -> throw CallProblem("手机已解锁或通话条件变化，未执行锁屏拨出")
+        }
     }
 
     suspend fun answer(expectedCallId: String? = null): CallActionResult = onMain {
@@ -427,9 +738,11 @@ class CallRuntime(private val app: MikaApp) {
             t.initialRingPolicy = settings.state.value
             t.ringObservedAt = SystemClock.elapsedRealtime()
             t.ringObservedWallMs = System.currentTimeMillis()
-            if (autoPauseWriting) t.autoTried = true
+            if (autoPauseWriting || !canAutomaticallyAnswerHere()) t.autoTried = true
         }
         val calls = liveCalls()
+        if (calls.isNotEmpty()) lockedDial?.takeUnless { work?.lockedDialTicket === it.ticket && work?.placed == true }
+            ?.let { finishLockedDial(it, "检测到另一通电话，未执行锁屏拨出") }
         if (calls.size > 1) calls.filter { it.phase == CallPhase.RINGING }.forEach { it.autoTried = true }
         val active = work
         if (active != null) {
@@ -439,6 +752,7 @@ class CallRuntime(private val app: MikaApp) {
             val target = active.track
             if (target === t && active.direction == CallDirection.OUTGOING &&
                 call.state in setOf(Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_ACTIVE)) {
+                if (active.lockedDialTicket != null) lockedDialDetail = "Android 已确认锁屏拨出"
                 active.result.complete(ok("Android 已确认拨号；是否接通请查看实时状态"))
             }
             when {
@@ -461,7 +775,7 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     private fun maybeStartAutoAnswer() {
-        if (work != null || autoPauseWriting) return
+        if (work != null || lockedDial != null || autoPauseWriting || !canAutomaticallyAnswerHere()) return
         val t = liveCalls().singleOrNull() ?: return
         val initial = t.initialRingPolicy ?: return
         if (t.phase != CallPhase.RINGING || t.direction != CallDirection.INCOMING || t.suppressed || t.autoTried) return
@@ -519,6 +833,7 @@ class CallRuntime(private val app: MikaApp) {
             if (!notifications.show(w.id, detail.orEmpty(), ringing = w.direction == CallDirection.INCOMING)) {
                 throw CallProblem("需要打开 AI 电话通知，才能随时取消或接管")
             }
+            if (!interactiveForeground()) acquireCallWakeLock(w, 20_000L)
             if (w.automatic) waitAutoAnswerDelay(w)
             prerequisite(ignoreWork = true)?.let { throw CallProblem(it) }
             validateTarget(w)
@@ -567,6 +882,10 @@ class CallRuntime(private val app: MikaApp) {
                 // Preparing the realtime session takes time; do not let Telecom fall back to a
                 // different account if the chosen SIM disappeared in the meantime.
                 readSims()
+                if (w.lockedDialTicket != null && !withContext(Dispatchers.IO) { access.ready() }) {
+                    armed = false
+                    throw CallProblem("系统通话管理权限不可用，未执行锁屏拨出")
+                }
                 if (sims.none { it.handle == sim.handle }) throw CallProblem("选定的拨号 SIM 已不可用，请重新选择")
                 prerequisite(ignoreWork = true)?.let { throw CallProblem(it) }
                 if (liveCalls().isNotEmpty() || managedCallPresent() != false) throw CallProblem("已有通话或无法确认空闲，未拨号")
@@ -575,9 +894,14 @@ class CallRuntime(private val app: MikaApp) {
                     putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, sim.handle)
                     putBundle(TelecomManager.EXTRA_OUTGOING_CALL_EXTRAS, Bundle().apply { putString(TOKEN, w.id) })
                 }
+                validateLockedDial(w)
                 w.placed = true
                 w.telecomActionIssued = true
-                if (runCatching { checkNotNull(telecom).placeCall(Uri.fromParts(PhoneAccount.SCHEME_TEL, number, null), extras) }.isFailure) {
+                val issued = runCatching { checkNotNull(telecom).placeCall(Uri.fromParts(PhoneAccount.SCHEME_TEL, number, null), extras) }.isSuccess
+                lockedDial?.takeIf { it.ticket === w.lockedDialTicket }?.let {
+                    finishLockedDial(it, if (issued) "正在等待 Android 确认锁屏拨号" else "Android 拒绝锁屏拨号")
+                }
+                if (!issued) {
                     throw CallProblem("Android 拒绝拨号")
                 }
                 if (!waitFor(CallPolicy.DIAL_TIMEOUT_MS) { w.track != null }) {
@@ -594,6 +918,7 @@ class CallRuntime(private val app: MikaApp) {
             }
             w.activeAt = System.currentTimeMillis()
             w.activeElapsed = SystemClock.elapsedRealtime()
+            acquireCallWakeLock(w)
             w.bridging = true
             detail = "已接通，正在建立双向音频"
             publish()
@@ -627,7 +952,7 @@ class CallRuntime(private val app: MikaApp) {
                 val reason = w.stopReason.value ?: "AI 已退出，电话由系统处理"
                 w.mediaStage = MediaStage.RELEASE
                 runCatching { w.session?.close() }.onFailure { debugMediaException(w, it) }
-                val restored = restoreAudio(w)
+                val restored = try { restoreAudio(w) } finally { releaseCallWakeLock(w) }
                 w.mediaCounters?.playbackDiagnostic()?.let { Log.d("MikaCallMedia", "playback $it") }
                 w.track?.let {
                     if (w.telecomActionIssued) {
@@ -637,8 +962,13 @@ class CallRuntime(private val app: MikaApp) {
                     }
                 }
                 if (work === w) {
+                    lockedDial?.takeIf { it.ticket === w.lockedDialTicket }?.let {
+                        finishLockedDial(it, reason, cancelUnplacedWork = false)
+                    }
                     work = null
                     detail = if (restored) reason else "$reason；音频恢复尚未确认"
+                    if (w.lockedDialTicket != null) lockedDialDetail = detail
+                    stopBackgroundStandbyIfUnneeded()
                     if (w.telecomActionIssued && w.track?.phase == CallPhase.ACTIVE) notifications.handoff()
                     else notifications.clear()
                     publish()
@@ -647,6 +977,24 @@ class CallRuntime(private val app: MikaApp) {
                 w.cleaned.complete(restored)
             }
         }
+    }
+
+    /** Only a pending AI attempt or active call can hold a timed partial wake lock. */
+    private fun acquireCallWakeLock(w: Work, timeoutMs: Long = CallStandbyPolicy.activeWakeBudgetMs(w.config.maxCallSeconds)) {
+        releaseCallWakeLock(w)
+        runCatching {
+            val power = app.getSystemService(PowerManager::class.java) ?: return
+            val lock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FlashPhone:ActiveCall")
+            lock.setReferenceCounted(false)
+            w.wakeLock = lock
+            lock.acquire(timeoutMs)
+        }.onFailure { debugMediaException(w, it) }
+    }
+
+    private fun releaseCallWakeLock(w: Work) {
+        val lock = w.wakeLock ?: return
+        w.wakeLock = null
+        runCatching { if (lock.isHeld) lock.release() }.onFailure { debugMediaException(w, it) }
     }
 
     private suspend fun probeAudio(): Boolean {
@@ -911,6 +1259,7 @@ class CallRuntime(private val app: MikaApp) {
                 throw CallProblem("来电已变化，AI 未接听")
             }
             if (w.automatic) {
+                if (!canAutomaticallyAnswerHere()) throw CallProblem("后台待命不可用，本次来电由系统电话处理")
                 val config = settings.state.value
                 val initial = t.initialRingPolicy
                 if (autoPauseWriting || initial == null ||
@@ -920,7 +1269,10 @@ class CallRuntime(private val app: MikaApp) {
                     throw CallProblem("来电已超时或不再符合自动接听规则")
                 }
             }
-        } else if (liveCalls().isNotEmpty()) throw CallProblem("已有通话，未拨号")
+        } else {
+            if (liveCalls().isNotEmpty()) throw CallProblem("已有通话，未拨号")
+            validateLockedDial(w)
+        }
     }
 
     private fun isCurrentCall(target: Tracked, expectedCallId: String?): Boolean =
@@ -992,7 +1344,20 @@ class CallRuntime(private val app: MikaApp) {
             CallPolicy.autoAnswerPauseRemainingMs(config, System.currentTimeMillis())
                 .takeIf { it > 0L }?.let { 1L + (it - 1L) / 1000L }
         } else null
-        val blocker = if (enabled && config.autoAnswer) autoAnswerBlocker(config, notificationReady) else null
+        val standbyNotify = enabled && config.autoAnswer && CallStandbyService.notificationsAvailable(app)
+        val baseBlocker = if (enabled && config.autoAnswer) autoAnswerBlocker(config, notificationReady) else null
+        val standbyBlocked = if (enabled && config.autoAnswer) when {
+            !userUnlocked() -> "手机重启后须先由机主解锁"
+            !standbyNotify -> "请允许后台待命通知"
+            baseBlocker != null -> baseBlocker
+            pauseSeconds != null -> "自动接听已暂停"
+            standbyStarting && standbyIncomingRequested -> null
+            !isIncomingStandbyRunning() -> standbyStartError ?: "请在电话页面启动后台待命"
+            else -> null
+        } else null
+        val blocker = if (enabled && config.autoAnswer) baseBlocker ?: if (!canAutomaticallyAnswerHere()) {
+            standbyBlocked ?: "后台待命正在启动"
+        } else null else null
         val autoStage = when {
             countdown != null -> CallAutoAnswerStage.COUNTDOWN
             pending -> CallAutoAnswerStage.PREPARING
@@ -1034,6 +1399,13 @@ class CallRuntime(private val app: MikaApp) {
             canHangUp = enabled && armed && current != null && current.phase != CallPhase.DISCONNECTING &&
                 calls.size == 1 && carrierCall(current.call),
             canTakeOver = active != null && active.stopReason.value == null,
+            backgroundStandbyRunning = isIncomingStandbyRunning(),
+            backgroundStandbyStarting = standbyStarting && standbyIncomingRequested,
+            backgroundStandbyBlockedReason = standbyBlocked,
+            lockedDialRequestId = lockedDial?.ticket?.id,
+            lockedDialRemainingSeconds = lockedDial?.let(::remainingSeconds),
+            lockedDialPreparing = lockedDial?.claimed == true,
+            lockedDialDetail = lockedDialDetail,
         )
         changes.value++
     }
@@ -1106,6 +1478,17 @@ class CallRuntime(private val app: MikaApp) {
     private fun fail(message: String) = CallActionResult(false, message)
 
     private class CarrierSim(val info: CallSim, val handle: PhoneAccountHandle)
+    private class PendingLockedDial(
+        val ticket: LockedDialGate.Ticket,
+        val config: CallConfig,
+        val sim: CarrierSim,
+        val credentialsRevision: Long,
+    ) {
+        var job: Job? = null
+        var claimed = false
+        var wakeLock: PowerManager.WakeLock? = null
+    }
+
     private class Tracked(val call: Call, val service: MikaInCallService) {
         val id = UUID.randomUUID().toString()
         val number get() = numberOf(call)
@@ -1141,6 +1524,7 @@ class CallRuntime(private val app: MikaApp) {
         val sim: CarrierSim? = null,
         val expectedCallId: String? = null,
         val task: CallTaskBrief? = null,
+        val lockedDialTicket: LockedDialGate.Ticket? = null,
     ) {
         val id = UUID.randomUUID().toString()
         val result = CompletableDeferred<CallActionResult>()
@@ -1167,6 +1551,7 @@ class CallRuntime(private val app: MikaApp) {
         val audioOwner = Binder()
         var audioHelper: IMikaShell? = null
         var muteLease: TelecomMuteLease? = null
+        var wakeLock: PowerManager.WakeLock? = null
         var capture: ParcelFileDescriptor.AutoCloseInputStream? = null
         var playback: ParcelFileDescriptor.AutoCloseOutputStream? = null
     }
@@ -1175,6 +1560,7 @@ class CallRuntime(private val app: MikaApp) {
 
     private companion object {
         const val MAX_MEDIA_DIAGNOSTICS = 4
+        const val STANDBY_START_MS = 5_000L
         const val MUTE_ACK_MS = 2_000L
         const val CALL_CHANGED = "指定通话已变化或结束，请重新读取电话状态"
         const val TOKEN = "com.wangzan101.mika.CALL_REQUEST_TOKEN"

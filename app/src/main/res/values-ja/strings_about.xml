@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · スター歓迎</string>
     <string name="about_guide">ガイドと貢献のしかた</string>
     <string name="about_guide_sub">はじめ方。コードを書かなくてもアプリの知識を追加できます</string>
-    <string name="about_data_note">%1$s に送った内容(メッセージ、画面の内容、スクリーンショット)は、設定したモデルプロバイダーにだけ送信されます。%1$s 専用のサーバーはなく、データも収集しません。アップデートの確認では GitHub にだけ接続します。</string>
+    <string name="about_data_note">AI が通話を処理している間だけ、設定済みの音声サービスに通話音声を送信します。録音は保存せず、文字起こしは端末に暗号化して保存します。更新確認時は GitHub に接続します。</string>
     <string name="about_license_link">Apache-2.0 ライセンス</string>
     <string name="about_author">Wang Zan による Mika をベースに開発 · © 2026</string>
     <string name="about_license_title">Apache-2.0 ライセンス</string>
