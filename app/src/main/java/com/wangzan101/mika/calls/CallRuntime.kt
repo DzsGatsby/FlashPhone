@@ -314,7 +314,12 @@ class CallRuntime(private val app: MikaApp) {
         }
     }
 
-    suspend fun dial(number: String, simId: String? = null): CallActionResult = onMain {
+    suspend fun dial(number: String, simId: String? = null, task: CallTaskBrief? = null): CallActionResult = onMain {
+        val taskSnapshot = try {
+            task?.validatedSnapshot()
+        } catch (e: IllegalArgumentException) {
+            return@onMain report(e.message ?: "本次拨打交代无效")
+        }
         prerequisite()?.let { return@onMain report(it) }
         val normalized = CallPolicy.outgoingNumber(number) ?: return@onMain report("仅支持普通号码，不支持紧急号码、短号或控制代码")
         if (isEmergency(normalized) != false) return@onMain report("紧急号码或无法确认安全的号码不能拨打")
@@ -334,7 +339,7 @@ class CallRuntime(private val app: MikaApp) {
                 else -> "请选择一张有效的 SIM，或明确选择系统默认 SIM"
             })
         val sim = sims.single { it.info.id == picked.id }
-        val attempt = Work(CallDirection.OUTGOING, config, requestedNumber = normalized, sim = sim)
+        val attempt = Work(CallDirection.OUTGOING, config, requestedNumber = normalized, sim = sim, task = taskSnapshot)
         startWork(attempt)
         awaitResult(attempt)
     }
@@ -533,7 +538,7 @@ class CallRuntime(private val app: MikaApp) {
             validateTarget(w)
             val session = withTimeoutOrNull(5_000L) {
                 VolcRealtimeClient().connect(credentials, VolcRealtimeConfig(
-                    systemPrompt = CallPolicy.prompt(w.config.systemPrompt, w.direction, ownerRules),
+                    systemPrompt = CallPolicy.prompt(w.config.systemPrompt, w.direction, ownerRules, task = w.task),
                     speaker = w.config.speaker,
                 ))
             } ?: throw CallProblem("火山实时语音连接超时，未由 AI 接管")
@@ -626,7 +631,7 @@ class CallRuntime(private val app: MikaApp) {
                 w.track?.let {
                     if (w.telecomActionIssued) {
                         val record = CallRecord(w.id, it.number, w.direction, w.activeAt ?: it.createdAt,
-                            System.currentTimeMillis(), reason, w.transcript.toList())
+                            System.currentTimeMillis(), reason, w.transcript.toList(), task = w.task)
                         scope.launch { records.append(record) }
                     }
                 }
@@ -703,7 +708,7 @@ class CallRuntime(private val app: MikaApp) {
             !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
             throw CallProblem("通话状态或静音已变更，未发送语音")
         }
-        val greeting = w.config.greeting.let {
+        val greeting = (if (w.task != null) CallPolicy.TASK_GREETING else w.config.greeting).let {
             if (it.startsWith("您好，我是 Mika 的 AI 电话助手。")) it else "您好，我是 Mika 的 AI 电话助手。$it"
         }
         val remaining = (w.config.maxCallSeconds * 1_000L - (SystemClock.elapsedRealtime() - w.activeElapsed)).coerceAtLeast(1)
@@ -1127,6 +1132,7 @@ class CallRuntime(private val app: MikaApp) {
         val requestedNumber: String? = null,
         val sim: CarrierSim? = null,
         val expectedCallId: String? = null,
+        val task: CallTaskBrief? = null,
     ) {
         val id = UUID.randomUUID().toString()
         val result = CompletableDeferred<CallActionResult>()

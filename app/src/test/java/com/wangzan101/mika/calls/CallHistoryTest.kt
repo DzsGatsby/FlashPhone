@@ -1,6 +1,7 @@
 package com.wangzan101.mika.calls
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Test
@@ -90,5 +91,25 @@ class CallHistoryTest {
             """{"id":"legacy","number":null,"direction":"INCOMING","startedAtMs":1,"endedAtMs":2,"result":"通话已结束","transcript":[]}""",
         )
         assertFalse(legacy.handled)
+        assertNull(legacy.task)
+    }
+
+    @Test fun outgoingTaskRoundTripsWithoutClaimingCompletionOrReusingItOnTheNextCall() = runBlocking {
+        val task = CallTaskBrief("问清服务时间", listOf("周末开门吗？"), "门店", "不预约").validatedSnapshot()
+        val attempted = record(1).copy(direction = CallDirection.OUTGOING, result = "通话已结束", task = task)
+        val decoded = Json.decodeFromString<CallRecord>(Json.encodeToString(attempted))
+        assertEquals(task, decoded.task)
+        assertEquals("通话已结束", decoded.result)
+        assertFalse(decoded.handled)
+        assertFalse(decoded.toString().contains(task.goal))
+
+        val storage = MemoryStorage(listOf(decoded))
+        val next = record(2).copy(direction = CallDirection.OUTGOING)
+        val history = CallHistory(storage)
+        assertEquals(CallHistory.Result.SAVED, history.append(next))
+        val reopened = CallHistory(storage)
+        reopened.load()
+        assertNull(reopened.state.value.first().task)
+        assertEquals(task, reopened.state.value.last().task)
     }
 }

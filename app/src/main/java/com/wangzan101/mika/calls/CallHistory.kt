@@ -28,6 +28,7 @@ data class CallRecord(
     val result: String,
     val transcript: List<CallTranscriptLine>,
     val handled: Boolean = false,
+    val task: CallTaskBrief? = null,
 ) {
     override fun toString(): String = "CallRecord(direction=$direction, result=$result)"
 }
@@ -134,8 +135,8 @@ internal class CallHistory(private val storage: Storage) {
         const val MAX_CALLS = 50
         const val MAX_LINES = 32
         const val MAX_LINE_LENGTH = 240
-        // Allow worst-case JSON escaping + Base64 for 50 bounded transcript records.
-        private const val MAX_ENCODED_CHARS = 4_000_000
+        // Allow worst-case JSON escaping + Base64 for 50 bounded transcripts and task briefs.
+        private const val MAX_ENCODED_CHARS = 5_000_000
         private const val KEY = "encrypted_calls_v1"
     }
 }

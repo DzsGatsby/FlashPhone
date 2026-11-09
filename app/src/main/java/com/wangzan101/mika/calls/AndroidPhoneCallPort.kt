@@ -1,6 +1,7 @@
 package com.wangzan101.mika.calls
 
 import com.wangzan101.mika.core.calls.PhoneCallPort
+import com.wangzan101.mika.core.calls.PhoneCallTask
 import kotlinx.serialization.json.*
 
 /** One native runtime for the local agent, UI and authenticated MCP endpoint. */
@@ -40,7 +41,9 @@ class AndroidPhoneCallPort(private val runtime: CallRuntime) : PhoneCallPort {
     private fun result(result: CallActionResult) = buildJsonObject {
         put("ok", result.ok); put("message", result.message); put("call", snapshot())
     }
-    override suspend fun dial(number: String, simId: String?) = result(runtime.dial(number, simId))
+    override suspend fun dial(number: String, simId: String?, task: PhoneCallTask?) = result(runtime.dial(
+        number, simId, task?.let { CallTaskBrief(it.goal, it.questions, it.context, it.constraints) },
+    ))
     override suspend fun answer(callId: String) = result(runtime.answer(expectedCallId = callId))
     override suspend fun hangup(callId: String) = result(runtime.hangup(expectedCallId = callId))
     override suspend fun takeover() = result(runtime.takeover())

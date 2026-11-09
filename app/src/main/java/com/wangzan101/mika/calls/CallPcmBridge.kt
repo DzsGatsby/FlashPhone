@@ -3,10 +3,13 @@ package com.wangzan101.mika.calls
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicInteger
@@ -46,7 +49,7 @@ internal class CallPcmBridge(
                     val count = (frame.pcm.size - written).coerceAtMost(960) // 20 ms
                     val accepted = writerLock.withLock {
                         if (generation.get() != frame.generation) return@withLock false
-                        playback.write(frame.pcm, written, count)
+                        callPipeIo { playback.write(frame.pcm, written, count) }
                         true
                     }
                     if (!accepted) break
@@ -62,7 +65,7 @@ internal class CallPcmBridge(
                 val frame = ByteArray(VolcRealtimeClient.INPUT_CHUNK_BYTES)
                 var position = 0
                 while (true) {
-                    val count = capture.read(frame, position, frame.size - position)
+                    val count = callPipeIo { capture.read(frame, position, frame.size - position) }
                     if (count < 0) throw CallMediaFailure("运营商音频输入已断开")
                     if (count == 0) continue
                     position += count
@@ -119,6 +122,22 @@ internal class CallPcmBridge(
             runCatching { playback.close() }
         }
     }
+}
+
+/** Closing a cancelled worker's pipe is expected; its IOException must not replace the cancellation. */
+internal suspend inline fun <T> callPipeIo(action: () -> T): T {
+    val context = currentCoroutineContext()
+    context.ensureActive()
+    val value = try {
+        action()
+    } catch (closed: IOException) {
+        // Still surface real I/O faults while the call is active.
+        context.ensureActive()
+        throw closed
+    }
+    // A concurrently closed stream may report EOF instead of throwing.
+    context.ensureActive()
+    return value
 }
 
 internal class CallMediaFailure(message: String) : Exception(message)

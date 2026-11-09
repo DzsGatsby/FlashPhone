@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallActionResult
 import com.wangzan101.mika.calls.CallDirection
+import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.calls.CallRecord
 import com.wangzan101.mika.calls.CallTranscriptLine
 import com.wangzan101.mika.ui.components.*
@@ -39,6 +40,7 @@ internal fun CallHistorySection(
     historyWriteFailed: Boolean,
     onMark: suspend (String, Boolean) -> CallActionResult,
     onDelete: suspend (String) -> CallActionResult,
+    onReuseTask: ((String, CallTaskBrief) -> Unit)? = null,
 ) {
     var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -69,7 +71,12 @@ internal fun CallHistorySection(
             matchesFilter && (text.isEmpty() || record.number.orEmpty().contains(text, ignoreCase = true) ||
                 (digits != null && record.number.orEmpty().filter(Char::isDigit).contains(digits)) ||
                 direction.contains(text, ignoreCase = true) || record.result.contains(text, ignoreCase = true) ||
-                record.transcript.any { it.text.contains(text, ignoreCase = true) })
+                record.transcript.any { it.text.contains(text, ignoreCase = true) } ||
+                record.task?.let { task ->
+                    (listOf(task.goal, task.context, task.constraints) + task.questions).any {
+                        it.contains(text, ignoreCase = true)
+                    }
+                } == true)
         }
     }
 
@@ -130,6 +137,9 @@ internal fun CallHistorySection(
                             change(if (next) handled else unhandled) { onMark(record.id, next) }
                         },
                         onDelete = { pendingDelete = record.id },
+                        onReuse = if (record.number != null && record.task != null && onReuseTask != null) {
+                            { onReuseTask(record.number, record.task) }
+                        } else null,
                     )
                 }
             }
@@ -174,8 +184,10 @@ internal fun CallHistorySection(
 @Composable
 private fun CallHistoryItem(
     record: CallRecord, expanded: Boolean, first: Boolean, busy: Boolean,
-    onExpand: () -> Unit, onMark: () -> Unit, onDelete: () -> Unit,
+    onExpand: () -> Unit, onMark: () -> Unit, onDelete: () -> Unit, onReuse: (() -> Unit)?,
 ) {
+    var showTask by rememberSaveable(record.id) { mutableStateOf(false) }
+    var showTranscript by rememberSaveable(record.id) { mutableStateOf(false) }
     val locale = LocalContext.current.resources.configuration.locales[0]
     val formatter = remember(locale) { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale) }
     val start = remember(record.startedAtMs, formatter) { formatter.format(Date(record.startedAtMs)) }
@@ -185,7 +197,9 @@ private fun CallHistoryItem(
     val name = record.number?.let { "\u2066$it\u2069" } ?: stringResource(R.string.calls_unknown_number)
     val expansion = stringResource(if (expanded) R.string.calls_collapse else R.string.calls_transcript)
     Column(Modifier.fillMaxWidth().semantics { stateDescription = expansion }) {
-        ListRow(MikaIcons.Clock, name, "$direction · $start", first = first, detail = "$status · ${record.result}",
+        ListRow(MikaIcons.Clock, record.task?.goal ?: name,
+            if (record.task != null) "$name · $direction · $start" else "$direction · $start",
+            first = first, detail = "$status · ${record.result}",
             onClick = onExpand) { CallExpandIcon(expanded) }
         if (expanded) {
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
@@ -193,12 +207,50 @@ private fun CallHistoryItem(
                 HorizontalDivider()
                 Text(stringResource(R.string.calls_history_period, start, end),
                     style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
-                Text(stringResource(R.string.calls_original_transcript), style = MaterialTheme.typography.titleSmall)
-                if (record.transcript.isEmpty()) {
-                    Text(stringResource(R.string.calls_no_transcript), style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
-                } else SelectionContainer {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        record.transcript.forEach { CallTranscriptText(it) }
+                record.task?.let { task ->
+                    Text(stringResource(R.string.calls_record_result_unconfirmed),
+                        style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
+                    TextButton(onClick = { showTask = !showTask }, modifier = Modifier.fillMaxWidth().testTag("call-record-task-toggle")) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(stringResource(R.string.calls_record_brief))
+                            CallExpandIcon(showTask)
+                        }
+                    }
+                    if (showTask) SelectionContainer {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.calls_record_goal), style = MaterialTheme.typography.labelLarge)
+                            Text(task.goal)
+                            if (task.questions.isNotEmpty()) {
+                                Text(stringResource(R.string.calls_record_questions), style = MaterialTheme.typography.labelLarge)
+                                task.questions.forEachIndexed { index, question -> Text("${index + 1}. $question") }
+                            }
+                            if (task.context.isNotBlank()) {
+                                Text(stringResource(R.string.calls_record_context), style = MaterialTheme.typography.labelLarge)
+                                Text(task.context)
+                            }
+                            if (task.constraints.isNotBlank()) {
+                                Text(stringResource(R.string.calls_record_constraints), style = MaterialTheme.typography.labelLarge)
+                                Text(task.constraints)
+                            }
+                        }
+                    }
+                    if (onReuse != null) OutlinedButton(onClick = onReuse, modifier = Modifier.fillMaxWidth().testTag("call-record-reuse")) {
+                        Text(stringResource(R.string.calls_record_reuse))
+                    }
+                }
+                TextButton(onClick = { showTranscript = !showTranscript }, modifier = Modifier.fillMaxWidth().testTag("call-record-transcript-toggle")) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(stringResource(R.string.calls_original_transcript))
+                        CallExpandIcon(showTranscript)
+                    }
+                }
+                if (showTranscript) {
+                    if (record.transcript.isEmpty()) {
+                        Text(stringResource(R.string.calls_no_transcript), style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
+                    } else SelectionContainer {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            record.transcript.forEach { CallTranscriptText(it) }
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

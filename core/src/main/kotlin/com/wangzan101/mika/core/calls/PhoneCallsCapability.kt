@@ -37,7 +37,8 @@ private class CallAgentTool(private val action: String, override val verb: Verb)
     override val def = ToolDef("phone_call_$action", Prompts.tool("phone_call_$action"),
         when (action) {
             "dial" -> mapOf("number" to str("Explicitly requested telephone number. No emergency, USSD or MMI codes."),
-                "simId" to str("SIM id returned by phone_call_state; choose explicitly when there is no unambiguous default."))
+                "simId" to str("SIM id returned by phone_call_state; choose explicitly when there is no unambiguous default."),
+                CALL_TASK_FIELD to phoneCallTaskSchema)
             "answer", "hangup" -> mapOf(CALL_ID_FIELD to str("Exact call_id returned by phone_call_state for this call."))
             else -> emptyMap()
         },
@@ -53,8 +54,17 @@ private class CallAgentTool(private val action: String, override val verb: Verb)
             val a = Args(def, args)
             when (action) {
                 "dial" -> {
-                    val (number, simId) = dialArgs(a)
-                    ConfirmationRequest(IrrevAction.other, "SIM ${simId ?: "（仅一张可用时自动选择）"}", "$label $number", null, capability)
+                    val (number, simId, task) = dialArgs(a)
+                    val content = buildString {
+                        append(label).append(' ').append(number)
+                        if (task != null) {
+                            append("\n本次目标：").append(task.goal)
+                            if (task.constraints.isNotEmpty()) append("\n本次边界：").append(task.constraints)
+                            task.questions.forEachIndexed { index, question -> append("\n必问 ").append(index + 1).append("：").append(question) }
+                            if (task.context.isNotEmpty()) append("\n本次背景：").append(task.context)
+                        }
+                    }
+                    ConfirmationRequest(IrrevAction.other, "SIM ${simId ?: "（仅一张可用时自动选择）"}", content, null, capability)
                 }
                 "answer", "hangup" -> ConfirmationRequest(IrrevAction.other, "通话 ${callId(a)}", label, null, capability)
                 else -> null
@@ -70,13 +80,13 @@ private class CallAgentTool(private val action: String, override val verb: Verb)
         val port = ctx[PhoneCallsCapability.KEY]!!.port
         return ToolExecution(when (action) {
             "state" -> port.state()
-            "dial" -> dialArgs(a).let { (number, simId) -> port.dial(number, simId) }
+            "dial" -> dialArgs(a).let { (number, simId, task) -> port.dial(number, simId, task) }
             "answer" -> port.answer(callId(a))
             "hangup" -> port.hangup(callId(a))
             else -> port.takeover()
         })
     }
 
-    private fun dialArgs(a: Args) = a.str("number", min = 3, max = 32)!! to a.str("simId", max = 200)
+    private fun dialArgs(a: Args) = Triple(a.str("number", min = 3, max = 32)!!, a.str("simId", max = 200), parsePhoneCallTask(a.o[CALL_TASK_FIELD]))
     private fun callId(a: Args) = a.str(CALL_ID_FIELD, max = MAX_CALL_ID_LENGTH)!!
 }

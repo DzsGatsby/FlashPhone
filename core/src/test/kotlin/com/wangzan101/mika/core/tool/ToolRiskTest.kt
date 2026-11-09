@@ -1,12 +1,17 @@
 package com.wangzan101.mika.core.tool
 
 import com.wangzan101.mika.core.gate.gateTargetOf
+import com.wangzan101.mika.core.calls.PhoneCallPort
+import com.wangzan101.mika.core.calls.PhoneCallTask
 import com.wangzan101.mika.core.risk.GateTarget
 import com.wangzan101.mika.core.model.Part
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
@@ -54,9 +59,9 @@ class ToolRiskTest {
                 "phone_call_state", "phone_call_dial", "phone_call_answer", "phone_call_hangup", "phone_call_takeover")
         assertEquals(refused, allTools().filter { !it.readOnly }.map { it.name }.toSet())
         // root 命令只在给了端口时登记:给一个,所有工具都在
-        val calls = object : com.wangzan101.mika.core.calls.PhoneCallPort {
+        val calls = object : PhoneCallPort {
             override suspend fun state() = JsonObject(emptyMap())
-            override suspend fun dial(number: String, simId: String?) = state()
+            override suspend fun dial(number: String, simId: String?, task: PhoneCallTask?) = state()
             override suspend fun answer(callId: String) = state()
             override suspend fun hangup(callId: String) = state()
             override suspend fun takeover() = state()
@@ -78,6 +83,13 @@ class ToolRiskTest {
         val dialAsk = dial.approvalRisk(buildJsonObject { put("number", "13800000000"); put("simId", "sim-2") })!!.ask!!
         assertTrue(dialAsk.content.contains("13800000000"))
         assertTrue(dialAsk.target.contains("sim-2"))
+        val taskArgs = Json.parseToJsonElement("""{"number":"13800000000","simId":"sim-2","task":{"goal":"问几点关门","constraints":"不预约"}}""").jsonObject
+        val taskAsk = dial.approvalRisk(taskArgs)!!.ask!!
+        assertEquals(dialAsk.target, taskAsk.target)
+        assertEquals(dialAsk.action, taskAsk.action)
+        assertTrue(taskAsk.content.contains("问几点关门"))
+        assertTrue(taskAsk.content.contains("不预约"))
+        assertNotEquals(dialAsk, taskAsk)
         for (name in listOf("phone_call_answer", "phone_call_hangup")) {
             val tool = tools.getValue(name)
             assertNull(tool.approvalRisk(buildJsonObject {})?.ask)
@@ -86,6 +98,43 @@ class ToolRiskTest {
             assertTrue(ask("call-a").target.contains("call-a"))
             assertNotEquals(ask("call-a"), ask("call-b"))
         }
+    }
+
+    @Test fun localDialForwardsOnlyThisCallsTaskAndRejectsMalformedTasksBeforeCallingPhone() = runTest {
+        val received = mutableListOf<Triple<String, String?, PhoneCallTask?>>()
+        val port = object : PhoneCallPort {
+            override suspend fun state() = buildJsonObject { put("ok", true) }
+            override suspend fun dial(number: String, simId: String?, task: PhoneCallTask?): JsonObject {
+                received += Triple(number, simId, task)
+                return state()
+            }
+            override suspend fun answer(callId: String) = state()
+            override suspend fun hangup(callId: String) = state()
+            override suspend fun takeover() = state()
+        }
+        val dispatcher = toolDispatcher(FakeScreen(), phoneCalls = port)
+        val name = "phone_call_dial"
+        val schema = Json.parseToJsonElement(dispatcher.definitions().single { it.name == name }.parametersJsonSchema).jsonObject
+        assertEquals(listOf(JsonPrimitive("number")), schema.getValue("required").jsonArray)
+        val taskSchema = schema.getValue("properties").jsonObject.getValue("task").jsonObject
+        assertEquals(listOf(JsonPrimitive("goal")), taskSchema.getValue("required").jsonArray)
+        assertEquals(JsonPrimitive(false), taskSchema["additionalProperties"])
+        suspend fun dial(args: String) = dispatcher.execute(Part.ToolCall("call", name, args)).content
+        for (badTask in listOf("null", "[]", "{}", """{"goal":"   "}""", """{"goal":12}""",
+            """{"goal":"问营业时间","questions":[false]}""", """{"goal":"问营业时间","context":null}""",
+            """{"goal":"问营业时间","constraints":"${"字".repeat(601)}"}""",
+            """{"goal":"问营业时间","unknown":"unexpected"}""")) {
+            val args = """{"number":"13800000000","task":$badTask}"""
+            assertNull(dispatcher.approvalRisk(name, Json.parseToJsonElement(args).jsonObject)?.ask)
+            assertEquals(JsonPrimitive("invalid_arguments"), dial(args)["error"])
+        }
+        assertTrue(received.isEmpty())
+        assertEquals(JsonPrimitive(true), dial("""{"number":"13800000000","simId":"sim-2","task":{"goal":" 问营业时间 ","questions":["几点停止入场？"],"context":"今天是假日","constraints":"不预约"}}""")["ok"])
+        assertEquals(JsonPrimitive(true), dial("""{"number":"13800000001"}""")["ok"])
+        assertEquals(listOf(
+            Triple("13800000000", "sim-2", PhoneCallTask("问营业时间", listOf("几点停止入场？"), "今天是假日", "不预约")),
+            Triple("13800000001", null, null),
+        ), received)
     }
 
     @Test fun externalToolsDeclareHowTheirTargetIsJudged() {
