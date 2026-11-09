@@ -56,16 +56,27 @@ import java.util.Date
 
 /** The current call and receiving controls come first; the rest expands without changing pages. */
 @Composable
-fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = null, onBack: () -> Unit) {
+fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = null, onBack: () -> Unit,
+    standalone: Boolean = false, onAppSettings: () -> Unit = {}, onAbout: () -> Unit = {},
+    updateAvailable: Boolean = false, focusRequest: Int = 0) {
     var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
     var instructionsOpen by rememberSaveable { mutableStateOf(false) }
+    var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
     val workspaceState = rememberSaveableStateHolder()
     val taskDraft = rememberSaveable(saver = CallTaskDraft.Saver) { CallTaskDraft() }
+    LaunchedEffect(focusRequest) {
+        if (focusRequest > 0 && focusRequest != handledFocusRequest) {
+            voiceCloneOpen = false
+            instructionsOpen = false
+            handledFocusRequest = focusRequest
+        }
+    }
     when {
         voiceCloneOpen -> VoiceCloneScreen(runtime) { voiceCloneOpen = false }
         instructionsOpen -> CallInstructionsScreen(runtime) { instructionsOpen = false }
         else -> workspaceState.SaveableStateProvider("call-workspace") {
-            CallSettingsWorkspace(runtime, taskDraft, onBack, onInstructions ?: { instructionsOpen = true }) {
+            CallSettingsWorkspace(runtime, taskDraft, onBack, onInstructions ?: { instructionsOpen = true },
+                standalone, onAppSettings, onAbout, updateAvailable, focusRequest) {
                 voiceCloneOpen = true
             }
         }
@@ -75,7 +86,10 @@ fun CallSettingsScreen(runtime: CallRuntime, onInstructions: (() -> Unit)? = nul
 @Composable
 private fun CallSettingsWorkspace(
     runtime: CallRuntime, taskDraft: CallTaskDraft,
-    onBack: () -> Unit, onInstructions: () -> Unit, onVoiceClone: () -> Unit,
+    onBack: () -> Unit, onInstructions: () -> Unit,
+    standalone: Boolean, onAppSettings: () -> Unit, onAbout: () -> Unit, updateAvailable: Boolean,
+    focusRequest: Int,
+    onVoiceClone: () -> Unit,
 ) {
     val context = LocalContext.current
     val config by runtime.settings.state.collectAsState()
@@ -93,6 +107,7 @@ private fun CallSettingsWorkspace(
     val tabStates = rememberSaveableStateHolder()
     var liveNavigation by remember { mutableIntStateOf(0) }
     var handledLiveNavigation by remember { mutableIntStateOf(0) }
+    var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
     var taskNavigation by rememberSaveable { mutableIntStateOf(0) }
     var handledTaskNavigation by rememberSaveable { mutableIntStateOf(0) }
     var deviceNavigation by rememberSaveable { mutableIntStateOf(0) }
@@ -103,6 +118,14 @@ private fun CallSettingsWorkspace(
     val ready = config.enabled && state.prepared && state.shellConnected &&
         state.notificationsAvailable && config.credentialsConfigured && state.audioReady
     val failureText = stringResource(R.string.calls_action_failed)
+
+    LaunchedEffect(focusRequest) {
+        if (focusRequest > 0 && focusRequest != handledFocusRequest) {
+            tab = CallWorkspaceTab.Receive
+            liveNavigation++
+            handledFocusRequest = focusRequest
+        }
+    }
 
     fun perform(priority: Boolean = false, action: suspend () -> CallActionResult) {
         if (if (priority) controlBusy else busy || controlBusy) return
@@ -193,7 +216,11 @@ private fun CallSettingsWorkspace(
 
     PageBackground(Modifier.testTag("call-settings")) {
         Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
-            TopBar(stringResource(R.string.calls_title), MikaIcons.Back, onBack, stringResource(R.string.back))
+            if (standalone) TopBar(stringResource(R.string.app_name), MikaIcons.Gear, onAppSettings,
+                stringResource(R.string.settings_title), right = {
+                    BarIconButton(MikaIcons.Info, stringResource(R.string.about_check), onAbout, badge = updateAvailable)
+                })
+            else TopBar(stringResource(R.string.calls_title), MikaIcons.Back, onBack, stringResource(R.string.back))
             if (!idle) {
                 val callId = state.callId
                 CurrentCallCard(

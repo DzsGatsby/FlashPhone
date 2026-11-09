@@ -47,7 +47,7 @@ class UpdateCheckerTest {
     )
 
     private fun release(tag: String) =
-        MockResponse().setBody("""{"tag_name":"$tag","name":"Mika $tag","body":"- 新东西","html_url":"https://github.com/wangzan101/Mika/releases/tag/$tag","assets":[]}""")
+        MockResponse().setBody("""{"tag_name":"$tag","name":"Mika $tag","body":"- 新东西","html_url":"https://github.com/DzsGatsby/Mika/releases/tag/$tag","assets":[]}""")
 
     @Test
     fun newerReleaseFromGitHubShowsUpdate() = runTest {
@@ -151,4 +151,19 @@ class UpdateCheckerTest {
         assertTrue(UpdateSchedule.due(1_000, 1_000 + UpdateSchedule.MIN_GAP_MS))
         assertTrue("clock moved back", UpdateSchedule.due(10_000, 5_000))
     }
+    @Test
+    fun deliveryReceivesOnlyNewerVersionAndCannotBreakCheck() = runTest {
+        var delivered: ReleaseInfo? = null
+        val c = UpdateChecker(tmp.root.resolve("delivery.json"), "0.1.0",
+            releaseApi = server.url("/api").toString(),
+            onUpdate = { delivered = it; error("notifications disabled") })
+        github = release("v0.2.0")
+        c.check(manual = true)
+        assertEquals("0.2.0", delivered?.version)
+        assertEquals(CheckStatus.Done, c.state.value.status)
+        github = release("v0.1.0")
+        c.check(manual = true)
+        assertNull(delivered)
+    }
+
 }

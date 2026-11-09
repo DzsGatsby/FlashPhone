@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_tagline">Your personal assistant on your phone, getting things done for you</string>
+    <string name="about_tagline">Answer and place calls with AI, and review the call history.</string>
     <string name="about_check">Check for updates</string>
     <string name="about_check_sub">Get new versions from GitHub Releases</string>
     <string name="about_check_sub_new">New version available</string>
@@ -21,12 +21,12 @@
     <string name="about_repo_sub">%1$s · stars welcome</string>
     <string name="about_guide">Guide &amp; how to contribute</string>
     <string name="about_guide_sub">Getting started; add app knowledge even without coding</string>
-    <string name="about_data_note">What you send Mika — messages, screen content and screenshots — goes only to the model provider you set up. Mika has no servers of its own and collects none of your data; checking for updates only contacts GitHub.</string>
+    <string name="about_data_note">What you send %1$s — messages, screen content and screenshots — goes only to the model provider you set up. %1$s has no servers of its own and collects none of your data; checking for updates only contacts GitHub.</string>
     <string name="about_license_link">Apache-2.0 license</string>
-    <string name="about_author">Made by Wang Zan · © 2026</string>
+    <string name="about_author">Based on Mika by Wang Zan · © 2026</string>
     <string name="about_license_title">Apache-2.0 License</string>
     <string name="about_update_download">Download from GitHub</string>
-    <string name="about_update_download_in_app">Download update</string>
+    <string name="about_update_download_in_app">Download and install</string>
     <string name="about_update_downloading">Downloading…</string>
     <string name="about_update_progress">Downloading %1$d%%</string>
     <string name="about_update_paused">Download paused; it will resume automatically…</string>
@@ -34,11 +34,11 @@
     <string name="about_update_retry">Download again</string>
     <string name="about_update_cancel">Delete download</string>
     <string name="about_update_working">Working…</string>
-    <string name="about_update_install_hint">When downloaded, tap “Install update” and confirm in the system installer. You may first need to allow Mika to install unknown apps.</string>
+    <string name="about_update_install_hint">After downloading, the Android installer opens for your confirmation. Android may first ask you to allow installs from %1$s.</string>
     <string name="about_update_error">Download or installation did not complete. Please try again later.</string>
     <string name="about_update_bad_file">The downloaded package is incomplete or does not match the release. It was deleted; please download again.</string>
-    <string name="about_update_not_newer">The downloaded package is not newer than the installed Mika. It was deleted.</string>
-    <string name="about_update_bad_signer">This package is signed differently from the installed Mika, so it cannot update it. It was deleted. If you built Mika yourself, uninstall it first, then install the official version.</string>
+    <string name="about_update_not_newer">The downloaded package is not newer than the installed %1$s. It was deleted.</string>
+    <string name="about_update_bad_signer">This package has a different signature and cannot update your installed %1$s. The download was removed. To keep your data, ask the publisher for a build signed the same way as your installed app.</string>
     <string name="about_update_later">Later</string>
     <string name="about_no_browser">No browser available to open the link</string>
     <string name="about_version">Version %1$s</string>
@@ -48,7 +48,7 @@
     <string name="about_current">Current %1$s</string>
     <string name="about_released_on">" · released %1$s"</string>
     <string name="about_released_under">Released under %1$s</string>
-    <string name="issue_body">- Device: %1$s\n- Android version: %2$s (SDK %3$d)\n- Mika version: %4$s (build %5$s)\n\n### What went wrong\n\n\n### Steps you took\n\n\n### What you expected\n\n\n### Diagnostics\n(Optional) In Mika, open About › Send feedback › Copy diagnostics, then paste it here\n\n</string>
+    <string name="issue_body">- Device: %1$s\n- Android version: %2$s (SDK %3$d)\n- Flash phone version: %4$s (build %5$s)\n\n### What went wrong\n\n\n### Steps you took\n\n\n### What you expected\n\n\n### Diagnostics\n(Optional) In Flash phone, open About › Send feedback › Copy diagnostics, then paste it here\n\n</string>
     <string name="licenses_third_party">Third-party components · %1$d</string>
     <string name="licenses_footer">Full license texts and copyright notices are in LICENSE and the licenses/ folder (including THIRD_PARTY_NOTICES.md) of the source repository.</string>
     <string name="diagnostics_copy">Copy diagnostics</string>
@@ -59,4 +59,8 @@
     <string name="diagnostics_share">Share</string>
     <string name="diagnostics_copied">Copied</string>
     <string name="diagnostics_loading">Collecting…</string>
+    <string name="about_update_install_permission_denied">Android did not grant installation permission. Your download is still available. Tap Install update to try again.</string>
+    <string name="about_update_release_page">View release on GitHub</string>
+    <string name="about_app_title">About %1$s</string>
+    <string name="about_update_call_busy">Installation is unavailable during a call. The download can continue; tap Install update after the call.</string>
 </resources>

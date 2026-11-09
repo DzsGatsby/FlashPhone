@@ -252,9 +252,9 @@ class CallRuntime(private val app: MikaApp) {
             if (!settings.state.value.enabled) return@withLock report("请先开启 AI 电话")
             if (work != null || liveCalls().isNotEmpty()) return@withLock report("请在没有通话时准备 AI 电话")
             if (!access.supported) return@withLock report("电话伴侣模式需要 Android 12 及以上、主用户及运营商通话功能")
-            if (!access.hasPhonePermissions()) return@withLock report("请允许 Mika 的电话权限")
+            if (!access.hasPhonePermissions()) return@withLock report("请允许 Flash phone 的电话权限")
             if (managedCallPresent() != false) return@withLock report("Android 正在通话或无法确认空闲，请稍后再准备")
-            val helper = shell ?: return@withLock report("请先连接 Mika 内置助手")
+            val helper = shell ?: return@withLock report("请先连接 Flash phone 内置助手")
             configuring = true
             publish()
             try {
@@ -522,7 +522,7 @@ class CallRuntime(private val app: MikaApp) {
             if (w.automatic) waitAutoAnswerDelay(w)
             prerequisite(ignoreWork = true)?.let { throw CallProblem(it) }
             validateTarget(w)
-            val helper = shell ?: throw CallProblem("Mika 内置助手未连接")
+            val helper = shell ?: throw CallProblem("Flash phone 内置助手未连接")
             val credentials = withContext(Dispatchers.IO) { settings.credentials() }
                 ?: throw CallProblem("火山凭据不可用，请重新保存")
             if (!probeAudio()) throw CallProblem(audioDetail ?: "此设备的双向通话音频不可用")
@@ -708,9 +708,7 @@ class CallRuntime(private val app: MikaApp) {
             !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
             throw CallProblem("通话状态或静音已变更，未发送语音")
         }
-        val greeting = (if (w.task != null) CallPolicy.TASK_GREETING else w.config.greeting).let {
-            if (it.startsWith("您好，我是 Mika 的 AI 电话助手。")) it else "您好，我是 Mika 的 AI 电话助手。$it"
-        }
+        val greeting = CallPolicy.spokenGreeting(w.config.greeting, hasTask = w.task != null)
         val remaining = (w.config.maxCallSeconds * 1_000L - (SystemClock.elapsedRealtime() - w.activeElapsed)).coerceAtLeast(1)
         w.mediaStage = MediaStage.PCM_BRIDGE
         val completed = withTimeoutOrNull(remaining) {
@@ -936,7 +934,7 @@ class CallRuntime(private val app: MikaApp) {
         !settings.state.value.enabled -> "AI 电话已关闭"
         configuring -> "AI 电话正在配置"
         !armed || !access.hasPhonePermissions() -> "请先准备 AI 电话"
-        shell == null -> "Mika 内置助手未连接"
+        shell == null -> "Flash phone 内置助手未连接"
         !settings.state.value.credentialsConfigured -> "请先配置火山实时语音凭据"
         !(notificationReady ?: notifications.ready()) -> "请允许 AI 电话通知，以便取消或接管"
         !ignoreWork && work?.direction == CallDirection.OUTGOING -> "已在处理另一通电话"
@@ -1007,7 +1005,7 @@ class CallRuntime(private val app: MikaApp) {
             callId = calls.singleOrNull()?.id,
             number = current?.number ?: active?.requestedNumber,
             aiActive = active?.aiActive == true,
-            detail = if (enabled && unobservedManagedCall && current == null) "Android 正在通话，但 Mika 尚未收到该通话的回调" else detail,
+            detail = if (enabled && unobservedManagedCall && current == null) "Android 正在通话，但 Flash phone 尚未收到该通话的回调" else detail,
             pendingAutoAnswer = pending,
             autoAnswerStage = autoStage,
             autoAnswerRemainingSeconds = countdown,

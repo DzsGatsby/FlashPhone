@@ -64,6 +64,8 @@ class UpdateChecker(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     /** 本机支持的 ABI(Build.SUPPORTED_ABIS),用来挑发布里合适的 APK;为空时取全架构包。 */
     private val deviceAbis: List<String> = emptyList(),
+    private val devPackage: Boolean? = null,
+    private val onUpdate: (ReleaseInfo?) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(UpdateState())
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -108,11 +110,12 @@ class UpdateChecker(
             }
             if (manual) _state.update { it.copy(status = if (found != null) CheckStatus.Done else CheckStatus.Failed, manualRounds = it.manualRounds + 1) }
             save()
+            runCatching { onUpdate(_state.value.update) }
         }
     }
 
     /** GitHub 上最新的发布;没查到为空。 */
-    internal fun fetchLatest(): ReleaseInfo? = runCatching { Releases.fromGitHub(get(releaseApi), deviceAbis) }.getOrNull()
+    internal fun fetchLatest(): ReleaseInfo? = runCatching { Releases.fromGitHub(get(releaseApi), deviceAbis, devPackage) }.getOrNull()
 
     private fun get(url: String): String {
         val req = Request.Builder().url(url)
@@ -134,7 +137,7 @@ class UpdateChecker(
         loaded = true
         val o = runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull() ?: return
         lastAttempt = (o["lastAttempt"] as? JsonPrimitive)?.longOrNull
-        val latest = (o["latest"] as? JsonObject)?.let(Releases::fromJson)
+        val latest = (o["latest"] as? JsonObject)?.let { Releases.fromJson(it, devPackage) }
         _state.update { it.withLatest(latest) }
     }
 

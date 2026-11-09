@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.wangzan101.mika.MikaApp
+import com.wangzan101.mika.R
 import com.wangzan101.mika.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +41,7 @@ internal class CallNotifications(private val context: Context) {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(MainActivity.EXTRA_OPEN_CALLS, true), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = Notification.Builder(context, CHANNEL)
-            .setContentTitle("Mika AI 电话").setContentText(message)
+            .setContentTitle(context.getString(R.string.app_name)).setContentText(message)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setOnlyAlertOnce(true).setOngoing(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(openCalls)
@@ -53,7 +54,7 @@ internal class CallNotifications(private val context: Context) {
         runCatching {
             if (!ready()) return
             manager?.notify(ID, Notification.Builder(context, CHANNEL)
-                .setContentTitle("AI 已退出通话").setContentText("请在系统电话界面接管")
+                .setContentTitle(context.getString(R.string.app_name)).setContentText("AI 已退出通话，请在系统电话界面接管")
                 .setSmallIcon(android.R.drawable.sym_action_call).setAutoCancel(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setTimeoutAfter(12_000L).build())
         }

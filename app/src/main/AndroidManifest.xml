@@ -195,6 +195,7 @@
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="false" />
         </service>
 
+        <service android:name=".about.UpdateJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
         <receiver android:name=".calls.CallNotificationAction" android:exported="false" />
 
         <service

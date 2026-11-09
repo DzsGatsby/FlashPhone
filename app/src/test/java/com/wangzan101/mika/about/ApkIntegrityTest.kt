@@ -2,6 +2,7 @@ package com.wangzan101.mika.about
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -10,21 +11,22 @@ class ApkIntegrityTest {
     @get:Rule val temp = TemporaryFolder()
 
     @Test fun acceptsOfficialApk() {
-        ApkIntegrity.requireOfficialUrl("https://github.com/wangzan101/Mika/releases/download/v0.2.0/Mika.apk")
+        ApkIntegrity.requireOfficialUrl("${MikaLinks.RELEASES}/download/v0.2.0/Mika.apk")
     }
 
     @Test fun rejectsUntrustedDownloads() {
+        val path = MikaLinks.RELEASES.substringAfter("https://github.com/")
         for (url in listOf(
-            "http://github.com/wangzan101/Mika/releases/download/v0.2.0/Mika.apk",
-            "https://github.com.evil.test/wangzan101/Mika/releases/download/v0.2.0/Mika.apk",
+            "http://github.com/$path/download/v0.2.0/Mika.apk",
+            "https://github.com.evil.test/$path/download/v0.2.0/Mika.apk",
             "https://github.com/other/Mika/releases/download/v0.2.0/Mika.apk",
-            "https://github.com/wangzan101/Mika/releases/download/../../other.apk",
-            "https://github.com/wangzan101/Mika/releases/download/%2e%2e/%2E%2e/%2e%2e/%2e%2e/other/x.apk",
-            "https://objects.githubusercontent.com/wangzan101/Mika/releases/download/v0.2.0/Mika.apk",
-            "https://github.com/wangzan101/Mika/releases/download/v0.2.0/Mika.zip",
-            "https://github.com/wangzan101/Mika/releases/tag/v0.2.0",
-            "https://user:pass@github.com/wangzan101/Mika/releases/download/v0.2.0/Mika.apk",
-            "https://github.com:8443/wangzan101/Mika/releases/download/v0.2.0/Mika.apk",
+            "https://github.com/$path/download/../../other.apk",
+            "https://github.com/$path/download/%2e%2e/%2E%2e/%2e%2e/%2e%2e/other/x.apk",
+            "https://objects.githubusercontent.com/$path/download/v0.2.0/Mika.apk",
+            "https://github.com/$path/download/v0.2.0/Mika.zip",
+            "https://github.com/$path/tag/v0.2.0",
+            "https://user:pass@github.com/$path/download/v0.2.0/Mika.apk",
+            "https://github.com:8443/$path/download/v0.2.0/Mika.apk",
         )) rejects { ApkIntegrity.requireOfficialUrl(url) }
     }
 
@@ -58,6 +60,17 @@ class ApkIntegrityTest {
             } catch (e: ApkRejected) {
                 assertEquals(ApkRejected.Reason.Signer, e.reason)
             }
+        }
+    }
+
+    @Test fun onlyTheInstalledPackageWithAStrictlyHigherVersionCodeCanUpdate() {
+        val installed = "com.wangzan101.mika.dev"
+        requireNewerPackage(installed, 38, installed, 39)
+        for ((name, version) in listOf(installed to 37L, installed to 38L,
+            "com.wangzan101.mika" to 39L, null to 39L)) {
+            assertEquals(ApkRejected.Reason.NotNewer, assertThrows(ApkRejected::class.java) {
+                requireNewerPackage(installed, 38, name, version)
+            }.reason)
         }
     }
 

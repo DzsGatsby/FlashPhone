@@ -147,7 +147,8 @@ class CallSettings(
             audioMode = prefs.getString("audio_mode", null)?.let(CallAudioMode::valueOf) ?: defaults.audioMode,
             audioVerified = verified,
             credentialsConfigured = credentials() != null,
-            greeting = prefs.getString("greeting", defaults.greeting).orEmpty().take(CallPolicy.MAX_GREETING_CHARS),
+            greeting = CallPolicy.migrateDefaultGreeting(prefs.getString("greeting", defaults.greeting).orEmpty())
+                .take(CallPolicy.MAX_GREETING_CHARS),
             systemPrompt = prefs.getString("prompt", "").orEmpty().take(CallPolicy.MAX_PROMPT_CHARS),
             speaker = prefs.getString("speaker", defaults.speaker).orEmpty().take(CallPolicy.MAX_SPEAKER_CHARS),
         )

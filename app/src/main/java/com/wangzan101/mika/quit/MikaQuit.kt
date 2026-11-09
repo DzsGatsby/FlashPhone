@@ -36,6 +36,7 @@ object MikaQuit {
     fun quit(context: Context) {
         val app = context.applicationContext as MikaApp
         FeatureFlags.get(app).setQuitRequested(true)
+        com.wangzan101.mika.about.UpdateDelivery.cancel(app)
         // 浮层挂在无障碍服务上,进程结束前也可能还活着:先当场拆掉,别等进程
         runCatching { app.capsule.stopNow() }
         // 先撤掉系统闹钟和进程内的长任务,再停前台服务;服务被系统重交启动请求时也会按退出标记拒绝工作

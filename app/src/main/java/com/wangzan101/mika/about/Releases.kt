@@ -1,12 +1,15 @@
 package com.wangzan101.mika.about
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** 一个发布的版本:版本号(不带 v)、标题、更新说明(Markdown)、发布日期、发布页、APK 直链。 */
 data class ReleaseInfo(
@@ -33,31 +36,34 @@ data class ReleaseInfo(
  */
 object Releases {
     private val json = Json { ignoreUnknownKeys = true }
+    private val digestFormat = Regex("sha256:[0-9a-fA-F]{64}")
+
+    private data class Asset(val name: String, val url: String, val size: Long?, val digest: String?)
 
     /**
      * 发布里除了全架构的 `Mika-v<版本>.apk`,还可能有只带某个架构原生库的包,名字以 `-<后缀>.apk` 结尾。
      * 键是 Android 的 ABI 名,值是附件名后缀。
      */
-    private val ABI_APK_SUFFIX = mapOf("arm64-v8a" to "arm64")
+    private val ABI_APK_SUFFIX = mapOf("arm64-v8a" to "arm64", "armeabi-v7a" to "armeabi-v7a", "x86_64" to "x86_64", "x86" to "x86")
 
     /** [deviceAbis] 是本机支持的 ABI,按偏好排序(Build.SUPPORTED_ABIS);为空时只取全架构包。 */
-    fun fromGitHub(text: String, deviceAbis: List<String> = emptyList()): ReleaseInfo {
+    fun fromGitHub(text: String, deviceAbis: List<String> = emptyList(), devPackage: Boolean? = null): ReleaseInfo {
         val o = json.parseToJsonElement(text).jsonObject
         val tag = o.str("tag_name") ?: error("no tag_name")
         val body = o.str("body").orEmpty()
-        val apk = o["assets"]?.let { a ->
-            runCatching { a.jsonArray }.getOrNull()?.map { it.jsonObject }?.let { pickApk(it, deviceAbis) }
-        }
+        val assets = (o["assets"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.apkAsset() }
+            .filter { matchesPackage(it.name, devPackage) }
+        val apk = pickApk(assets, deviceAbis)
         val version = AppVersion.normalize(tag)
         return ReleaseInfo(
             version = version,
             name = o.str("name")?.takeIf { it.isNotBlank() } ?: version,
             notes = body.trim(),
             date = o.str("published_at")?.take(10)?.takeIf { it.length == 10 },
-            pageUrl = o.str("html_url") ?: "${MikaLinks.RELEASES}/tag/$tag",
-            apkUrl = apk?.str("browser_download_url"),
-            apkSize = apk?.strOrNumber("size")?.toLongOrNull(),
-            apkDigest = apk?.str("digest"),
+            pageUrl = pageUrl(o.str("html_url"), tag),
+            apkUrl = apk?.url,
+            apkSize = apk?.size,
+            apkDigest = apk?.digest,
         )
     }
 
@@ -65,12 +71,46 @@ object Releases {
      * 本机支持某个架构、发布里又有这个架构的专用包时取专用包(更小);否则取全架构包。
      * 只有别的架构的专用包时不取(装不上),这时打开发布页。
      */
-    private fun pickApk(assets: List<JsonObject>, deviceAbis: List<String>): JsonObject? {
-        val apks = assets.filter { it.str("name")?.endsWith(".apk", ignoreCase = true) == true }
-        fun named(suffix: String) = apks.firstOrNull { it.str("name")!!.endsWith("-$suffix.apk", ignoreCase = true) }
+    private fun pickApk(apks: List<Asset>, deviceAbis: List<String>): Asset? {
+        fun named(suffix: String) = apks.firstOrNull { it.name.endsWith("-$suffix.apk", ignoreCase = true) }
         val forDevice = deviceAbis.firstNotNullOfOrNull { abi -> ABI_APK_SUFFIX[abi]?.let(::named) }
-        val universal = apks.firstOrNull { a -> ABI_APK_SUFFIX.values.none { a.str("name")!!.endsWith("-$it.apk", ignoreCase = true) } }
+        val universal = apks.firstOrNull { a -> ABI_APK_SUFFIX.values.none { a.name.endsWith("-$it.apk", ignoreCase = true) } }
         return forDevice ?: universal
+    }
+
+    private fun JsonObject.apkAsset(): Asset? {
+        val name = str("name")?.takeIf { it.endsWith(".apk", ignoreCase = true) } ?: return null
+        val url = str("browser_download_url") ?: return null
+        return verifiedMetadata(name, url, "size", "digest")
+    }
+
+    /** Missing metadata is supported for old releases; malformed metadata never disables verification. */
+    private fun JsonObject.verifiedMetadata(name: String, url: String, sizeKey: String, digestKey: String): Asset? = runCatching {
+        ApkIntegrity.requireOfficialUrl(url)
+        val fileName = url.toHttpUrl().pathSegments.last()
+        require(name.isEmpty() || name == fileName)
+        val size = if (missing(sizeKey)) null else requireNotNull(strOrNumber(sizeKey)?.toLongOrNull()?.takeIf { it > 0 })
+        val digest = if (missing(digestKey)) null else requireNotNull(str(digestKey)?.takeIf(digestFormat::matches))
+        Asset(fileName, url, size, digest)
+    }.getOrNull()
+
+    private fun JsonObject.missing(key: String): Boolean = this[key] == null || this[key] == JsonNull
+
+    private fun matchesPackage(name: String, devPackage: Boolean?): Boolean {
+        val standalone = name.startsWith("FlashPhone-", ignoreCase = true) ||
+            name.startsWith("Mika-Dev-", ignoreCase = true)
+        return devPackage == null || standalone == devPackage
+    }
+
+    private fun pageUrl(candidate: String?, tag: String? = null): String {
+        val base = MikaLinks.RELEASES.toHttpUrl()
+        val page = candidate?.toHttpUrlOrNull()
+        if (page != null && page.isHttps && page.host == base.host && page.port == base.port &&
+            page.username.isEmpty() && page.password.isEmpty() &&
+            (page.encodedPath == base.encodedPath || page.encodedPath.startsWith("${base.encodedPath}/tag/"))) {
+            return page.toString()
+        }
+        return tag?.let { base.newBuilder().addPathSegment("tag").addPathSegment(it).build().toString() } ?: base.toString()
     }
 
     /** 存盘用:记下最近一次查到的版本,下次打开 App 时红点还在。 */
@@ -85,11 +125,13 @@ object Releases {
         r.apkDigest?.let { put("apkDigest", it) }
     }
 
-    fun fromJson(o: JsonObject): ReleaseInfo? = runCatching {
+    fun fromJson(o: JsonObject, devPackage: Boolean? = null): ReleaseInfo? = runCatching {
+        val apk = o.str("apkUrl")?.let { o.verifiedMetadata("", it, "apkSize", "apkDigest") }
+            ?.takeIf { matchesPackage(it.name, devPackage) }
         ReleaseInfo(
             version = o.str("version")!!, name = o.str("name") ?: o.str("version")!!, notes = o.str("notes").orEmpty(),
-            date = o.str("date"), pageUrl = o.str("pageUrl") ?: MikaLinks.RELEASES, apkUrl = o.str("apkUrl"),
-            apkSize = o.strOrNumber("apkSize")?.toLongOrNull(), apkDigest = o.str("apkDigest"),
+            date = o.str("date"), pageUrl = pageUrl(o.str("pageUrl")), apkUrl = apk?.url,
+            apkSize = apk?.size, apkDigest = apk?.digest,
         )
     }.getOrNull()
 

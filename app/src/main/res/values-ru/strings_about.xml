@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_tagline">Ваш личный помощник в телефоне: делает дела за вас</string>
+    <string name="about_tagline">Принимайте и совершайте звонки с ИИ и просматривайте историю.</string>
     <string name="about_check">Проверить обновления</string>
     <string name="about_check_sub">Новые версии берутся из GitHub Releases</string>
     <string name="about_check_sub_new">Доступна новая версия</string>
@@ -21,12 +21,12 @@
     <string name="about_repo_sub">%1$s · звёзды приветствуются</string>
     <string name="about_guide">Руководство и как помочь проекту</string>
     <string name="about_guide_sub">С чего начать; можно добавлять знания о приложениях и без программирования</string>
-    <string name="about_data_note">Всё, что вы отправляете Mika (сообщения, содержимое экрана и снимки экрана), уходит только провайдеру модели, которого вы настроили. У Mika нет собственных серверов, и она не собирает ваши данные; при проверке обновлений обращение идёт только к GitHub.</string>
+    <string name="about_data_note">Всё, что вы отправляете %1$s (сообщения, содержимое экрана и снимки экрана), уходит только провайдеру модели, которого вы настроили. У %1$s нет собственных серверов, и она не собирает ваши данные; при проверке обновлений обращение идёт только к GitHub.</string>
     <string name="about_license_link">Лицензия Apache-2.0</string>
-    <string name="about_author">Автор: Wang Zan · © 2026</string>
+    <string name="about_author">На основе Mika, автор Wang Zan · © 2026</string>
     <string name="about_license_title">Лицензия Apache-2.0</string>
     <string name="about_update_download">Скачать с GitHub</string>
-    <string name="about_update_download_in_app">Скачать обновление</string>
+    <string name="about_update_download_in_app">Скачать и установить</string>
     <string name="about_update_downloading">Загрузка…</string>
     <string name="about_update_progress">Загрузка %1$d%%</string>
     <string name="about_update_paused">Загрузка приостановлена, скоро продолжится сама…</string>
@@ -34,11 +34,11 @@
     <string name="about_update_retry">Скачать заново</string>
     <string name="about_update_cancel">Удалить загрузку</string>
     <string name="about_update_working">Подождите…</string>
-    <string name="about_update_install_hint">Когда загрузка завершится, нажмите «Установить обновление» и подтвердите в системном установщике. Возможно, сначала придётся разрешить Mika установку неизвестных приложений.</string>
+    <string name="about_update_install_hint">После загрузки откроется установщик Android для подтверждения. Возможно, сначала нужно разрешить установку из %1$s.</string>
     <string name="about_update_error">Загрузка или установка не завершена. Попробуйте позже.</string>
     <string name="about_update_bad_file">Скачанный пакет неполный или не совпадает с релизом. Он удалён, скачайте его заново.</string>
-    <string name="about_update_not_newer">Скачанный пакет не новее установленной Mika. Он удалён.</string>
-    <string name="about_update_bad_signer">Подпись этого пакета отличается от подписи установленной Mika, поэтому обновить её им нельзя. Пакет удалён. Если вы собирали Mika сами, сначала удалите её, а затем установите официальную версию.</string>
+    <string name="about_update_not_newer">Скачанный пакет не новее установленной %1$s. Он удалён.</string>
+    <string name="about_update_bad_signer">Подпись пакета отличается, поэтому обновить установленную %1$s нельзя. Загрузка удалена. Чтобы сохранить данные, запросите у издателя версию с той же подписью.</string>
     <string name="about_update_later">Позже</string>
     <string name="about_no_browser">Нет браузера, чтобы открыть ссылку</string>
     <string name="about_version">Версия %1$s</string>
@@ -48,7 +48,7 @@
     <string name="about_current">Сейчас %1$s</string>
     <string name="about_released_on">" · выпущена %1$s"</string>
     <string name="about_released_under">Лицензия: %1$s</string>
-    <string name="issue_body">- Устройство: %1$s\n- Версия Android: %2$s (SDK %3$d)\n- Версия Mika: %4$s (сборка %5$s)\n\n### Что пошло не так\n\n\n### Что вы делали\n\n\n### Что ожидали\n\n\n### Диагностика\n(По желанию) В Mika откройте «О приложении» › «Отправить отзыв» › «Скопировать диагностику» и вставьте её сюда\n\n</string>
+    <string name="issue_body">- Устройство: %1$s\n- Версия Android: %2$s (SDK %3$d)\n- Версия Flash phone: %4$s (сборка %5$s)\n\n### Что пошло не так\n\n\n### Что вы делали\n\n\n### Что ожидали\n\n\n### Диагностика\n(По желанию) В Flash phone откройте «О приложении» › «Отправить отзыв» › «Скопировать диагностику» и вставьте её сюда\n\n</string>
     <string name="licenses_third_party">Сторонние компоненты · %1$d</string>
     <string name="licenses_footer">Полные тексты лицензий и уведомления об авторских правах находятся в файле LICENSE и папке licenses/ (включая THIRD_PARTY_NOTICES.md) в репозитории с исходным кодом.</string>
     <string name="diagnostics_copy">Скопировать диагностику</string>
@@ -59,4 +59,8 @@
     <string name="diagnostics_share">Поделиться</string>
     <string name="diagnostics_copied">Скопировано</string>
     <string name="diagnostics_loading">Сбор данных…</string>
+    <string name="about_update_install_permission_denied">Android не разрешил установку. Загрузка сохранена. Нажмите «Установить обновление», чтобы повторить попытку.</string>
+    <string name="about_update_release_page">Открыть выпуск на GitHub</string>
+    <string name="about_app_title">О приложении %1$s</string>
+    <string name="about_update_call_busy">Во время звонка установка недоступна. Скачивание может продолжаться. После звонка нажмите «Установить обновление».</string>
 </resources>

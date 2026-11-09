@@ -107,6 +107,22 @@ class CallPolicyTest {
         assertFalse(CallPolicy.prompt("", CallDirection.INCOMING).contains("机主明确保存的通话规则"))
     }
 
+    @Test fun flashPhoneGreetingMigratesOnlyTheExactOldDefault() {
+        val oldDefault = "您好，我是 Mika 的 AI 电话助手。请问有什么需要我转告？"
+        val customWithOldName = "您好，我是 Mika 的 AI 电话助手。请留下可回拨的时间。"
+        val plainCustom = "请留下想转达的事情。"
+        val currentDefault = "您好，我是 Flash phone AI 电话助手。请问有什么需要我转告？"
+        assertEquals(currentDefault, CallConfig().greeting)
+        assertEquals(currentDefault, CallPolicy.migrateDefaultGreeting(oldDefault))
+        assertEquals(currentDefault, CallPolicy.spokenGreeting(oldDefault, hasTask = false))
+        assertEquals(customWithOldName, CallPolicy.migrateDefaultGreeting(customWithOldName))
+        assertEquals(customWithOldName, CallPolicy.spokenGreeting(customWithOldName, hasTask = false))
+        assertEquals(plainCustom, CallPolicy.migrateDefaultGreeting(plainCustom))
+        assertTrue(CallPolicy.spokenGreeting(plainCustom, hasTask = false).endsWith(plainCustom))
+        assertEquals("您好，我是 Flash phone AI 电话助手。请问现在方便通话吗？",
+            CallPolicy.spokenGreeting(plainCustom, hasTask = true))
+    }
+
     @Test fun explicitSimOverridesPreferenceAndMissingPreferenceNeverFallsBack() {
         val first = CallSim("sim-1", "SIM 1", true)
         val second = CallSim("sim-2", "SIM 2", false)

@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -76,6 +77,8 @@ class MainActivity : ComponentActivity() {
     private var requestedConversation by mutableStateOf<String?>(null)
     private var openTeach by mutableStateOf(false)
     private var openCalls by mutableStateOf(false)
+    private var callFocusRequest by mutableIntStateOf(0)
+    private var openUpdates by mutableStateOf(false)
     private var requestedSharedDraft by mutableStateOf<SharedDraftRequest?>(null)
     private var shareJob: Job? = null
     private var shareSerial = 0L
@@ -94,7 +97,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        callFocusRequest = savedInstanceState?.getInt("callFocusRequest", 0) ?: 0
+        openUpdates = intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false)
         openCalls = intent.getBooleanExtra(EXTRA_OPEN_CALLS, false)
+        if (openCalls) callFocusRequest++
         requestedConversation = intent.getStringExtra(EXTRA_OPEN_CONVERSATION)
         takeTeach(intent)
         val pendingShare = (application as MikaApp).sharedDrafts.read()
@@ -114,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 // 在输入框外面点一下或拖动就收起键盘,全 App 统一
                 KeyboardDismissArea(Modifier.fillMaxSize()) {
                     MikaRoot(
-                        store, monitor, ::perform, requestedConversation, { requestedConversation = null }, requestedSharedDraft,
+                        store, monitor, ::perform, requestedConversation, { intent.removeExtra(EXTRA_OPEN_CONVERSATION); requestedConversation = null }, requestedSharedDraft,
                         onSharedDraftOpened = { accepted, draft ->
                             requestedSharedDraft = null
                             if (accepted) {
@@ -127,6 +133,9 @@ class MainActivity : ComponentActivity() {
                         },
                         openTeach = openTeach,
                         onTeachOpened = { openTeach = false },
+                        openUpdates = openUpdates,
+                        onUpdatesOpened = { intent.removeExtra(EXTRA_OPEN_UPDATES); openUpdates = false },
+                        callFocusRequest = callFocusRequest,
                         openCalls = openCalls,
                         onCallsOpened = { intent.removeExtra(EXTRA_OPEN_CALLS); openCalls = false },
                     )
@@ -135,11 +144,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("callFocusRequest", callFocusRequest)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        openUpdates = intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false)
         openCalls = intent.getBooleanExtra(EXTRA_OPEN_CALLS, false)
-        if (openCalls) return // 只打开电话页;不打断现有对话/分享，也不从这里操作通话。
+        if (openCalls) callFocusRequest++
+        if (openUpdates || openCalls) return // 只打开电话页;不打断现有对话/分享，也不从这里操作通话。
         requestedConversation = intent.getStringExtra(EXTRA_OPEN_CONVERSATION)
         takeTeach(intent)
         requestedSharedDraft?.let { (application as MikaApp).sharedDrafts.discard(it.draft.image) }
@@ -193,6 +209,7 @@ class MainActivity : ComponentActivity() {
         com.wangzan101.mika.quit.MikaQuit.resume(this)
         monitor.start()
         // 每次打开都悄悄查一次新版本(两分钟内连着打开的只查一次),失败不吭声
+        com.wangzan101.mika.about.UpdateDelivery.schedule(this)
         (application as MikaApp).updates.autoCheckInBackground()
         // 电脑连接开着、服务却不在(被系统停过、从后台没能起来):界面在前台时补起来
         (application as MikaApp).mcp.ensureRunning()
@@ -287,6 +304,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_CONVERSATION = "open_conversation"
         const val EXTRA_OPEN_TEACH = "open_teach"
         const val EXTRA_TEACH_GOAL = "teach_goal"
+        const val EXTRA_OPEN_UPDATES = "open_updates"
         const val EXTRA_OPEN_CALLS = "open_calls"
         private const val TAG = "MikaMain"
     }
@@ -322,9 +340,12 @@ private fun MikaRoot(
     openTeach: Boolean,
     onTeachOpened: () -> Unit,
     openCalls: Boolean,
+    callFocusRequest: Int,
     onCallsOpened: () -> Unit,
+    openUpdates: Boolean,
+    onUpdatesOpened: () -> Unit,
 ) {
-    val nav = rememberNavStack()
+    val nav = rememberNavStack(root = Route.Calls)
     // 从设置页「重新配对」进来时先回到配对一步
     var setupRepair by rememberSaveable { mutableStateOf(false) }
     // 首次上手正在走哪一步;为空时不在上手流程里。配置模型页从哪儿来就回哪儿去
@@ -353,7 +374,7 @@ private fun MikaRoot(
     LaunchedEffect(requestedConversation) {
         if (requestedConversation != null) {
             app.chat.openConversation(requestedConversation)
-            nav.reset()
+            nav.push(Route.Chat)
             onConversationOpened()
         }
     }
@@ -361,7 +382,7 @@ private fun MikaRoot(
         val draft = sharedDraft?.draft
         if (draft != null) {
             val accepted = app.chat.openSharedDraft(draft)
-            if (accepted) nav.reset()
+            if (accepted) nav.push(Route.Chat)
             onSharedDraftOpened(accepted, draft)
         }
     }
@@ -400,11 +421,14 @@ private fun MikaRoot(
         val keepCallsOpen = openCalls || nav.current == Route.Calls
         if (!initialNavigationDone) {
             initialNavigationDone = true
-            if (onboarding == null) Onboarding.start(onboardingInputs())?.let(::goOnboarding)
+            // Phone setup belongs to the call workspace; a chat model is not required.
         }
         // 电话通知不需要聊天模型。需要上手时仍在电话页下方保留上手步骤，退出电话页后继续。
         if (keepCallsOpen) nav.push(Route.Calls)
         if (openCalls) onCallsOpened()
+    }
+    LaunchedEffect(openUpdates) {
+        if (openUpdates) { nav.push(Route.About); onUpdatesOpened() }
     }
     val phoneSetupNeeded by phoneSetup.needed.collectAsState()
     // 页面有自己的返回处理时(设置页里的子页、侧栏)由它们先接;这里只管退回上一页
@@ -413,7 +437,11 @@ private fun MikaRoot(
     // 聊天页离开组合树时保留列表位置和输入内容，返回设置页等子页面后原样恢复。
     val screenStates = rememberSaveableStateHolder()
     when (nav.current) {
-        Route.Calls -> CallSettingsScreen(app.calls, onBack = back)
+        Route.Calls -> screenStates.SaveableStateProvider(Route.Calls.name) {
+            CallSettingsScreen(app.calls, onBack = back, standalone = true,
+                onAppSettings = { nav.push(Route.Settings) }, onAbout = { nav.push(Route.About) },
+                updateAvailable = updateState.hasUpdate, focusRequest = callFocusRequest)
+        }
         Route.PhoneSetup -> PhoneSetupScreen(status, setupRepair, onFix, onboarding = onboarding == OnboardingStep.Phone) {
             phoneSetup.markGuideSeen()
             if (onboarding == OnboardingStep.Phone) goOnboarding(null) else nav.back()

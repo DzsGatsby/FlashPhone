@@ -30,7 +30,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +88,7 @@ fun AboutScreen(
     val context = LocalContext.current
     var sheet by rememberSaveable { mutableStateOf<AboutSheet?>(null) }
     // 点了「检查更新」后等这一轮结果:有新版直接弹出说明,没有就提示一句
-    var waitingRound by remember { mutableIntStateOf(-1) }
+    var waitingRound by rememberSaveable { mutableIntStateOf(-1) }
     LaunchedEffect(update.manualRounds) {
         if (waitingRound >= 0 && update.manualRounds > waitingRound) {
             waitingRound = -1
@@ -180,7 +179,7 @@ private fun Hero(versionName: String, build: String, beta: Boolean) {
             painterResource(R.drawable.mika_launcher_art), contentDescription = null,
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)),
         )
-        Text("Mika", Modifier.padding(top = 12.dp), style = MikaType.Title, fontWeight = FontWeight.Bold, color = c.ink)
+        Text(AboutCopy.APP_NAME, Modifier.padding(top = 12.dp), style = MikaType.Title, fontWeight = FontWeight.Bold, color = c.ink)
         Text(AboutCopy.TAGLINE, Modifier.padding(top = 4.dp), style = MikaType.Caption, color = c.ink2, textAlign = TextAlign.Center)
         Row(Modifier.padding(top = 10.dp).testTag("about-version"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(AboutCopy.version(versionName), style = MikaType.Hint, color = c.ink3)
@@ -256,9 +255,14 @@ private fun NotesBox(notes: String) {
 @Composable
 private fun UpdateSheet(r: ReleaseInfo, current: String, beta: Boolean, onOpenUrl: (String) -> Unit, onDismiss: () -> Unit) {
     AboutSheetFrame(AboutCopy.updateTitle(r.version), AboutCopy.updateSub(current, beta, r.date), "update-sheet", onDismiss) {
+        if (r.apkUrl != null) {
+            UpdateDownloadControls(r)
+            MikaButton(stringResource(R.string.about_update_release_page), { onOpenUrl(r.pageUrl) },
+                Modifier.fillMaxWidth().padding(top = 8.dp), kind = ButtonKind.Text)
+        } else {
+            MikaButton(AboutCopy.UPDATE_DOWNLOAD, { onOpenUrl(r.pageUrl) }, Modifier.fillMaxWidth().padding(top = 14.dp))
+        }
         if (r.notes.isNotBlank()) NotesBox(r.notes)
-        if (r.apkUrl != null) UpdateDownloadControls(r)
-        else MikaButton(AboutCopy.UPDATE_DOWNLOAD, { onOpenUrl(r.pageUrl) }, Modifier.fillMaxWidth().padding(top = 14.dp))
         Text(
             AboutCopy.UPDATE_LATER,
             Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onDismiss).padding(vertical = 10.dp),

@@ -239,7 +239,7 @@ internal class VolcVoiceCloneClient(
         private const val WER_ERROR = 45001109
         private const val MAX_RESPONSE_BYTES = 64L * 1024
         private const val MAX_DEMO_BYTES = 6L * 1024 * 1024
-        private const val DEMO_TEXT = "您好，我是米卡的电话助手，请问有什么需要转告？"
+        private const val DEMO_TEXT = "您好，我是 Flash phone AI 电话助手，请问有什么需要转告？"
 
         fun validSpeakerId(value: String): Boolean = SLOT.matches(value)
 

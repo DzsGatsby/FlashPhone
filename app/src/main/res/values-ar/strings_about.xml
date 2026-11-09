@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_tagline">مساعدك الشخصي على هاتفك، ينجز المهام نيابةً عنك</string>
+    <string name="about_tagline">رُد على المكالمات وأجرها بالذكاء الاصطناعي وراجع سجل المكالمات.</string>
     <string name="about_check">التحقق من وجود تحديثات</string>
     <string name="about_check_sub">احصل على الإصدارات الجديدة من GitHub Releases</string>
     <string name="about_check_sub_new">يتوفر إصدار جديد</string>
@@ -21,12 +21,12 @@
     <string name="about_repo_sub">%1$s · نرحب بنجوم GitHub</string>
     <string name="about_guide">الدليل والمساهمة</string>
     <string name="about_guide_sub">البدء؛ أضف معرفة بالتطبيق حتى دون كتابة شيفرة</string>
-    <string name="about_data_note">كل ما ترسله إلى Mika — الرسائل ومحتوى الشاشة ولقطات الشاشة — يُرسل فقط إلى موفر النموذج الذي أعددته. لا تملك Mika خوادم خاصة بها ولا تجمع أي بيانات عنك؛ ولا يتصل التحقق من التحديثات إلا بـ GitHub.</string>
+    <string name="about_data_note">كل ما ترسله إلى %1$s — الرسائل ومحتوى الشاشة ولقطات الشاشة — يُرسل فقط إلى موفر النموذج الذي أعددته. لا تملك %1$s خوادم خاصة بها ولا تجمع أي بيانات عنك؛ ولا يتصل التحقق من التحديثات إلا بـ GitHub.</string>
     <string name="about_license_link">ترخيص Apache-2.0</string>
-    <string name="about_author">من إعداد Wang Zan · © 2026</string>
+    <string name="about_author">مبني على Mika من تطوير Wang Zan · © 2026</string>
     <string name="about_license_title">ترخيص Apache-2.0</string>
     <string name="about_update_download">التنزيل من GitHub</string>
-    <string name="about_update_download_in_app">تنزيل التحديث</string>
+    <string name="about_update_download_in_app">التنزيل والتثبيت</string>
     <string name="about_update_downloading">جارٍ التنزيل…</string>
     <string name="about_update_progress">جارٍ التنزيل %1$d%%</string>
     <string name="about_update_paused">أُوقف التنزيل مؤقتاً؛ وسيُستأنف تلقائياً…</string>
@@ -34,11 +34,11 @@
     <string name="about_update_retry">إعادة التنزيل</string>
     <string name="about_update_cancel">حذف التنزيل</string>
     <string name="about_update_working">جارٍ العمل…</string>
-    <string name="about_update_install_hint">بعد التنزيل، انقر على «تثبيت التحديث» وأكّد ذلك في أداة تثبيت النظام. قد تحتاج أولاً إلى السماح لـ Mika بتثبيت تطبيقات غير معروفة.</string>
+    <string name="about_update_install_hint">بعد التنزيل، يفتح مثبّت Android لتأكيد التثبيت. قد يطلب Android أولًا السماح بالتثبيت من %1$s.</string>
     <string name="about_update_error">لم يكتمل التنزيل أو التثبيت. يُرجى المحاولة مجدداً لاحقاً.</string>
     <string name="about_update_bad_file">الحزمة التي تم تنزيلها غير مكتملة أو لا تطابق الإصدار. حُذفت؛ يُرجى تنزيلها مجدداً.</string>
-    <string name="about_update_not_newer">الحزمة التي تم تنزيلها ليست أحدث من Mika المثبتة. حُذفت.</string>
-    <string name="about_update_bad_signer">وُقّعت هذه الحزمة بطريقة مختلفة عن Mika المثبتة، لذا لا يمكنها تحديثها. حُذفت. إذا أنشأت Mika بنفسك، فأزل تثبيتها أولاً ثم ثبّت الإصدار الرسمي.</string>
+    <string name="about_update_not_newer">الحزمة التي تم تنزيلها ليست أحدث من %1$s المثبتة. حُذفت.</string>
+    <string name="about_update_bad_signer">توقيع الحزمة مختلف، لذا لا يمكن تحديث نسخة %1$s المثبتة. حُذف التنزيل. للاحتفاظ ببياناتك، اطلب من الناشر إصدارًا يحمل التوقيع نفسه.</string>
     <string name="about_update_later">لاحقاً</string>
     <string name="about_no_browser">لا يتوفر متصفح لفتح الرابط</string>
     <string name="about_version">الإصدار %1$s</string>
@@ -48,7 +48,7 @@
     <string name="about_current">الحالي %1$s</string>
     <string name="about_released_on">" · صدر في %1$s"</string>
     <string name="about_released_under">صدر بموجب %1$s</string>
-    <string name="issue_body">- الجهاز: %1$s\n- إصدار Android: %2$s (SDK %3$d)\n- إصدار Mika: %4$s (البنية %5$s)\n\n### ما المشكلة؟\n\n\n### خطوات إعادة المشكلة\n\n\n### ما الذي توقعته؟\n\n\n### معلومات التشخيص\n(اختياري) في Mika، افتح «حول» › «إرسال ملاحظات» › «نسخ معلومات التشخيص»، ثم ألصقها هنا\n\n</string>
+    <string name="issue_body">- الجهاز: %1$s\n- إصدار Android: %2$s (SDK %3$d)\n- إصدار Flash phone: %4$s (البنية %5$s)\n\n### ما المشكلة؟\n\n\n### خطوات إعادة المشكلة\n\n\n### ما الذي توقعته؟\n\n\n### معلومات التشخيص\n(اختياري) في Flash phone، افتح «حول» › «إرسال ملاحظات» › «نسخ معلومات التشخيص»، ثم ألصقها هنا\n\n</string>
     <string name="licenses_third_party">مكونات الجهات الخارجية · %1$d</string>
     <string name="licenses_footer">توجد النصوص الكاملة للتراخيص وإشعارات حقوق النشر في LICENSE ومجلد licenses/ (بما في ذلك THIRD_PARTY_NOTICES.md) في مستودع المصدر.</string>
     <string name="diagnostics_copy">نسخ معلومات التشخيص</string>
@@ -59,4 +59,8 @@
     <string name="diagnostics_share">مشاركة</string>
     <string name="diagnostics_copied">تم النسخ</string>
     <string name="diagnostics_loading">جارٍ الجمع…</string>
+    <string name="about_update_install_permission_denied">لم يمنح Android إذن التثبيت. ما زال التنزيل متاحًا. اضغط على «تثبيت التحديث» للمحاولة مرة أخرى.</string>
+    <string name="about_update_release_page">عرض الإصدار على GitHub</string>
+    <string name="about_app_title">حول %1$s</string>
+    <string name="about_update_call_busy">لا يمكن تثبيت التحديث أثناء المكالمة. يمكن متابعة التنزيل؛ اضغط على «تثبيت التحديث» بعد انتهاء المكالمة.</string>
 </resources>

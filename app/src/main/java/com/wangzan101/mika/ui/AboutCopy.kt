@@ -8,7 +8,8 @@ import com.wangzan101.mika.about.UpdateState
 
 /** 关于页的文字,以及「检查更新」一行、设置首页「关于 Mika」一行、侧栏入口上的提示怎么显示。 */
 object AboutCopy {
-    val TITLE: String get() = tr(R.string.settings_about)
+    val APP_NAME: String get() = tr(R.string.app_name)
+    val TITLE: String get() = tr(R.string.about_app_title, APP_NAME)
     val TAGLINE: String get() = tr(R.string.about_tagline)
     const val BETA = "Beta"
 
@@ -44,7 +45,7 @@ object AboutCopy {
     val GUIDE: String get() = tr(R.string.about_guide)
     val GUIDE_SUB: String get() = tr(R.string.about_guide_sub)
 
-    val DATA_NOTE: String get() = tr(R.string.about_data_note)
+    val DATA_NOTE: String get() = tr(R.string.about_data_note, APP_NAME)
     val LICENSE_LINK: String get() = tr(R.string.about_license_link)
     val AUTHOR: String get() = tr(R.string.about_author)
     val LICENSE_TITLE: String get() = tr(R.string.about_license_title)

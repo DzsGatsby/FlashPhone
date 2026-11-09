@@ -61,7 +61,7 @@ internal object CodexWire {
     fun initialize() = buildJsonObject {
         put("clientInfo", buildJsonObject {
             put("name", "mika_calls")
-            put("title", "Mika")
+            put("title", "Flash phone")
             put("version", "1")
         })
     }

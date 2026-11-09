@@ -73,7 +73,7 @@ class AboutScreenTest {
     @Test
     fun showsHeroRowsNoteAndFooter() {
         about()
-        compose.onNodeWithText("Mika").assertIsDisplayed()
+        compose.onNodeWithText(AboutCopy.APP_NAME).assertIsDisplayed()
         compose.onNodeWithText(AboutCopy.TAGLINE).assertIsDisplayed()
         compose.onNodeWithText("版本 0.1.0").assertIsDisplayed()
         compose.onNodeWithText("Beta").assertIsDisplayed()
@@ -165,7 +165,7 @@ class AboutScreenTest {
         compose.awaitOne("发现新版本 0.2.0")
         compose.onNodeWithText("当前 0.1.0 Beta · 2026-11-05 发布").assertExists()
         compose.onNodeWithText("以后再说").assertExists()
-        compose.onNodeWithText("下载更新").assertExists()
+        compose.onNodeWithText("下载并安装").assertExists()
         compose.waitForIdle()
         assertEquals(0, calls.checks)
         assertTrue(calls.urls.isEmpty())
@@ -210,6 +210,7 @@ class AboutScreenTest {
             }
         }
         compose.onNodeWithText("正在下载 50%").assertIsNotEnabled()
+        compose.onNodeWithTag("update-download-progress").assertIsDisplayed()
         compose.onNodeWithText("删除下载").performClick()
         assertEquals(1, deletes)
     }
@@ -255,12 +256,12 @@ class AboutScreenTest {
             }
         }
         compose.onNodeWithText("设置").assertIsDisplayed()
-        compose.onNodeWithText("关于 Mika").assertIsDisplayed()
+        compose.onNodeWithText(AboutCopy.TITLE).assertIsDisplayed()
         compose.onNodeWithTag("update-dot", useUnmergedTree = true).assertExists()
         val footer = compose.onNodeWithTag("drawer-footer").getUnclippedBoundsInRoot()
         // 量文字本身(未合并的树):合并后的可点行节点比文字宽,量它判断不了左右半边
         val settings = compose.onNodeWithText("设置", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val about = compose.onNodeWithText("关于 Mika", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val about = compose.onNodeWithText(AboutCopy.TITLE, useUnmergedTree = true).getUnclippedBoundsInRoot()
         val dot = compose.onNodeWithTag("update-dot", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val mid = (footer.left + footer.right) / 2
         assertTrue(settings.right < mid)
@@ -268,7 +269,7 @@ class AboutScreenTest {
         // 关于那一项贴着右边:红点离行的右边只隔两层内边距(行 12dp + 项 12dp)
         assertTrue(footer.right - dot.right <= 25.dp)
         compose.onNodeWithText("设置").performClick()
-        compose.onNodeWithText("关于 Mika").performClick()
+        compose.onNodeWithText(AboutCopy.TITLE).performClick()
         assertEquals(listOf("settings", "about"), calls)
     }
 
@@ -282,7 +283,7 @@ class AboutScreenTest {
                 )
             }
         }
-        compose.onNodeWithText("关于 Mika").assertIsDisplayed()
+        compose.onNodeWithText(AboutCopy.TITLE).assertIsDisplayed()
         compose.onAllNodesWithTag("update-dot", useUnmergedTree = true).assertCountEquals(0)
     }
 

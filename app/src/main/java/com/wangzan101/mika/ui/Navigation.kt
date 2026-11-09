@@ -12,12 +12,12 @@ import androidx.compose.runtime.setValue
 enum class Route { Chat, Settings, Memory, Plans, Browser, Run, Source, PhoneSetup, Models, Usage, SpeechModel, Welcome, ModelSetup, About, License, Screens, Teach, Calls }
 
 /**
- * 页面栈:最底下永远是对话页。[push] 进一页,[back] 回上一页(已在对话页时返回 false,交给系统退出)。
+ * 页面栈:最底下为产品的根页面。[push] 进一页,[back] 回上一页(已在对话页时返回 false,交给系统退出)。
  * 返回键和页面上的返回按钮走同一个 [back],所以两者总是一致。
  */
 @Stable
-class NavStack(initial: List<Route> = listOf(Route.Chat), fromDrawer: Boolean = false) {
-    var stack: List<Route> by mutableStateOf(normalize(initial))
+class NavStack(initial: List<Route> = listOf(Route.Chat), fromDrawer: Boolean = false, val root: Route = Route.Chat) {
+    var stack: List<Route> by mutableStateOf(normalize(initial, root))
         private set
 
     /** 这一串页面是从侧栏进去的:退回对话页时要回到打开的侧栏。 */
@@ -32,7 +32,7 @@ class NavStack(initial: List<Route> = listOf(Route.Chat), fromDrawer: Boolean = 
 
     /** 进一页;已经在这一页时不重复压栈。 */
     fun push(route: Route) {
-        if (route == Route.Chat) return reset()
+        if (route == root) return reset()
         if (current != route) stack = stack + route
     }
 
@@ -59,30 +59,38 @@ class NavStack(initial: List<Route> = listOf(Route.Chat), fromDrawer: Boolean = 
     /** 只留对话页和 [route] 两层(首次上手的每一步用)。 */
     fun show(route: Route) {
         fromDrawer = false
-        stack = normalize(listOf(route))
+        stack = normalize(listOf(route), root)
     }
 
     /** 回到对话页(打开某个对话时)。 */
     fun reset() {
         fromDrawer = false
         reopenDrawer = false
-        stack = listOf(Route.Chat)
+        stack = listOf(root)
     }
 
     companion object {
         private const val DRAWER_MARK = "fromDrawer"
 
-        private fun normalize(list: List<Route>): List<Route> =
-            listOf(Route.Chat) + list.filter { it != Route.Chat }
+        private fun normalize(list: List<Route>, root: Route): List<Route> =
+            listOf(root) + list.filter { it != root }
 
-        val Saver: Saver<NavStack, ArrayList<String>> = Saver(
-            save = { ArrayList(it.stack.map(Route::name) + listOfNotNull(DRAWER_MARK.takeIf { _ -> it.fromDrawer })) },
+        fun saver(rootOverride: Route? = null): Saver<NavStack, ArrayList<String>> = Saver(
+            save = { ArrayList(it.stack.map(Route::name) + listOf("root:${it.root.name}") + listOfNotNull(DRAWER_MARK.takeIf { _ -> it.fromDrawer })) },
             restore = { names ->
-                NavStack(names.mapNotNull { n -> Route.entries.firstOrNull { it.name == n } }, fromDrawer = DRAWER_MARK in names)
+                val savedRoot = names.firstOrNull { it.startsWith("root:") }?.substringAfter(":")
+                    ?.let { name -> Route.entries.firstOrNull { it.name == name } } ?: Route.Chat
+                val root = rootOverride ?: savedRoot
+                val migrating = root != savedRoot
+                val routes = names.mapNotNull { n -> Route.entries.firstOrNull { it.name == n } }
+                    .filter { !migrating || it != savedRoot }
+                NavStack(routes, fromDrawer = !migrating && DRAWER_MARK in names, root = root)
             },
         )
+
+        val Saver = saver()
     }
 }
 
 @Composable
-fun rememberNavStack(): NavStack = rememberSaveable(saver = NavStack.Saver) { NavStack() }
+fun rememberNavStack(root: Route = Route.Chat): NavStack = rememberSaveable(saver = NavStack.saver(root)) { NavStack(listOf(root), root = root) }

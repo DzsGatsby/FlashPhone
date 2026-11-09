@@ -19,13 +19,13 @@ class MikaLinksTest {
         val lines = MikaLinks.issueBody(device).lines()
         assertEquals("- 机型：Google Pixel 8", lines[0])
         assertEquals("- 安卓版本：14（SDK 34）", lines[1])
-        assertEquals("- Mika 版本：0.1.0（构建 65fcf92）", lines[2])
+        assertEquals("- Flash phone 版本：0.1.0（构建 65fcf92）", lines[2])
         assertTrue(lines.contains("### 遇到了什么问题"))
         assertTrue(lines.contains("### 做了哪几步"))
         assertTrue(lines.contains("### 期望是什么样"))
         // 诊断信息不自动带上:只提示用户去哪里复制
         assertTrue(lines.contains("### 诊断信息"))
-        assertTrue(lines.contains("（可选）在 Mika「关于 › 反馈问题 › 复制诊断信息」复制后粘贴在这里"))
+        assertTrue(lines.contains("（可选）在 Flash phone「关于 › 反馈问题 › 复制诊断信息」复制后粘贴在这里"))
     }
 
     /** 型号里已经带厂商名时不重复写。 */
@@ -38,7 +38,7 @@ class MikaLinksTest {
     @Test
     fun issueUrlIsEncoded() {
         val url = MikaLinks.issueUrl(device)
-        assertTrue(url.startsWith("https://github.com/wangzan101/Mika/issues/new?title=&body="))
+        assertTrue(url.startsWith("https://github.com/DzsGatsby/Mika/issues/new?title=&body="))
         val query = url.substringAfter('?')
         assertFalse("no raw spaces or newlines", query.any { it == ' ' || it == '\n' || it == '+' })
         assertFalse("no raw non-ASCII", query.any { it.code > 127 })

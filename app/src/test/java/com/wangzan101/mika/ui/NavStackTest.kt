@@ -73,4 +73,30 @@ class NavStackTest {
         nav.back()
         assertFalse(nav.reopenDrawer)
     }
+    @Test fun phoneProductReturnsFromSettingsAndUpdatesToPhoneHome() {
+        val nav = NavStack(listOf(Route.Calls), root = Route.Calls)
+        assertFalse(nav.canGoBack)
+        nav.push(Route.Settings)
+        nav.push(Route.About)
+        nav.back()
+        assertEquals(Route.Settings, nav.current)
+        nav.back()
+        assertEquals(Route.Calls, nav.current)
+        assertFalse(nav.back())
+        nav.push(Route.Chat)
+        assertEquals(listOf(Route.Calls, Route.Chat), nav.stack)
+        nav.reset()
+        assertEquals(listOf(Route.Calls), nav.stack)
+    }
+
+    @Test fun phoneProductMigratesLegacySavedNavigationAndKeepsNewRoot() {
+        val legacy = NavStack.saver(Route.Calls).restore(arrayListOf("Chat", "Calls"))!!
+        assertEquals(listOf(Route.Calls), legacy.stack)
+        assertFalse(legacy.canGoBack)
+        val restored = NavStack.saver(Route.Calls).restore(arrayListOf("Calls", "About", "root:Calls"))!!
+        assertEquals(Route.About, restored.current)
+        restored.back()
+        assertEquals(Route.Calls, restored.current)
+    }
+
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_tagline">Asisten pribadi di ponsel Anda, yang mengerjakan banyak hal untuk Anda</string>
+    <string name="about_tagline">Jawab dan lakukan panggilan dengan AI, lalu tinjau riwayat.</string>
     <string name="about_check">Periksa pembaruan</string>
     <string name="about_check_sub">Dapatkan versi baru dari GitHub Releases</string>
     <string name="about_check_sub_new">Versi baru tersedia</string>
@@ -21,12 +21,12 @@
     <string name="about_repo_sub">%1$s · beri bintang ya</string>
     <string name="about_guide">Panduan &amp; cara berkontribusi</string>
     <string name="about_guide_sub">Mulai memakai; tambahkan pengetahuan aplikasi tanpa perlu coding</string>
-    <string name="about_data_note">Apa yang Anda kirim ke Mika — pesan, isi layar, dan tangkapan layar — hanya dikirim ke penyedia model yang Anda atur. Mika tidak punya server sendiri dan tidak mengumpulkan data Anda; pemeriksaan pembaruan hanya menghubungi GitHub.</string>
+    <string name="about_data_note">Apa yang Anda kirim ke %1$s — pesan, isi layar, dan tangkapan layar — hanya dikirim ke penyedia model yang Anda atur. %1$s tidak punya server sendiri dan tidak mengumpulkan data Anda; pemeriksaan pembaruan hanya menghubungi GitHub.</string>
     <string name="about_license_link">Lisensi Apache-2.0</string>
-    <string name="about_author">Dibuat oleh Wang Zan · © 2026</string>
+    <string name="about_author">Berdasarkan Mika karya Wang Zan · © 2026</string>
     <string name="about_license_title">Lisensi Apache-2.0</string>
     <string name="about_update_download">Unduh dari GitHub</string>
-    <string name="about_update_download_in_app">Unduh pembaruan</string>
+    <string name="about_update_download_in_app">Unduh dan instal</string>
     <string name="about_update_downloading">Mengunduh…</string>
     <string name="about_update_progress">Mengunduh %1$d%%</string>
     <string name="about_update_paused">Unduhan dijeda; akan dilanjutkan otomatis…</string>
@@ -34,11 +34,11 @@
     <string name="about_update_retry">Unduh lagi</string>
     <string name="about_update_cancel">Hapus unduhan</string>
     <string name="about_update_working">Memproses…</string>
-    <string name="about_update_install_hint">Setelah selesai diunduh, ketuk “Instal pembaruan” dan konfirmasi di penginstal sistem. Anda mungkin perlu mengizinkan Mika menginstal aplikasi tidak dikenal terlebih dahulu.</string>
+    <string name="about_update_install_hint">Setelah mengunduh, penginstal Android akan terbuka untuk dikonfirmasi. Android mungkin meminta izin pemasangan dari %1$s terlebih dahulu.</string>
     <string name="about_update_error">Pengunduhan atau penginstalan belum selesai. Silakan coba lagi nanti.</string>
     <string name="about_update_bad_file">Paket yang diunduh tidak lengkap atau tidak cocok dengan rilisnya. Paket sudah dihapus; silakan unduh ulang.</string>
-    <string name="about_update_not_newer">Paket yang diunduh tidak lebih baru dari Mika yang terpasang. Paket sudah dihapus.</string>
-    <string name="about_update_bad_signer">Paket ini ditandatangani berbeda dari Mika yang terpasang, jadi tidak bisa memperbaruinya. Paket sudah dihapus. Jika Anda membangun Mika sendiri, copot dulu, lalu instal versi resmi.</string>
+    <string name="about_update_not_newer">Paket yang diunduh tidak lebih baru dari %1$s yang terpasang. Paket sudah dihapus.</string>
+    <string name="about_update_bad_signer">Tanda tangan paket berbeda sehingga tidak dapat memperbarui %1$s yang terpasang. Unduhan dihapus. Agar data tetap tersimpan, mintalah versi dengan tanda tangan yang sama kepada penerbit.</string>
     <string name="about_update_later">Nanti</string>
     <string name="about_no_browser">Tidak ada browser untuk membuka tautan</string>
     <string name="about_version">Versi %1$s</string>
@@ -48,7 +48,7 @@
     <string name="about_current">Saat ini %1$s</string>
     <string name="about_released_on">" · dirilis %1$s"</string>
     <string name="about_released_under">Dirilis di bawah %1$s</string>
-    <string name="issue_body">- Perangkat: %1$s\n- Versi Android: %2$s (SDK %3$d)\n- Versi Mika: %4$s (build %5$s)\n\n### Apa yang salah\n\n\n### Langkah yang Anda lakukan\n\n\n### Yang Anda harapkan\n\n\n### Diagnostik\n(Opsional) Di Mika, buka Tentang › Kirim masukan › Salin diagnostik, lalu tempel di sini\n\n</string>
+    <string name="issue_body">- Perangkat: %1$s\n- Versi Android: %2$s (SDK %3$d)\n- Versi Flash phone: %4$s (build %5$s)\n\n### Apa yang salah\n\n\n### Langkah yang Anda lakukan\n\n\n### Yang Anda harapkan\n\n\n### Diagnostik\n(Opsional) Di Flash phone, buka Tentang › Kirim masukan › Salin diagnostik, lalu tempel di sini\n\n</string>
     <string name="licenses_third_party">Komponen pihak ketiga · %1$d</string>
     <string name="licenses_footer">Teks lisensi lengkap dan pemberitahuan hak cipta ada di LICENSE dan folder licenses/ (termasuk THIRD_PARTY_NOTICES.md) pada repositori kode sumber.</string>
     <string name="diagnostics_copy">Salin diagnostik</string>
@@ -59,4 +59,8 @@
     <string name="diagnostics_share">Bagikan</string>
     <string name="diagnostics_copied">Disalin</string>
     <string name="diagnostics_loading">Mengumpulkan…</string>
+    <string name="about_update_install_permission_denied">Android tidak memberikan izin pemasangan. Unduhan masih tersedia. Ketuk Instal pembaruan untuk mencoba lagi.</string>
+    <string name="about_update_release_page">Lihat rilis di GitHub</string>
+    <string name="about_app_title">Tentang %1$s</string>
+    <string name="about_update_call_busy">Pembaruan tidak dapat dipasang saat panggilan berlangsung. Unduhan dapat dilanjutkan; ketuk Instal pembaruan setelah panggilan selesai.</string>
 </resources>
