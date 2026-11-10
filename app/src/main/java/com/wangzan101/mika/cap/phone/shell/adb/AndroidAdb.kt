@@ -33,7 +33,8 @@ object AndroidAdb {
 
     /** 本进程唯一的一份身份来源:配对和连接都从这里拿,拿到的是同一把钥匙。 */
     fun identities(context: Context): AdbIdentitySource = source ?: synchronized(this) {
-        source ?: AdbIdentitySource(keyStore(context), { "mika@${Build.MODEL}" }) { msg, e -> Log.w(TAG, msg, e) }.also { source = it }
+        // Only the name shown by Android for a new pairing changes. Keep the existing key.
+        source ?: AdbIdentitySource(keyStore(context), { "Flash_phone@${Build.MODEL}" }) { msg, e -> Log.w(TAG, msg, e) }.also { source = it }
     }
 
     /** 连接用的身份;存着的钥匙读不出时抛 [com.wangzan101.mika.core.adb.AdbKeyUnreadableException]。 */

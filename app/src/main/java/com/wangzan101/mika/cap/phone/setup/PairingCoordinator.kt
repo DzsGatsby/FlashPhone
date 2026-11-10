@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
-import com.wangzan101.mika.cap.phone.a11y.ScreenAccessibility
 import com.wangzan101.mika.cap.phone.PhoneServices
 import com.wangzan101.mika.core.shell.BuiltinShellControl
 import com.wangzan101.mika.core.shell.PairingCode
@@ -29,8 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * 一次配对的全过程:找配对窗口、无障碍开着时自己读配对码([PairingCodeReader])、
- * 读不到就弹带输入框的通知、把码交给内置助手 [control]、显示结果。
+ * 找配对窗口，在通知里由机主输入系统配对码，然后把码交给内置助手 [control]。
  * 跟着进程走,不跟界面(用户在系统设置里看配对码时 Mika 的界面已经不在前台):由 [com.wangzan101.mika.cap.phone.PhoneServices] 建一份。
  */
 class PairingCoordinator(context: Context, private val control: BuiltinShellControl) {
@@ -73,9 +71,8 @@ class PairingCoordinator(context: Context, private val control: BuiltinShellCont
             Log.i(TAG, "already watching; deadline extended")
             return
         }
-        Log.i(TAG, "watching for pairing (status ${control.status.value}, accessibility ${ScreenAccessibility.instance.value != null})")
+        Log.i(TAG, "watching for call audio pairing (status ${control.status.value})")
         watch = scope.launch {
-            val reader = launch { PairingCodeReader.run(app, control, this@PairingCoordinator) }
             val notices = launch {
                 // 三样各由一个协程送进 combine,送到的先后不一定是改的先后(先改的「正在配对」可能后到):每次都按此刻的值算。
                 // 按写入的反序读,读到后写的值时先写的也一定读得到:submit 先写 submitted 再让找窗口的状态回到「在找」,
@@ -84,7 +81,7 @@ class PairingCoordinator(context: Context, private val control: BuiltinShellCont
                     val d = control.pairingDiscovery.value
                     val pending = submitted
                     val r = _repairing.value
-                    PairingNotice.follow(control.status.value, d, r, pending)
+                    PairingNotice.follow(control.status.value, d, r, pending, callOnly = true)
                 }
                     .distinctUntilChanged()
                     .onEach { (notice, done) -> Log.i(TAG, "notice ${notice?.let { it::class.simpleName } ?: "none"} (discovery ${control.pairingDiscovery.value}, status ${control.status.value})${if (done) "; done" else ""}") }
@@ -97,14 +94,12 @@ class PairingCoordinator(context: Context, private val control: BuiltinShellCont
                 notices.cancel()
                 cancelNotice()
             }
-            reader.cancel()
             control.stopDiscovery()
         }
     }
 
     /** 发出 [notice];没人理就隔一阵再弹,次数有上限。 */
     private suspend fun post(notice: PairingNotice) {
-        delay(PairingNotice.delayBefore(notice, autoRead = ScreenAccessibility.instance.value != null))
         show(notice)
         var sent = 0
         while (true) {

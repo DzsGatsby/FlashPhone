@@ -33,4 +33,14 @@ class CallStandbyPolicyTest {
         assertEquals(130_000L, CallStandbyPolicy.activeWakeBudgetMs(120))
         assertEquals(610_000L, CallStandbyPolicy.activeWakeBudgetMs(Int.MAX_VALUE))
     }
+
+    @Test fun foregroundRestoreWaitsForTheLateHelperAndDoesNotRetryAfterFailure() {
+        val resume = CallStandbyResumeGate()
+        assertFalse(resume.take(visible = true, eligible = false))
+        assertTrue(resume.take(visible = true, eligible = true))
+        assertFalse(resume.take(visible = true, eligible = false))
+        assertFalse(resume.take(visible = true, eligible = true))
+        assertFalse(resume.take(visible = false, eligible = true))
+        assertTrue(resume.take(visible = true, eligible = true))
+    }
 }

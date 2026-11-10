@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.wangzan101.mika.R
 import com.wangzan101.mika.core.shell.BuiltinShellFailure
 import com.wangzan101.mika.core.shell.BuiltinShellFix
 import com.wangzan101.mika.core.shell.BuiltinShellStatus
@@ -23,6 +24,7 @@ import com.wangzan101.mika.core.shell.PhoneSetupFlow
 import com.wangzan101.mika.core.shell.SetupInputs
 import com.wangzan101.mika.core.shell.SetupStep
 import com.wangzan101.mika.core.shell.SetupSuspect
+import com.wangzan101.mika.i18n.tr
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -33,6 +35,47 @@ import org.junit.runner.RunWith
 class PhoneSetupScreenTest {
     @get:Rule val compose = createComposeRule()
     private val calls = mutableListOf<String>()
+
+    private fun showFlashUsb(status: BuiltinShellStatus) = compose.setContent {
+        var repair by remember { mutableStateOf(false) }
+        var wirelessEnabled by remember { mutableStateOf(false) }
+        val inputs = SetupInputs(
+            developerOptions = true, wirelessDebugging = wirelessEnabled, status = status,
+            accessibility = false, accessibilitySkipped = true, repair = repair,
+            restart = if (repair) HelperRestart.None else HelperRestart.UsbCommand,
+        )
+        PhoneSetupContent(
+            view = PhoneSetupFlow.view(inputs), callOnly = true,
+            onSetUpWireless = if (!repair) ({ calls += "wireless"; repair = true }) else null,
+            onStepAction = { if (it == SetupStep.WirelessDebugging) wirelessEnabled = true },
+            onFailureFix = {}, onAllowNotifications = {}, onConfirmStep = {}, onSubmit = { _, _ -> },
+            onClose = {}, usbCommand = "test command", onAskUsb = { calls += "usb" },
+        )
+    }
+
+    @Test
+    fun runningUsbHelperCanSetUpWirelessAndPairWithoutAccessibility() {
+        showFlashUsb(BuiltinShellStatus.Running)
+        compose.onNodeWithText(tr(R.string.calls_helper_setup_title)).assertIsDisplayed()
+        compose.onNodeWithText(PhoneSetupCopy.INTRO).assertDoesNotExist()
+        compose.onNodeWithTag("setup-wireless-recovery").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("setup-step-Accessibility").assertDoesNotExist()
+        compose.onNodeWithTag("setup-action").performScrollTo().performClick()
+        compose.onNodeWithTag("setup-pairing-guide").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(PhoneSetupCopy.notifyGuide(callOnly = true)[1]).assertExists()
+        compose.onNodeWithText(PhoneSetupCopy.NOTIFY_GUIDE[1]).assertDoesNotExist()
+        assertEquals(listOf("wireless"), calls)
+    }
+
+    @Test
+    fun stoppedUsbHelperShowsWirelessFirstAndDisclosesComputerOnlyOnRequest() {
+        showFlashUsb(BuiltinShellStatus.Failed(BuiltinShellFailure.UsbHelperStopped))
+        compose.onNodeWithTag("setup-wireless-recovery").assertIsDisplayed()
+        compose.onNodeWithTag("setup-usb-command").assertDoesNotExist()
+        compose.onNodeWithTag("setup-usb-options").performScrollTo().performClick()
+        compose.onNodeWithTag("setup-usb-command").performScrollTo().assertIsDisplayed()
+        assertEquals(listOf("usb"), calls)
+    }
 
     private fun show(inputs: SetupInputs, headsUpLowered: Boolean = false, diagnostics: Boolean = false, scanning: Boolean = false) = compose.setContent {
         PhoneSetupContent(

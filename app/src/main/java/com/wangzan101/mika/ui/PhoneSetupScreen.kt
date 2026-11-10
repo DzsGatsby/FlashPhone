@@ -111,7 +111,6 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
     val pairing = phone.pairing
     val discovery by phone.shellControl.pairingDiscovery.collectAsState()
     val scanning by phone.shellManager.scanningPorts.collectAsState()
-    val shell = status.builtinShell
     var repairStarted by rememberSaveable { mutableStateOf(false) }
     if (repair && !repairStarted) { repairStarted = true; pairing.startRepair() }
     val repairing by pairing.repairing.collectAsState()
@@ -122,12 +121,25 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
 
     var diagnosticsOpen by rememberSaveable { mutableStateOf(false) }
     var usbAsked by rememberSaveable { mutableStateOf(false) }
+    var wirelessRecoveryRequested by rememberSaveable { mutableStateOf(false) }
     var stalledMs by remember { mutableLongStateOf(0L) }
 
-    val inputs = status.setupInputs(discovery, repairing, callOnly || accessibilitySkipped, confirmed, revisit, stalledMs, usbAsked)
-    val view = PhoneSetupFlow.view(inputs).let {
-        if (callOnly) it.copy(marks = it.marks - SetupStep.Accessibility) else it
+    val baseInputs = status.setupInputs(discovery, repairing, callOnly || accessibilitySkipped, confirmed, revisit, stalledMs, usbAsked)
+    val usbOnly = baseInputs.restart == HelperRestart.UsbCommand ||
+        (baseInputs.status as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.UsbHelperStopped
+    val wirelessSetupAvailable = !baseInputs.wirelessMissing || !baseInputs.developerSettingsMissing
+    val offerWirelessRecovery = callOnly && usbOnly && wirelessSetupAvailable && !repairing && !wirelessRecoveryRequested
+    LaunchedEffect(Unit) {
+        // An Activity restored after process death can keep its wizard state while losing the coordinator.
+        if (wirelessRecoveryRequested && usbOnly && wirelessSetupAvailable && !repairing) pairing.startRepair()
     }
+    val inputs = if (callOnly) baseInputs.copy(
+        // Flash phone does not use an accessibility service to read the system's pairing code.
+        accessibility = false,
+        // Once requested, use the real wireless steps rather than the skipped marks from the old USB start.
+        restart = if (wirelessRecoveryRequested && usbOnly) HelperRestart.None else baseInputs.restart,
+    ) else baseInputs
+    val view = PhoneSetupFlow.view(inputs)
     // 停在同一处没有进展时计时,换了地方从头算;到了时限就不用再数
     val stallPoint = PhoneSetupFlow.stallPoint(view)
     LaunchedEffect(stallPoint) {
@@ -174,7 +186,7 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
     }
     LaunchedEffect(view.phase) { if (view.phase == SetupPhase.Success) phone.setupPrompt.clear() }
     // 打开引导页时把「用电脑启动」的脚本备好(助手不在时带新口令)
-    LaunchedEffect(Unit) { phone.shellManager.usbScript.refresh() }
+    LaunchedEffect(Unit) { if (!callOnly) phone.shellManager.usbScript.refresh() }
     val usbCommand = remember { phone.shellManager.usbScript.command() }
 
     val copyUsbCommand = {
@@ -195,7 +207,7 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
                 SetupStep.DeveloperOptions -> onFix(Fix.OpenAboutPhone)
                 SetupStep.UsbDebugging -> onFix(Fix.OpenUsbDebugging)
                 SetupStep.Accessibility -> onFix(Fix.OpenAccessibility)
-                SetupStep.WirelessDebugging -> onFix(Fix.OpenDeveloperOptions)
+                SetupStep.WirelessDebugging -> onFix(if (callOnly) Fix.OpenWirelessDebugging else Fix.OpenDeveloperOptions)
                 SetupStep.PairingCode -> { pairing.begin(); onFix(Fix.OpenWirelessDebugging) }
                 SetupStep.Connect -> Unit
             }
@@ -229,9 +241,17 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
             }
         },
         usbCommand = usbCommand,
-        onAskUsb = { usbAsked = true },
+        onAskUsb = {
+            if (callOnly) phone.shellManager.usbScript.refresh()
+            usbAsked = true
+        },
         onCopyUsbCommand = copyUsbCommand,
-        barTitle = if (callOnly) stringResource(R.string.calls_device_pair_helper) else PhoneSetupCopy.BAR_TITLE,
+        callOnly = callOnly,
+        onSetUpWireless = if (offerWirelessRecovery) ({
+            wirelessRecoveryRequested = true
+            revisit = null
+            pairing.startRepair()
+        }) else null,
     )
     // 卡在哪一步都能把诊断信息发给作者:用的是引导页此刻的输入,用户确认过的步骤也在里面
     if (diagnosticsOpen) {
@@ -273,74 +293,105 @@ fun PhoneSetupContent(
     usbCommand: String? = null,
     onAskUsb: () -> Unit = {},
     onCopyUsbCommand: () -> Unit = {},
-    barTitle: String = PhoneSetupCopy.BAR_TITLE,
+    callOnly: Boolean = false,
+    onSetUpWireless: (() -> Unit)? = null,
 ) {
     val canRevisit = view.phase == SetupPhase.Guide || view.phase == SetupPhase.Failed
+    val steps = SetupStep.entries.filter { it in view.marks && (!callOnly || it != SetupStep.Accessibility) }
     fun revisitable(step: SetupStep) = canRevisit && step != view.current && step in PhoneSetupFlow.REVISITABLE &&
         view.marks[step] in setOf(StepMark.Done, StepMark.Skipped, StepMark.Failed)
     val c = MikaTheme.colors
+    val usbStopped = callOnly && view.failure?.reason == BuiltinShellFailure.UsbHelperStopped
+    val usbOnly = callOnly && (view.restart == HelperRestart.UsbCommand || usbStopped)
+    val showUsbOptions = callOnly && usbCommand != null &&
+        (usbStopped || view.usbFallback || view.current == SetupStep.WirelessDebugging)
+    var usbOptionsOpen by rememberSaveable { mutableStateOf(false) }
     PageBackground {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
-            TopBar(barTitle, MikaIcons.Back, onClose, stringResource(R.string.back))
+            TopBar(
+                if (callOnly) stringResource(R.string.calls_helper_setup_title) else PhoneSetupCopy.BAR_TITLE,
+                MikaIcons.Back, onClose, stringResource(R.string.back),
+            )
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                 if (view.phase == SetupPhase.Unavailable) {
                     // 这个环境没有能起助手的路:只说明,不列走不通的步骤
                     GroupCard {
                         Column(Modifier.padding(16.dp).testTag("setup-unavailable")) {
-                            Text(PhoneSetupCopy.UNAVAILABLE, style = MikaType.Body, fontWeight = FontWeight.SemiBold, color = c.ink)
                             Text(
-                                PhoneSetupCopy.UNAVAILABLE_REASON, Modifier.padding(top = 8.dp),
+                                if (callOnly) stringResource(R.string.calls_helper_unavailable) else PhoneSetupCopy.UNAVAILABLE,
+                                style = MikaType.Body, fontWeight = FontWeight.SemiBold, color = c.ink,
+                            )
+                            Text(
+                                if (callOnly) stringResource(R.string.calls_helper_unavailable_reason) else PhoneSetupCopy.UNAVAILABLE_REASON,
+                                Modifier.padding(top = 8.dp),
                                 fontSize = 14.5.sp, lineHeight = 23.sp, color = c.ink2,
                             )
                         }
                     }
                 } else {
-                    if (view.phase == SetupPhase.Success) {
+                    if (usbOnly && view.phase != SetupPhase.Working) {
+                        UsbOnlyCallRecovery(view.phase == SetupPhase.Success, onSetUpWireless)
+                    }
+                    if (view.phase == SetupPhase.Success && !usbOnly) {
                         Text(
-                            PhoneSetupCopy.SUCCESS_LINE, Modifier.padding(top = 4.dp, bottom = 16.dp).testTag("setup-success"),
+                            if (callOnly) stringResource(R.string.calls_helper_ready) else PhoneSetupCopy.SUCCESS_LINE,
+                            Modifier.padding(top = 4.dp, bottom = 16.dp).testTag("setup-success"),
                             style = MikaType.Body, fontWeight = FontWeight.SemiBold, color = c.ok,
                         )
                     } else {
                         Text(
-                            PhoneSetupCopy.INTRO, Modifier.padding(top = 4.dp, bottom = 16.dp),
+                            if (callOnly) stringResource(R.string.calls_helper_setup_intro) else PhoneSetupCopy.INTRO,
+                            Modifier.padding(top = 4.dp, bottom = 16.dp),
                             fontSize = 14.5.sp, lineHeight = 23.sp, color = c.ink2,
                         )
                     }
                     GroupCard {
-                        SetupStep.entries.filter(view.marks::containsKey).forEach { step ->
+                        steps.forEachIndexed { index, step ->
                             StepRow(
-                                step, view.marks.getValue(step), current = step == view.current, first = step.ordinal == 0,
+                                step, index, view.marks.getValue(step), current = step == view.current, callOnly = callOnly,
                                 onClick = if (revisitable(step)) ({ onRevisit(step) }) else null,
                             ) {
-                                if (step == view.current) CurrentStepBody(
+                                if (step == view.current && !usbStopped) CurrentStepBody(
                                     step, view, onStepAction, onFailureFix, onAllowNotifications, onOpenPairingChannel, headsUpLowered, onOpenHeadsUp,
                                     onConfirmStep, onSubmit, onAppInfo, onSkipAccessibility, onRevisit, onDiagnostics, onConnectPort,
+                                    callOnly,
                                 )
                                 val working = step == SetupStep.Connect && view.phase == SetupPhase.Working
                                 if (working) WorkingLine(scanning)
-                                if (usbCommand != null && (step == view.current || working)) {
+                                if (!callOnly && usbCommand != null && (step == view.current || working)) {
                                     if (view.usbFallback) UsbStartCard(view.restart, usbCommand, onCopyUsbCommand)
                                     else if (step == SetupStep.WirelessDebugging) LinkText(PhoneSetupCopy.USB_ASK, "setup-usb-ask", onAskUsb)
                                 }
                             }
                         }
                     }
-                    if (SetupStep.entries.any(::revisitable)) FooterNote(PhoneSetupCopy.REVISIT_NOTE)
-                    if (view.phase != SetupPhase.Success) FooterNote(PhoneSetupCopy.SKIP_NOTE)
+                    if (showUsbOptions && usbCommand != null) {
+                        MikaButton(
+                            stringResource(if (usbOptionsOpen) R.string.calls_helper_hide_usb else R.string.calls_helper_show_usb),
+                            onClick = { if (!usbOptionsOpen) onAskUsb(); usbOptionsOpen = !usbOptionsOpen },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("setup-usb-options"),
+                            kind = ButtonKind.Text, size = ButtonSize.Medium,
+                        )
+                        if (usbOptionsOpen) UsbStartCard(view.restart, usbCommand, onCopyUsbCommand, callOnly = true)
+                    }
+                    if (steps.any(::revisitable)) FooterNote(PhoneSetupCopy.REVISIT_NOTE)
+                    if (!callOnly && view.phase != SetupPhase.Success) FooterNote(PhoneSetupCopy.SKIP_NOTE)
                 }
             }
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)) {
-                if (view.phase == SetupPhase.Success) {
+                if (view.phase == SetupPhase.Success && (!callOnly || view.restart == HelperRestart.Wireless)) {
                     Text(
-                        PhoneSetupCopy.successNote(view.restart), Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                        if (callOnly) stringResource(R.string.calls_helper_wireless_reconnect) else PhoneSetupCopy.successNote(view.restart),
+                        Modifier.fillMaxWidth().padding(bottom = 10.dp),
                         style = MikaType.Caption, color = c.ink3, textAlign = TextAlign.Center,
                     )
                 }
                 if (onboarding) ProgressDots(Onboarding.DOTS, Onboarding.dot(OnboardingStep.Phone), Modifier.padding(bottom = 8.dp))
                 when (view.phase) {
                     SetupPhase.Success -> MikaButton(
-                        if (onboarding) PhoneSetupCopy.START_USING else PhoneSetupCopy.SUCCESS_DONE, onClose,
+                        if (onboarding && !callOnly) PhoneSetupCopy.START_USING else PhoneSetupCopy.SUCCESS_DONE, onClose,
                         Modifier.fillMaxWidth().testTag("setup-done"),
+                        kind = if (onSetUpWireless == null) ButtonKind.Primary else ButtonKind.Tonal,
                     )
                     SetupPhase.Unavailable -> MikaButton(stringResource(R.string.ok_got_it), onClose, Modifier.fillMaxWidth().testTag("setup-got-it"))
                     // 正在连接、连不上时也能先离开,之后在设置里接着弄
@@ -360,14 +411,37 @@ fun PhoneSetupContent(
     }
 }
 
+@Composable
+private fun UsbOnlyCallRecovery(running: Boolean, onSetUpWireless: (() -> Unit)?) {
+    val c = MikaTheme.colors
+    Column(
+        Modifier.padding(bottom = 16.dp).fillMaxWidth().background(c.accentSoft, RoundedCornerShape(12.dp))
+            .padding(14.dp).testTag("setup-usb-only"),
+    ) {
+        Text(
+            stringResource(if (running) R.string.calls_helper_usb_running else R.string.calls_helper_usb_stopped),
+            style = MikaType.Body, fontWeight = FontWeight.SemiBold, color = c.ink,
+        )
+        Text(
+            stringResource(if (onSetUpWireless != null) R.string.calls_helper_wireless_recovery else R.string.calls_helper_wireless_unavailable),
+            Modifier.padding(top = 4.dp), style = MikaType.Caption, color = c.ink2,
+        )
+        if (onSetUpWireless != null) {
+            PillButton(stringResource(R.string.calls_helper_setup_wireless), primary = true, tag = "setup-wireless-recovery", onClick = onSetUpWireless)
+        }
+    }
+}
+
 /**
  * 另一条路:用电脑经 USB 数据线起助手。放在当前这一步里,和这一步的其他提示一样是一块浅色底:标题、一句说明、命令和复制按钮。
  * 助手本来就是这样起的([HelperRestart.UsbCommand])时,标题说「再运行一次」。
  */
 @Composable
-private fun UsbStartCard(restart: HelperRestart, command: String, onCopy: () -> Unit) {
+private fun UsbStartCard(restart: HelperRestart, command: String, onCopy: () -> Unit, callOnly: Boolean = false) {
     val c = MikaTheme.colors
-    val (title, body) = PhoneSetupCopy.usbCard(restart)
+    val (title, body) = if (callOnly) {
+        stringResource(R.string.calls_helper_show_usb) to stringResource(R.string.calls_helper_usb_fallback)
+    } else PhoneSetupCopy.usbCard(restart)
     Column(Modifier.padding(top = 10.dp).fillMaxWidth().background(c.accentSoft, RoundedCornerShape(12.dp)).padding(12.dp).testTag("setup-usb")) {
         Text(title, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
         Text(body, Modifier.padding(top = 2.dp), fontSize = 13.sp, lineHeight = 18.sp, color = c.ink2)
@@ -380,13 +454,13 @@ private fun UsbStartCard(restart: HelperRestart, command: String, onCopy: () -> 
 }
 
 @Composable
-private fun StepRow(step: SetupStep, mark: StepMark, current: Boolean, first: Boolean, onClick: (() -> Unit)?, body: @Composable () -> Unit) {
-    val copy = PhoneSetupCopy.step(step)
+private fun StepRow(step: SetupStep, index: Int, mark: StepMark, current: Boolean, callOnly: Boolean, onClick: (() -> Unit)?, body: @Composable () -> Unit) {
+    val copy = PhoneSetupCopy.step(step, callOnly)
     val c = MikaTheme.colors
     Box(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).testTag("setup-step-${step.name}")) {
-        if (!first) Box(Modifier.padding(start = 58.dp).fillMaxWidth().height(0.5.dp).background(c.hair))
+        if (index != 0) Box(Modifier.padding(start = 58.dp).fillMaxWidth().height(0.5.dp).background(c.hair))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            StepBadge(step.ordinal + 1, mark)
+            StepBadge(index + 1, mark)
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -439,11 +513,13 @@ private fun CurrentStepBody(
     onRevisit: (SetupStep?) -> Unit,
     onDiagnostics: (() -> Unit)?,
     onConnectPort: ((Int) -> Unit)?,
+    callOnly: Boolean,
 ) {
-    val copy = PhoneSetupCopy.step(step)
+    val copy = PhoneSetupCopy.step(step, callOnly)
+    val fixNotificationsFirst = step == SetupStep.PairingCode && view.needsNotifications && !view.autoRead
     Text(copy.body, Modifier.padding(top = 2.dp), style = MikaType.Caption, color = MikaTheme.colors.ink2)
     view.failure?.let { f ->
-        val fc = PhoneSetupCopy.failure(f.reason)
+        val fc = PhoneSetupCopy.failure(f.reason, callOnly)
         Column(
             Modifier.padding(top = 10.dp).fillMaxWidth().background(MikaTheme.colors.badSoft, RoundedCornerShape(12.dp)).padding(12.dp),
         ) {
@@ -452,7 +528,7 @@ private fun CurrentStepBody(
         }
         // 要再运行 USB 命令时,下面的卡片里就有命令和复制按钮,不再重复一个
         if (f.fix != BuiltinShellFix.RunUsbCommand || !view.usbFallback) {
-            PillButton(PhoneSetupCopy.fixLabel(f.fix), primary = true, tag = "setup-fix") { onFailureFix(f.fix) }
+            PillButton(PhoneSetupCopy.fixLabel(f.fix), primary = !callOnly || !fixNotificationsFirst, tag = "setup-fix") { onFailureFix(f.fix) }
         }
         // 自动找不到端口:让用户照着「无线调试」页面填
         if (step == SetupStep.Connect && f.reason == BuiltinShellFailure.ConnectFailed) onConnectPort?.let { ConnectPort(it) }
@@ -461,7 +537,7 @@ private fun CurrentStepBody(
     // 没成功时最可能的原因在前面哪一步:说清楚,给回去的按钮
     view.suspect?.let { s ->
         Text(
-            PhoneSetupCopy.suspect(s),
+            PhoneSetupCopy.suspect(s, callOnly),
             Modifier.padding(top = 10.dp).fillMaxWidth().background(MikaTheme.colors.warnSoft, RoundedCornerShape(12.dp)).padding(12.dp)
                 .testTag("setup-suspect"),
             fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.ink,
@@ -469,21 +545,20 @@ private fun CurrentStepBody(
         PillButton(PhoneSetupCopy.goBackTo(s.step), primary = view.failure == null, tag = "setup-suspect-back") { onRevisit(s.step) }
     }
     // 没有无障碍时配对码只能填在通知里:通知发不出来就先修它,这是这一步的主按钮
-    val fixNotificationsFirst = step == SetupStep.PairingCode && view.needsNotifications && !view.autoRead
     if (step == SetupStep.PairingCode) {
         when (view.notifyIssue) {
             PairingNotifyIssue.NotificationsOff -> {
-                Text(PhoneSetupCopy.NEED_NOTIFICATIONS, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.warn)
+                Text(PhoneSetupCopy.needNotifications(callOnly), Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.warn)
                 PillButton(PhoneSetupCopy.ALLOW_NOTIFICATIONS, primary = fixNotificationsFirst, tag = "setup-notify-fix") { onAllowNotifications() }
             }
             PairingNotifyIssue.ChannelOff -> {
-                Text(PhoneSetupCopy.PAIRING_CHANNEL_OFF, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.warn)
+                Text(PhoneSetupCopy.pairingChannelOff(callOnly), Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.warn)
                 PillButton(PhoneSetupCopy.OPEN_PAIRING_CHANNEL, primary = fixNotificationsFirst, tag = "setup-notify-fix") { onOpenPairingChannel() }
             }
             // 不弹出也能下拉去填:只提醒,不抢主按钮;无障碍开着时用不上通知,不提
             PairingNotifyIssue.NotHeadsUp -> if (!view.autoRead) {
                 Text(
-                    PhoneSetupCopy.PAIRING_LOWERED,
+                    PhoneSetupCopy.pairingLowered(callOnly),
                     Modifier.padding(top = 10.dp).fillMaxWidth().background(MikaTheme.colors.warnSoft, RoundedCornerShape(12.dp)).padding(12.dp)
                         .testTag("setup-pairing-lowered"),
                     fontSize = 13.sp, lineHeight = 18.sp, color = MikaTheme.colors.ink,
@@ -501,7 +576,7 @@ private fun CurrentStepBody(
             }
             PillButton(PhoneSetupCopy.OPEN_HEADS_UP, primary = false, tag = "setup-heads-up-open") { onOpenHeadsUp() }
         }
-        if (view.autoRead) AutoReadHint() else NotifyGuide()
+        if (view.autoRead && !callOnly) AutoReadHint() else NotifyGuide(callOnly)
         if (view.portFound && !view.autoRead) Text(PhoneSetupCopy.PORT_FOUND, Modifier.padding(top = 8.dp), fontSize = 13.sp, color = MikaTheme.colors.ok)
     }
     // 无障碍一步推荐跳过:配对后 Mika 自己打开,也不会被「受限制的设置」拦住
@@ -513,7 +588,7 @@ private fun CurrentStepBody(
     if (a11y && view.showAppInfo) PillButton(PhoneSetupCopy.APP_INFO, primary = false, tag = "setup-app-info", onClick = onAppInfo)
     // 读到的开关只是参考:用户说打开了就往下走,哪一步都不会卡死
     if (step in PhoneSetupFlow.CONFIRMABLE) PillButton(PhoneSetupCopy.TURNED_ON_NEXT, primary = false, tag = "setup-confirm") { onConfirmStep(step) }
-    if (step == SetupStep.PairingCode) ManualCode(askPort = !view.portFound, onSubmit = onSubmit)
+    if (step == SetupStep.PairingCode) ManualCode(askPort = !view.portFound, onSubmit = onSubmit, callOnly = callOnly)
     if (view.revisiting) LinkText(PhoneSetupCopy.REVISIT_BACK, "setup-revisit-back") { onRevisit(null) }
 }
 
@@ -545,7 +620,7 @@ private fun AutoReadHint() {
 
 /** 无障碍没开:用三行编号小图示说清楚配对码怎么填进通知,不用离开配对窗口。 */
 @Composable
-private fun NotifyGuide() {
+private fun NotifyGuide(callOnly: Boolean) {
     val c = MikaTheme.colors
     val icons = listOf(MikaIcons.Phone, MikaIcons.Bell, MikaIcons.Key)
     Column(
@@ -553,7 +628,7 @@ private fun NotifyGuide() {
             .padding(12.dp).testTag("setup-pairing-guide"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PhoneSetupCopy.NOTIFY_GUIDE.forEachIndexed { i, line ->
+        PhoneSetupCopy.notifyGuide(callOnly).forEachIndexed { i, line ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(22.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
                     Text("${i + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.onAccent)
@@ -567,7 +642,7 @@ private fun NotifyGuide() {
 
 /** 通知没弹出来时的兜底:在 App 里直接填码(找不到配对窗口时连带填端口)。 */
 @Composable
-private fun ManualCode(askPort: Boolean, onSubmit: (String, Int?) -> Unit) {
+private fun ManualCode(askPort: Boolean, onSubmit: (String, Int?) -> Unit, callOnly: Boolean = false) {
     var open by rememberSaveable { mutableStateOf(false) }
     var code by rememberSaveable { mutableStateOf("") }
     var port by rememberSaveable { mutableStateOf("") }
@@ -586,7 +661,7 @@ private fun ManualCode(askPort: Boolean, onSubmit: (String, Int?) -> Unit) {
     if (askPort) {
         OutlinedTextField(
             port, { port = it; error = null }, Modifier.fillMaxWidth().padding(top = 6.dp).keepsKeyboard().testTag("setup-port"),
-            label = { Text(PhoneSetupCopy.PORT_LABEL) }, supportingText = { Text(PhoneSetupCopy.PORT_HINT) }, singleLine = true,
+            label = { Text(PhoneSetupCopy.PORT_LABEL) }, supportingText = { Text(PhoneSetupCopy.portHint(callOnly)) }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
     }

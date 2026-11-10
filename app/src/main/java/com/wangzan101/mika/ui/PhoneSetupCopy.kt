@@ -17,6 +17,8 @@ import com.wangzan101.mika.ui.components.ValueTone
  * 例外是连不上时请用户照着「无线调试」页面填端口的那几句。
  */
 object PhoneSetupCopy {
+    private fun brand(callOnly: Boolean): String = if (callOnly) tr(R.string.app_name) else "Mika"
+
     val TITLE: String get() = tr(R.string.phone_title)
     val INTRO: String get() = tr(R.string.phone_intro)
     val DIAGNOSTICS: String get() = tr(R.string.diagnostics_copy)
@@ -31,7 +33,7 @@ object PhoneSetupCopy {
     /** [brief] 是清单里没轮到、或已做完时那一行的短说明;轮到时显示完整的 [body]。 */
     data class StepCopy(val title: String, val body: String, val action: String?, val done: String, val brief: String)
 
-    fun step(s: SetupStep): StepCopy = when (s) {
+    fun step(s: SetupStep, callOnly: Boolean = false): StepCopy = when (s) {
         SetupStep.DeveloperOptions -> StepCopy(
             tr(R.string.phone_step_dev),
             tr(R.string.phone_step_dev_body),
@@ -39,8 +41,9 @@ object PhoneSetupCopy {
         )
         SetupStep.UsbDebugging -> StepCopy(
             tr(R.string.phone_step_usb),
-            tr(R.string.phone_step_usb_body),
-            tr(R.string.phone_open_dev_options), tr(R.string.phone_done_on), tr(R.string.phone_step_usb_brief),
+            tr(if (callOnly) R.string.calls_helper_usb_debugging_body else R.string.phone_step_usb_body),
+            tr(R.string.phone_open_dev_options), tr(R.string.phone_done_on),
+            tr(if (callOnly) R.string.calls_helper_usb_debugging_brief else R.string.phone_step_usb_brief),
         )
         SetupStep.Accessibility -> StepCopy(
             tr(R.string.phone_step_a11y),
@@ -49,8 +52,9 @@ object PhoneSetupCopy {
         )
         SetupStep.WirelessDebugging -> StepCopy(
             tr(R.string.phone_step_wireless),
-            tr(R.string.phone_step_wireless_body),
-            tr(R.string.phone_open_dev_options), tr(R.string.phone_done_on), tr(R.string.phone_step_wireless_brief),
+            tr(if (callOnly) R.string.calls_helper_wireless_debugging_body else R.string.phone_step_wireless_body),
+            tr(if (callOnly) R.string.phone_step_pair_action else R.string.phone_open_dev_options),
+            tr(R.string.phone_done_on), tr(R.string.phone_step_wireless_brief),
         )
         SetupStep.PairingCode -> StepCopy(
             tr(R.string.phone_step_pair),
@@ -59,7 +63,7 @@ object PhoneSetupCopy {
         )
         SetupStep.Connect -> StepCopy(
             tr(R.string.phone_step_connect),
-            tr(R.string.phone_step_connect_body),
+            tr(if (callOnly) R.string.calls_helper_connect_body else R.string.phone_step_connect_body),
             null, tr(R.string.phone_connected), tr(R.string.phone_step_connect_brief),
         )
     }
@@ -74,8 +78,9 @@ object PhoneSetupCopy {
     /** 读不到时的退路:填码通知一开始就静静放在通知栏里。 */
     val AUTO_READ_FALLBACK: String get() = tr(R.string.phone_auto_read_fallback, NOTIFY_ENTER_TITLE)
     /** 无障碍没开时的三步图示:点系统的配对按钮、看顶部弹出的通知、在通知里填码。 */
-    val NOTIFY_GUIDE: List<String> get() = listOf(
-        tr(R.string.phone_guide_1), tr(R.string.phone_guide_2), tr(R.string.phone_guide_3, NOTIFY_ACTION),
+    val NOTIFY_GUIDE: List<String> get() = notifyGuide()
+    fun notifyGuide(callOnly: Boolean = false): List<String> = listOf(
+        tr(R.string.phone_guide_1), tr(R.string.phone_guide_2, brand(callOnly)), tr(R.string.phone_guide_3, NOTIFY_ACTION),
     )
 
     /** 读开关的几步的兜底:有的手机读不到或读不准,用户确认打开了就往下走。 */
@@ -85,21 +90,24 @@ object PhoneSetupCopy {
     val REVISIT_NOTE: String get() = tr(R.string.phone_revisit_note)
 
     /** 配对、连接没成功时,最可能要回去重做的那一步怎么说。 */
-    fun suspect(s: SetupSuspect): String = when {
-        s.step == SetupStep.DeveloperOptions -> tr(R.string.phone_suspect_dev)
-        s.unreadable -> tr(R.string.phone_suspect_wireless_unreadable)
-        else -> tr(R.string.phone_suspect_wireless_off)
+    fun suspect(s: SetupSuspect, callOnly: Boolean = false): String = when {
+        s.step == SetupStep.DeveloperOptions -> tr(R.string.phone_suspect_dev, brand(callOnly))
+        s.unreadable -> tr(R.string.phone_suspect_wireless_unreadable, brand(callOnly))
+        else -> tr(R.string.phone_suspect_wireless_off, brand(callOnly))
     }
 
     fun goBackTo(s: SetupStep): String = tr(R.string.phone_suspect_go_back, step(s).title)
     val PORT_FOUND: String get() = tr(R.string.phone_port_found)
-    val NEED_NOTIFICATIONS: String get() = tr(R.string.phone_need_notif)
+    val NEED_NOTIFICATIONS: String get() = needNotifications()
+    fun needNotifications(callOnly: Boolean = false): String = tr(R.string.phone_need_notif, brand(callOnly))
     val ALLOW_NOTIFICATIONS: String get() = tr(R.string.explain_notif)
     /** 「配对」通知被关掉:配对码填不了,先打开它。 */
-    val PAIRING_CHANNEL_OFF: String get() = tr(R.string.phone_pairing_channel_off, CHANNEL_NAME)
+    val PAIRING_CHANNEL_OFF: String get() = pairingChannelOff()
+    fun pairingChannelOff(callOnly: Boolean = false): String = tr(R.string.phone_pairing_channel_off, CHANNEL_NAME, brand(callOnly))
     val OPEN_PAIRING_CHANNEL: String get() = tr(R.string.phone_open_pairing_channel, CHANNEL_NAME)
     /** 「配对」通知被用户调成不弹出:还能下拉去填,只提醒一句并给入口。 */
-    val PAIRING_LOWERED: String get() = tr(R.string.phone_pairing_lowered, CHANNEL_NAME)
+    val PAIRING_LOWERED: String get() = pairingLowered()
+    fun pairingLowered(callOnly: Boolean = false): String = tr(R.string.phone_pairing_lowered, CHANNEL_NAME, brand(callOnly))
     /** 通知允许了,但「需要你处理」「任务结果」被调成不弹出:不挡后面的步骤,但要说清楚。 */
     val HEADS_UP_LOWERED: String get() = tr(R.string.phone_heads_up_lowered)
     val OPEN_HEADS_UP: String get() = tr(R.string.heads_up_action)
@@ -107,7 +115,8 @@ object PhoneSetupCopy {
     val MANUAL_HINT: String get() = tr(R.string.phone_manual_hint)
     val CODE_LABEL: String get() = tr(R.string.phone_code_label)
     val PORT_LABEL: String get() = tr(R.string.phone_port_label)
-    val PORT_HINT: String get() = tr(R.string.phone_port_hint)
+    val PORT_HINT: String get() = portHint()
+    fun portHint(callOnly: Boolean = false): String = tr(R.string.phone_port_hint, brand(callOnly))
     val SUBMIT: String get() = tr(R.string.phone_submit)
     val CODE_INVALID: String get() = tr(R.string.phone_code_invalid)
     val PORT_INVALID: String get() = tr(R.string.phone_port_invalid)
@@ -141,7 +150,7 @@ object PhoneSetupCopy {
 
     data class FailureCopy(val title: String, val body: String)
 
-    fun failure(f: BuiltinShellFailure): FailureCopy = when (f) {
+    fun failure(f: BuiltinShellFailure, callOnly: Boolean = false): FailureCopy = when (f) {
         BuiltinShellFailure.WrongCode -> FailureCopy(
             tr(R.string.fail_wrong_code),
             tr(R.string.fail_wrong_code_body),
@@ -152,11 +161,11 @@ object PhoneSetupCopy {
         )
         BuiltinShellFailure.NoWifi -> FailureCopy(
             tr(R.string.fail_no_wifi),
-            tr(R.string.fail_no_wifi_body),
+            tr(if (callOnly) R.string.calls_helper_wifi_needed else R.string.fail_no_wifi_body),
         )
         BuiltinShellFailure.WifiNotAllowed -> FailureCopy(
             tr(R.string.fail_wifi_not_allowed),
-            tr(R.string.fail_wifi_not_allowed_body),
+            tr(R.string.fail_wifi_not_allowed_body, brand(callOnly)),
         )
         BuiltinShellFailure.ConnectFailed -> FailureCopy(
             tr(R.string.fail_connect),
@@ -164,15 +173,15 @@ object PhoneSetupCopy {
         )
         BuiltinShellFailure.NotLocal -> FailureCopy(
             tr(R.string.fail_not_local),
-            tr(R.string.fail_not_local_body),
+            tr(R.string.fail_not_local_body, brand(callOnly)),
         )
         BuiltinShellFailure.AuthorizationRevoked -> FailureCopy(
             tr(R.string.fail_revoked),
-            tr(R.string.fail_revoked_body),
+            tr(if (callOnly) R.string.calls_helper_repair_needed else R.string.fail_revoked_body),
         )
         BuiltinShellFailure.KeyUnreadable -> FailureCopy(
             tr(R.string.fail_key_unreadable),
-            tr(R.string.fail_key_unreadable_body),
+            tr(if (callOnly) R.string.calls_helper_repair_needed else R.string.fail_key_unreadable_body),
         )
         BuiltinShellFailure.HelperStartFailed -> FailureCopy(
             tr(R.string.fail_helper),
@@ -180,23 +189,23 @@ object PhoneSetupCopy {
         )
         BuiltinShellFailure.UsbHelperStopped -> FailureCopy(
             tr(R.string.fail_usb_stopped),
-            tr(R.string.fail_usb_stopped_body),
+            tr(if (callOnly) R.string.calls_helper_usb_stopped else R.string.fail_usb_stopped_body),
         )
         BuiltinShellFailure.RootDenied -> FailureCopy(
             tr(R.string.fail_root_denied),
-            tr(R.string.fail_root_denied_body),
+            tr(R.string.fail_root_denied_body, brand(callOnly)),
         )
         BuiltinShellFailure.RootNoAnswer -> FailureCopy(
             tr(R.string.fail_root_no_answer),
-            tr(R.string.fail_root_no_answer_body),
+            tr(R.string.fail_root_no_answer_body, brand(callOnly)),
         )
         BuiltinShellFailure.RootUnavailable -> FailureCopy(
             tr(R.string.fail_root_gone),
-            tr(R.string.fail_root_gone_body),
+            tr(R.string.fail_root_gone_body, brand(callOnly)),
         )
         BuiltinShellFailure.RootNoShellUid -> FailureCopy(
             tr(R.string.fail_root_no_shell),
-            tr(R.string.fail_root_no_shell_body),
+            tr(R.string.fail_root_no_shell_body, brand(callOnly)),
         )
         BuiltinShellFailure.Unknown -> FailureCopy(
             tr(R.string.fail_unknown),

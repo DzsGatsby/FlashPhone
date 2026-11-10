@@ -94,7 +94,7 @@ class CallStandbyService : Service() {
             }
         }
         // A null Intent is only accepted when Android restarts this already opted-in service.
-        // There is no receiver, alarm or app-start path to relaunch it ourselves.
+        // Our other recovery path runs only with the unlocked app visible and an existing grant.
         return if (incoming) START_STICKY else START_NOT_STICKY
     }
 
@@ -168,4 +168,16 @@ internal object CallStandbyPolicy {
         userUnlocked && (interactiveForeground || serviceRunning && notificationsAllowed)
 
     fun activeWakeBudgetMs(maxCallSeconds: Int): Long = maxCallSeconds.coerceIn(15, CallPolicy.MAX_SECONDS) * 1_000L + 10_000L
+}
+
+/** A failed automatic restore must not spin; user retry is always available. */
+internal class CallStandbyResumeGate {
+    private var attemptedWhileVisible = false
+
+    fun take(visible: Boolean, eligible: Boolean): Boolean {
+        if (!visible) attemptedWhileVisible = false
+        if (!visible || !eligible || attemptedWhileVisible) return false
+        attemptedWhileVisible = true
+        return true
+    }
 }

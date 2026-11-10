@@ -15,6 +15,7 @@ import com.wangzan101.mika.core.shell.BuiltinShellStatus
 import com.wangzan101.mika.core.shell.PairingChannelHealth
 import com.wangzan101.mika.core.shell.PairingDiscovery
 import com.wangzan101.mika.core.shell.PhoneSetupFlow
+import com.wangzan101.mika.i18n.tr
 import com.wangzan101.mika.ui.MainActivity
 import com.wangzan101.mika.ui.PhoneSetupCopy
 import com.wangzan101.mika.setup.PairingCodeReceiver
@@ -39,7 +40,7 @@ sealed interface PairingNotice {
          * 配对阶段的失败(码不对、过期、窗口关了)留在通知里重填;要重新配对的失败(配对失效)找到配对窗口后也给输入框,
          * 和无障碍读码认的一样(PairingScreen.attempt),还在找时同样先静静备好;别的失败请用户回 Mika。
          */
-        fun of(status: BuiltinShellStatus, discovery: PairingDiscovery): PairingNotice? {
+        fun of(status: BuiltinShellStatus, discovery: PairingDiscovery, callOnly: Boolean = false): PairingNotice? {
             val port = (discovery as? PairingDiscovery.Found)?.port
             return when (status) {
                 BuiltinShellStatus.Running -> Done
@@ -48,7 +49,7 @@ sealed interface PairingNotice {
                     status.reason.duringPairing -> EnterCode(port, PhoneSetupCopy.notifyRetry(status.reason))
                     status.fix == BuiltinShellFix.RePair && port != null -> EnterCode(port)
                     status.fix == BuiltinShellFix.RePair && discovery == PairingDiscovery.Searching -> EnterCode(null, quiet = true)
-                    else -> Problem(PhoneSetupCopy.failure(status.reason).title)
+                    else -> Problem(PhoneSetupCopy.failure(status.reason, callOnly = callOnly).title)
                 }
                 BuiltinShellStatus.NotPaired, BuiltinShellStatus.WirelessDebuggingOff -> when (discovery) {
                     is PairingDiscovery.Found -> EnterCode(discovery.port)
@@ -76,9 +77,11 @@ sealed interface PairingNotice {
          * 填了码、配对还没开始([submitted])时一律是「正在配对」,也不在这时结束(助手原本就在运行也一样,配对开始后状态还会变);
          * 「重新配对」时运行中的旧状态不算配好([PhoneSetupFlow.effectiveStatus]),助手在运行、又不在重新配对才结束。
          */
-        fun follow(status: BuiltinShellStatus, discovery: PairingDiscovery, repairing: Boolean, submitted: Boolean): Pair<PairingNotice?, Boolean> =
+        fun follow(status: BuiltinShellStatus, discovery: PairingDiscovery, repairing: Boolean, submitted: Boolean,
+                   callOnly: Boolean = false): Pair<PairingNotice?, Boolean> =
             if (submitted) Working to false
-            else of(PhoneSetupFlow.effectiveStatus(status, repairing), discovery) to (status == BuiltinShellStatus.Running && !repairing)
+            else of(PhoneSetupFlow.effectiveStatus(status, repairing), discovery, callOnly) to
+                (status == BuiltinShellStatus.Running && !repairing)
     }
 }
 
@@ -168,7 +171,7 @@ object PairingNotifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val b = Notification.Builder(context, channel)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(android.R.drawable.sym_action_call)
             .setCategory(Notification.CATEGORY_STATUS)
             .setContentIntent(open)
         when (notice) {
@@ -184,8 +187,7 @@ object PairingNotifier {
                     .addRemoteInput(input)
                     .setAllowGeneratedReplies(false)
                     .setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
-                // 锁着屏也能直接填,不先要求解锁
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) action.setAuthenticationRequired(false)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) action.setAuthenticationRequired(true)
                 val text = notice.error ?: PhoneSetupCopy.NOTIFY_ENTER_TEXT
                 b.setContentTitle(PhoneSetupCopy.NOTIFY_ENTER_TITLE)
                     .setContentText(text)
@@ -199,16 +201,16 @@ object PairingNotifier {
             }
             PairingNotice.Working -> b.setContentTitle(PhoneSetupCopy.NOTIFY_WORKING).setOngoing(true).setOnlyAlertOnce(true)
                 .setProgress(0, 0, true)
-            PairingNotice.Done -> b.setContentTitle(PhoneSetupCopy.NOTIFY_DONE_TITLE).setContentText(PhoneSetupCopy.NOTIFY_DONE_TEXT)
+            PairingNotice.Done -> b.setContentTitle(PhoneSetupCopy.NOTIFY_DONE_TITLE).setContentText(tr(R.string.calls_helper_pairing_done))
                 .setAutoCancel(true).setOnlyAlertOnce(true).setTimeoutAfter(DONE_TIMEOUT_MS)
-            is PairingNotice.Problem -> b.setContentTitle(notice.title).setContentText(PhoneSetupCopy.NOTIFY_PROBLEM_TEXT).setAutoCancel(true)
+            is PairingNotice.Problem -> b.setContentTitle(notice.title).setContentText(tr(R.string.calls_helper_pairing_problem)).setAutoCancel(true)
         }
         // 静静备好的那个:放进通知栏,不响不弹(高优先级频道上也是,minSdk 30 没有 setSilent)
         if (notice is PairingNotice.EnterCode && notice.quiet) b.setOnlyAlertOnce(true).setGroup(QUIET_GROUP).setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
         // 没允许通知时系统会丢掉它;引导页在配对这一步先请用户允许
         runCatching { nm.notify(ID, b.build()) }.onFailure { Log.w(TAG, "pairing notification not posted", it) }
         // 发出去了也可能不弹:总开关、频道的重要程度都记一句(厂商另外的「悬浮通知」开关读不到)
-        if (!nm.areNotificationsEnabled()) Log.w(TAG, "notifications are off for Mika; the pairing notice is dropped")
+        if (!nm.areNotificationsEnabled()) Log.w(TAG, "notifications are off; the pairing notice is dropped")
         else nm.getNotificationChannel(channel)?.let { if (it.importance < NotificationManager.IMPORTANCE_HIGH) Log.i(TAG, "pairing channel importance ${it.importance}; it won't pop up") }
     }
 

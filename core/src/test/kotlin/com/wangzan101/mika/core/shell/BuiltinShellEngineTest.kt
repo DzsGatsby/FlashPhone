@@ -147,6 +147,27 @@ class BuiltinShellEngineTest {
     }
 
     @Test
+    fun usbOnlyToPhonePairingCanRecoverTheHelperWithoutAComputer() = runTest {
+        helper.value = "usb helper"
+        val e = engine()
+        e.start()
+        runCurrent()
+        assertEquals(HelperRestart.UsbCommand, e.restart)
+        helper.value = null
+        advanceUntilIdle()
+        assertEquals(BuiltinShellStatus.Failed(BuiltinShellFailure.UsbHelperStopped), e.status.value)
+        assertEquals(0, launches())
+        e.startPairing("123456", 37000)
+        assertEquals(HelperRestart.Wireless, e.restart)
+        assertEquals(BuiltinShellStatus.Running, e.status.value)
+        runCurrent()
+        helper.value = null
+        advanceUntilIdle()
+        assertEquals(BuiltinShellStatus.Running, e.status.value)
+        assertEquals(2, launches())
+    }
+
+    @Test
     fun pairingFailuresAreReported() = runTest {
         val e = engine()
         platform.pairError = AdbPairingException.Reason.WRONG_CODE

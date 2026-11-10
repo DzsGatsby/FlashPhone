@@ -219,12 +219,13 @@ internal fun CallPermissionRows(device: CallDeviceControls, helperConnected: Boo
         onClick = notificationAction,
     ) { if (notificationAction != null) RowChevron() }
 
-    val helperAction = onHelperSetup.takeIf { enabled && !helperConnected }
+    val helperAction = onHelperSetup.takeIf { enabled }
     ListRow(
-        MikaIcons.Link, stringResource(R.string.calls_device_helper),
-        stringResource(if (helperConnected) R.string.calls_device_helper_connected else R.string.calls_setup_shell),
+        MikaIcons.Link, stringResource(R.string.calls_helper_name),
+        stringResource(if (helperConnected) R.string.calls_device_helper_connected else R.string.calls_helper_disconnected),
         tone = if (helperConnected) TileTone.Ok else TileTone.Warn,
-        detail = helperAction?.let { stringResource(R.string.calls_device_pair_helper) }, detailColor = MikaTheme.colors.accent,
+        detail = helperAction?.let { stringResource(if (helperConnected) R.string.calls_helper_manage else R.string.calls_helper_set_up) },
+        detailColor = MikaTheme.colors.accent,
         onClick = helperAction,
     ) { if (helperAction != null) RowChevron() }
 }

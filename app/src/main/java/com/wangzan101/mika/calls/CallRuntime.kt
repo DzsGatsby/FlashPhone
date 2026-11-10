@@ -215,9 +215,22 @@ class CallRuntime(private val app: MikaApp) {
             publish()
             maybeStartAutoAnswer()
         }
+        scope.launch {
+            val resume = CallStandbyResumeGate()
+            // The app can reopen before the on-device audio helper finishes reconnecting.
+            // Reevaluate when readiness changes; Android only permits this start while visible.
+            combine(app.foreground.visible, state) { visible, _ -> visible }.collect { visible ->
+                val eligible = visible && !standbyStarting && standbyService?.stickyAutoAnswer != true &&
+                    work == null && lockedDial == null && !unobservedManagedCall && liveCalls().isEmpty() &&
+                    hasAuthorizedIncomingStandby() && interactiveForeground() &&
+                    autoAnswerBlocker(settings.state.value) == null &&
+                    CallStandbyService.notificationsAvailable(app, create = true)
+                if (resume.take(visible, eligible)) requestCallForegroundService(incoming = true)
+            }
+        }
     }
 
-    /** Explicit user action in the unlocked phone UI. This never starts from a receiver or an incoming call. */
+    /** Initial authorization comes only from this explicit action in the unlocked phone UI. */
     suspend fun startBackgroundStandby(): CallActionResult = onMain {
         val config = settings.state.value
         if (!interactiveForeground() || !userUnlocked()) return@onMain fail("请解锁手机并在电话页面启动后台待命")
