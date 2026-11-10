@@ -2,6 +2,7 @@ package com.wangzan101.mika.about
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -132,9 +133,20 @@ class ReleasesTest {
 
         val malformedSize = Releases.fromGitHub(github.replace("12345", "-1"))
         assertNull(malformedSize.apkUrl)
-        val external = github.replace(releases, "https://github.com/unrelated/Mika/releases")
-        val fallback = Releases.fromGitHub(external)
+    }
+
+    @Test
+    fun legacyReleasePagesAndAssetsAreNotTrusted() {
+        val legacyReleases = "https://github.com/DzsGatsby/Mika/releases"
+        assertThrows(IllegalArgumentException::class.java) {
+            Releases.fromGitHub(github.replace(releases, legacyReleases))
+        }
+        val legacyAsset = github.replace("$releases/download", "$legacyReleases/download")
+        val fallback = Releases.fromGitHub(legacyAsset)
         assertNull(fallback.apkUrl)
         assertEquals("$releases/tag/v0.2.0", fallback.downloadUrl)
+
+        val current = Releases.fromGitHub(github)
+        assertNull(Releases.fromJson(Releases.toJson(current.copy(pageUrl = "$legacyReleases/tag/v0.2.0"))))
     }
 }

@@ -3,6 +3,10 @@ package com.wangzan101.mika.about
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -41,13 +45,15 @@ class UpdateCheckerTest {
     fun stop() = server.shutdown()
 
     private fun checker(current: String = "0.1.0") = UpdateChecker(
-        tmp.root.resolve("update.json"), current,
+        tmp.root.resolve(UpdateChecker.CACHE_FILE_NAME), current,
         releaseApi = server.url("/api").toString(),
         now = { clock },
     )
 
-    private fun release(tag: String) =
-        MockResponse().setBody("""{"tag_name":"$tag","name":"Mika $tag","body":"- 新东西","html_url":"https://github.com/DzsGatsby/Mika/releases/tag/$tag","assets":[]}""")
+    private fun releaseJson(tag: String) =
+        """{"tag_name":"$tag","name":"Flash phone $tag","body":"- 新东西","html_url":"https://github.com/DzsGatsby/FlashPhone/releases/tag/$tag","assets":[]}"""
+
+    private fun release(tag: String) = MockResponse().setBody(releaseJson(tag))
 
     @Test
     fun newerReleaseFromGitHubShowsUpdate() = runTest {
@@ -62,7 +68,35 @@ class UpdateCheckerTest {
         assertEquals(listOf("/api"), hits)
         val req = server.takeRequest()
         assertEquals("application/vnd.github+json", req.getHeader("Accept"))
-        assertTrue(req.getHeader("User-Agent")!!.startsWith("Mika/"))
+        assertTrue(req.getHeader("User-Agent")!!.startsWith("FlashPhone/"))
+    }
+
+    @Test
+    fun defaultCheckerRequestsTheIndependentGitHubEndpoint() = runTest {
+        val expected = "https://api.github.com/repos/DzsGatsby/FlashPhone/releases/latest"
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals(expected, request.url.toString())
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(200).message("OK").body(releaseJson("v1.0.9").toResponseBody()).build()
+        }.build()
+        val c = UpdateChecker(tmp.root.resolve(UpdateChecker.CACHE_FILE_NAME), "1.0.8", client = client)
+        c.check(manual = true)
+        assertEquals("1.0.9", c.state.value.update?.version)
+    }
+
+    @Test
+    fun metadataRedirectCannotSwitchFeeds() = runTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path == "/api") MockResponse().setResponseCode(302).addHeader("Location", "/legacy")
+                else release("v99.0.0")
+        }
+        val c = checker()
+        c.check(manual = true)
+        assertEquals(CheckStatus.Failed, c.state.value.status)
+        assertNull(c.state.value.latest)
+        assertEquals(1, server.requestCount)
     }
 
     @Test
@@ -129,6 +163,26 @@ class UpdateCheckerTest {
         upgraded.load()
         assertNull(upgraded.state.value.update)
         assertNotNull(upgraded.state.value.latest)
+    }
+
+    @Test
+    fun legacyCacheCannotSupplyAnUpdateOrSuppressFirstCheck() = runTest {
+        val legacyLatest = """{"version":"99.0.0","pageUrl":"https://github.com/DzsGatsby/Mika/releases/tag/v99.0.0"}"""
+        val legacyCache = """{"lastAttempt":$clock,"latest":$legacyLatest}"""
+        val cache = tmp.root.resolve(UpdateChecker.CACHE_FILE_NAME)
+        tmp.root.resolve("update-fork-v1.json").writeText(legacyCache)
+        github = release("v0.2.0")
+
+        // Unmarked old cache or a cache explicitly belonging to the old feed must both be ignored.
+        val legacySource = "https://api.github.com/repos/DzsGatsby/Mika/releases/latest"
+        for (contents in listOf(legacyCache, """{"source":"$legacySource","lastAttempt":$clock,"latest":$legacyLatest}""")) {
+            cache.writeText(contents)
+            val c = checker()
+            c.load()
+            assertNull(c.state.value.latest)
+            assertTrue(c.autoCheck())
+            assertEquals("0.2.0", c.state.value.update?.version)
+        }
     }
 
     /** 同时进来的两次自动检查(查还没完)只真的查一次;隔十分钟再打开照样查。 */

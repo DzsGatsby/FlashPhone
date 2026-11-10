@@ -23,7 +23,7 @@
     <string name="about_guide_sub">上手指南；不會寫程式碼也能補充 App 知識</string>
     <string name="about_data_note">只有 AI 處理通話時，才會將通話音訊傳送給您設定的語音服務。不儲存錄音，文字記錄加密儲存在本機。檢查更新時連線至 GitHub。</string>
     <string name="about_license_link">Apache-2.0 開源許可</string>
-    <string name="about_author">基於王贊開發的上游 Mika · © 2026</string>
+    <string name="about_author">上游程式碼版權 © 2026 王贊</string>
     <string name="about_license_title">Apache-2.0 授權條款</string>
     <string name="about_update_download">從 GitHub 下載</string>
     <string name="about_update_later">以後再說</string>

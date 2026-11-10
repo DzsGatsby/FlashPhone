@@ -16,8 +16,10 @@ from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parents[2]
-REPO = "DzsGatsby/Mika"
+REPO = "DzsGatsby/FlashPhone"
 GITHUB = f"github.com/{REPO}"
+LEGACY_REPO = "DzsGatsby/Mika"
+BRIDGE_VERSION = "1.0.8"
 PACKAGE = "com.wangzan101.mika.dev"
 PRODUCT = "Flash phone"
 ASSET_PREFIX = "FlashPhone"
@@ -43,9 +45,10 @@ def command(*args, timeout=60, allow_missing=False):
     raise ReleaseError(f"{Path(args[0]).name} command failed (exit {result.returncode}): {args[1]}")
 
 
-def github(route, *, paginate=False, allow_missing=False):
+def github(route, *, repo=REPO, paginate=False, allow_missing=False):
     flags = ("--paginate", "--slurp") if paginate else ()
-    value = command("gh", "api", "--hostname", "github.com", f"repos/{REPO}/{route}", *flags,
+    path = f"repos/{repo}" + (f"/{route}" if route else "")
+    value = command("gh", "api", "--hostname", "github.com", path, *flags,
                     allow_missing=allow_missing)
     if value is None:
         return None
@@ -135,8 +138,15 @@ def remote_tip(branch, commit):
         raise ReleaseError(f"GitHub {REPO} branch {branch} does not point to the supplied commit")
 
 
-def tag_commit(tag):
-    info = github(f"git/ref/tags/{tag}", allow_missing=True)
+def standalone_repo():
+    info = github("")
+    if (not isinstance(info, dict) or info.get("full_name") != REPO or info.get("fork") is not False or
+            info.get("private") is not False or info.get("default_branch") != "main"):
+        raise ReleaseError("The Flash phone update source must be the public independent repository on main")
+
+
+def tag_commit(tag, *, repo=REPO):
+    info = github(f"git/ref/tags/{tag}", repo=repo, allow_missing=True)
     if info is None:
         return None
     if not isinstance(info, dict) or info.get("ref") != f"refs/tags/{tag}":
@@ -150,12 +160,12 @@ def tag_commit(tag):
             return sha
         if kind != "tag":
             break
-        obj = github(f"git/tags/{sha}").get("object", {})
+        obj = github(f"git/tags/{sha}", repo=repo).get("object", {})
     raise ReleaseError("Could not resolve the remote tag to a commit")
 
 
-def find_release(tag):
-    pages = github("releases?per_page=100", paginate=True)
+def find_release(tag, *, repo=REPO):
+    pages = github("releases?per_page=100", repo=repo, paginate=True)
     if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
         raise ReleaseError("GitHub returned an unexpected release listing")
     matches = [release for page in pages for release in page if release.get("tag_name") == tag]
@@ -164,33 +174,62 @@ def find_release(tag):
     return matches[0] if matches else None
 
 
-def available(tag, commit):
-    if find_release(tag) is not None:
+def available(tag, commit, *, repo=REPO):
+    if find_release(tag, repo=repo) is not None:
         raise ReleaseError("Release already exists (including drafts); refusing to replace or add to any asset")
-    existing = tag_commit(tag)
+    existing = tag_commit(tag, repo=repo)
     if existing is not None and existing != commit:
         raise ReleaseError("Existing GitHub tag points to a different commit; refusing to move it")
     return existing is not None
 
 
-def verify_release(release, tag, commit, name, size, digest, *, draft):
+def verify_release(release, tag, commit, name, size, digest, *, draft, repo=REPO):
     if (not isinstance(release, dict) or release.get("tag_name") != tag or release.get("draft") is not draft or
             release.get("prerelease") is not False or
-            (release.get("target_commitish") != commit and tag_commit(tag) != commit)):
+            (release.get("target_commitish") != commit and tag_commit(tag, repo=repo) != commit)):
         raise ReleaseError("GitHub release state or target commit did not match")
     assets = release.get("assets")
     if not isinstance(assets, list) or len(assets) != 1:
         raise ReleaseError("GitHub release does not contain exactly one APK asset")
     asset = assets[0]
-    expected_url = f"https://{GITHUB}/releases/download/{tag}/{name}"
+    prefix = f"https://github.com/{repo}/releases/download/"
+    expected_url = f"{prefix}{tag}/{name}"
     # GitHub assigns a temporary untagged URL before a new draft is published.
     # The asset bytes, owner/repo, filename and draft target still have to match exactly.
     url = asset.get("browser_download_url", "")
     url_matches = url == expected_url or (draft and isinstance(url, str) and re.fullmatch(
-        re.escape(f"https://{GITHUB}/releases/download/") + r"untagged-[0-9a-f]+/" + re.escape(name), url) is not None)
+        re.escape(prefix) + r"untagged-[0-9a-f]+/" + re.escape(name), url) is not None)
     if (asset.get("name") != name or asset.get("size") != size or asset.get("state") != "uploaded" or
             asset.get("digest") != f"sha256:{digest}" or not url_matches):
         raise ReleaseError("GitHub APK name, size, SHA-256, or download URL did not match the checked build")
+
+
+def verify_latest(repo, tag, commit, name, size, digest):
+    verify_release(github("releases/latest", repo=repo), tag, commit, name, size, digest, draft=False, repo=repo)
+    if tag_commit(tag, repo=repo) != commit:
+        raise ReleaseError("Published tag did not resolve to the verified commit")
+
+
+def publish_release(repo, tag, commit, upload, size, digest, notes, title):
+    remote = f"github.com/{repo}"
+    name = upload.name
+    verified_tag = ("--verify-tag",) if available(tag, commit, repo=repo) else ()
+    command("gh", "release", "create", tag, str(upload), "--repo", remote,
+            "--draft", "--target", commit, "--title", title, "--notes-file", str(notes),
+            *verified_tag, timeout=900)
+    verify_release(find_release(tag, repo=repo), tag, commit, name, size, digest, draft=True, repo=repo)
+    if tag_commit(tag, repo=repo) not in {None, commit}:
+        raise ReleaseError("Tag changed after draft creation; draft left unpublished")
+    command("gh", "release", "edit", tag, "--repo", remote, "--draft=false", "--latest")
+    for attempt in range(3):
+        try:
+            verify_latest(repo, tag, commit, name, size, digest)
+            break
+        except ReleaseError:
+            if attempt == 2:
+                raise
+            time.sleep(2)
+    print(f"Published and verified: https://{remote}/releases/tag/{tag}", flush=True)
 
 
 def main():
@@ -201,18 +240,20 @@ def main():
     signer = parser.add_mutually_exclusive_group(required=True)
     signer.add_argument("--reference-apk", type=Path, help="An older APK already verified on the intended device")
     signer.add_argument("--signer-sha256", help="Previously verified certificate SHA-256, not the APK checksum")
-    parser.add_argument("--branch", help="Branch pushed to the fork; defaults to the checked-out branch")
+    parser.add_argument("--branch", default="main", help="Branch pushed to the standalone repository (default: main)")
     parser.add_argument("--build-tools", type=Path, help="Android SDK Build Tools directory containing aapt and apksigner")
     parser.add_argument("--notes-file", type=Path, help="Reviewed public Markdown release notes")
     parser.add_argument("--publish", action="store_true", help="Run Gradle checks, upload to a draft, then publish after verification")
+    parser.add_argument("--legacy-bridge", action="store_true",
+                        help="For 1.0.8 only: publish the exact same APK on the old update source after verifying the new release")
     args = parser.parse_args()
     commit, version = args.commit.lower(), args.version
     if not re.fullmatch(r"[0-9a-f]{40}", commit) or not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
         raise ReleaseError("Supply a full commit SHA and a numeric major.minor.patch version")
+    if args.legacy_bridge and version != BRIDGE_VERSION:
+        raise ReleaseError(f"The previous update source only accepts the one-time {BRIDGE_VERSION} migration release")
     clean_commit(commit)
-    branch = args.branch or command("git", "branch", "--show-current")
-    if not branch:
-        raise ReleaseError("Use --branch when running from detached HEAD")
+    branch = args.branch
     command("git", "check-ref-format", f"refs/heads/{branch}")
     code = source_code(commit, version)
     apk = args.apk.resolve()
@@ -230,8 +271,15 @@ def main():
     size, digest = verify_apk(aapt, apksigner, apk, version, code, expected_signer)
     tag = f"v{version}"
     name = f"{ASSET_PREFIX}-v{version}.apk"
+    standalone_repo()
     remote_tip(branch, commit)
-    available(tag, commit)
+    canonical_already_published = args.legacy_bridge and find_release(tag) is not None
+    if canonical_already_published:
+        verify_latest(REPO, tag, commit, name, size, digest)
+    else:
+        available(tag, commit)
+    if args.legacy_bridge:
+        available(tag, commit, repo=LEGACY_REPO)
     print(f"{REPO} {branch}@{commit}\n{tag}: {name}, {size} bytes, sha256:{digest}\n"
           f"{PACKAGE}, version code {code}, certificate sha256:{expected_signer}", flush=True)
     if not args.publish:
@@ -253,25 +301,25 @@ def main():
                         f"{PRODUCT} {version}。安装需要 Android 确认；同签名覆盖升级可保留已有设置与记录。")
         notes.write_text(f"{public_notes.rstrip()}\n\nSource: `{commit}`\n\nAPK SHA-256: `{digest}`\n")
         remote_tip(branch, commit)
-        verified_tag = ("--verify-tag",) if available(tag, commit) else ()
-        command("gh", "release", "create", tag, str(upload), "--repo", GITHUB,
-                "--draft", "--target", commit, "--title", f"{PRODUCT} {version}", "--notes-file", str(notes),
-                *verified_tag, timeout=900)
-        verify_release(find_release(tag), tag, commit, name, size, digest, draft=True)
-        if tag_commit(tag) not in {None, commit}:
-            raise ReleaseError("Tag changed after draft creation; draft left unpublished")
-        command("gh", "release", "edit", tag, "--repo", GITHUB, "--draft=false", "--latest")
-        for attempt in range(3):
-            try:
-                verify_release(github("releases/latest"), tag, commit, name, size, digest, draft=False)
-                if tag_commit(tag) != commit:
-                    raise ReleaseError("Published tag did not resolve to the verified commit")
-                break
-            except ReleaseError:
-                if attempt == 2:
-                    raise
-                time.sleep(2)
-    print(f"Published and verified: https://{GITHUB}/releases/tag/{tag}")
+        if not canonical_already_published:
+            publish_release(REPO, tag, commit, upload, size, digest, notes, f"{PRODUCT} {version}")
+        if args.legacy_bridge:
+            verify_latest(REPO, tag, commit, name, size, digest)
+            # A single tag makes this exact source available to the old repo without
+            # updating its branches or establishing a second active release channel.
+            if not available(tag, commit, repo=LEGACY_REPO):
+                command("git", "push", f"https://github.com/{LEGACY_REPO}.git", f"{commit}:refs/tags/{tag}")
+            if tag_commit(tag, repo=LEGACY_REPO) != commit:
+                raise ReleaseError("Could not verify the legacy migration tag")
+            bridge_notes = Path(folder) / "migration.md"
+            bridge_notes.write_text(
+                f"Flash phone 已迁至 [独立仓库](https://{GITHUB})。本版是旧安装的一次性迁移更新；"
+                f"安装后，应用内更新将直接读取[新发布源](https://{GITHUB}/releases/latest)。"
+                f"本页 APK 与[正式发布](https://{GITHUB}/releases/tag/{tag})完全一致。\n\n"
+                f"Source: `{commit}`\n\nAPK SHA-256: `{digest}`\n",
+                encoding="utf-8",
+            )
+            publish_release(LEGACY_REPO, tag, commit, upload, size, digest, bridge_notes, f"{PRODUCT} {version} · 迁移更新")
 
 
 if __name__ == "__main__":

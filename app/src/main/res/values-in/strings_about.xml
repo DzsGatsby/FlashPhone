@@ -23,7 +23,7 @@
     <string name="about_guide_sub">Mulai memakai; tambahkan pengetahuan aplikasi tanpa perlu coding</string>
     <string name="about_data_note">Selama AI menangani panggilan, audio dikirim ke layanan suara yang telah Anda atur. Rekaman tidak disimpan; transkrip dienkripsi di ponsel. Pemeriksaan pembaruan terhubung ke GitHub.</string>
     <string name="about_license_link">Lisensi Apache-2.0</string>
-    <string name="about_author">Berdasarkan Mika karya Wang Zan · © 2026</string>
+    <string name="about_author">Kode sumber asal © 2026 Wang Zan</string>
     <string name="about_license_title">Lisensi Apache-2.0</string>
     <string name="about_update_download">Unduh dari GitHub</string>
     <string name="about_update_download_in_app">Unduh dan instal</string>

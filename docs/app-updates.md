@@ -1,36 +1,37 @@
 # Flash phone：应用更新与发布
 
-Flash phone 直接从 [GitHub Releases](https://github.com/DzsGatsby/Mika/releases) 检查版本和下载 APK，不需要自建更新服务器。首个版本为 `1.0.0`（Android 版本代码 `41`），发布标签为 `v1.0.0`，附件为完整的 `FlashPhone-v1.0.0.apk`。
+Flash phone 从独立项目的 [GitHub Releases](https://github.com/DzsGatsby/FlashPhone/releases) 检查和下载版本。发布标签为 `vX.Y.Z`，每次发布提供一个完整的 `FlashPhone-vX.Y.Z.apk` 安装包。
 
-Flash phone 使用独立的产品版本，从 `1.0.0` 开始；历史迁移构建 `0.1.39` 使用了底座编号，不作为 Flash phone 的产品版本。Android 内部版本代码仅用于保证原安装可以无损覆盖升级。
+## 安装、更新与迁移
 
-## 已安装用户怎么更新
+- **第一次安装**：打开 [最新版](https://github.com/DzsGatsby/FlashPhone/releases/latest)，在 Assets 下载 FlashPhone APK，再按 Android 提示安装。如果系统询问是否允许安装，请只给打开此 APK 的应用授权。
+- **应用内更新**：打开 **设置 → 关于 → 检查更新**，下载后在 Android 安装器确认。应用也会在启动及 Android 允许的后台时段检查；省电、网络限制或强行停止可能延后后台检查。
+- **从旧地址迁移**：仍从原仓库检查更新的 1.0.7 及更早版本，可通过应用内更新安装一次过渡版 **1.0.8**。也可直接从新发布页下载签名 APK 覆盖安装，无需 USB。安装后，应用会从新仓库检查后续版本。
+- **保留原有数据**：不要先卸载 Flash phone。正式 APK 沿用既有安装的应用 ID 和签名，正常覆盖安装可保留设置和记录。其他签名的自行构建版本不能直接覆盖。
 
-- 如果目前安装的是此前的电话实验版本，请先从本仓库发布页下载并覆盖安装 `1.0.0`，让应用切换到新的更新源。保留原有安装和数据，直接打开 APK 完成系统确认；不要先卸载。
-- 此后打开应用可触发检查，也可使用应用中的检查更新入口。后台会向 Android 申请约每 15 分钟检查一次；这是系统调度间隔，省电、网络限制或强行停止应用会推迟检查。安装需要用户在 Android 系统页面确认。
-- 原有正式 Mika 应用可并存。Flash phone 沿用历史应用 ID `com.wangzan101.mika.dev` 和签名，只为了让此前同包、同签名的安装可以覆盖升级并保留数据。两者使用不同的发布源和安装包。
+更新安装后请重新打开应用，检查通话音频助手和后台待命状态。助手恢复条件见[锁屏接打与后台待命](ai-phone-calls.md#锁屏接打与后台待命)。
 
 ## 发布者操作
 
-准备 JDK 17、Android SDK Build Tools（`aapt`、`apksigner`）、Python 3 与已登录的 GitHub CLI。GitHub 账号需要 fork 的发布权限。先更新 `app/build.gradle.kts` 的 `versionName` 和递增的 `versionCode`，提交改动并把该提交推到 fork 的目标分支。
+准备 JDK 17、Android SDK Build Tools（`aapt`、`apksigner`）、Python 3 和已登录的 GitHub CLI。更新 `app/build.gradle.kts` 的 `versionName` 与递增的 `versionCode`，将干净的候选提交推到独立仓库的 `main`。
 
-在已保存原签名的本机，从干净的该提交构建并通过测试：
+在保存有原签名的机器上构建并通过测试：
 
 ```sh
 ./gradlew -PdevInstall -PphoneCodex=true :core:test :app:testDebugUnitTest \
   :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-保留一份已经在原设备上验证过的旧 APK 作为签名基准。将 `REFERENCE_APK` 指向这份 APK，先预检：
+让 `REFERENCE_APK` 指向已核验的旧版签名 APK，`VERSION` 为这次发布的版本号（不带 `v`），然后预检：
 
 ```sh
 python3 tools/release/publish-flash.py \
-  app/build/outputs/apk/debug/app-debug.apk 1.0.0 "$(git rev-parse HEAD)" \
-  --branch feat/ai-phone-calls --reference-apk "$REFERENCE_APK"
+  app/build/outputs/apk/debug/app-debug.apk "$VERSION" "$(git rev-parse HEAD)" \
+  --branch main --reference-apk "$REFERENCE_APK"
 ```
 
-也可用 `--signer-sha256` 传入独立核验过的旧证书 SHA-256；证书摘要和 APK 文件摘要是不同的值。可用 `--build-tools` 指定 SDK 工具目录，用 `--notes-file` 指定已审阅的公开发布说明。默认预检只读 GitHub，无标签、发布或上传操作。全部检查通过后，使用同一命令追加 `--publish`。
+也可用 `--signer-sha256` 提供独立核验过的旧证书摘要；证书摘要与 APK 文件摘要不同。用 `--notes-file` 提供已审阅的发布说明。默认预检只读，全部通过后用同一命令追加 `--publish`。
 
-发布模式会确认本地 HEAD 干净、GitHub 分支的提交与其完全相同，核对 APK 的应用 ID、版本名、版本代码、架构和签名，再运行上述构建与测试并验证候选 APK 与本次构建产物逐字节一致。脚本先把唯一的 APK 附件上传至 GitHub 草稿，读回 SHA-256、大小、名称和下载地址后再设为正式最新版。最后从应用读取的 [latest API](https://api.github.com/repos/DzsGatsby/Mika/releases/latest) 与 Git 标签回读核验。若某版本已经有 Release（包括未完成的草稿），脚本会停止，不覆盖附件；检查草稿或采用新的版本号后再发布。构建、标签和附件上传方式见 [GitHub CLI 发布手册](https://cli.github.com/manual/gh_release_create)；APK 证书校验使用 [Android apksigner](https://developer.android.com/tools/apksigner)。
+脚本核对 GitHub 分支、提交、APK 版本、应用 ID、架构和签名，重新构建并逐字节比较候选包。正式发布前先上传至草稿，核对唯一 APK 的名称、大小、摘要和下载地址；发布后从应用使用的 [latest API](https://api.github.com/repos/DzsGatsby/FlashPhone/releases/latest) 回读版本和附件。重复版本不会覆盖现有附件。旧地址的过渡发布仅用于 1.0.8，后续版本只发布到新仓库。
 
-**必须保留当前构建使用的本机签名。** 旧 APK 和证书摘要可用来核对签名；真正构建仍需要原来的私钥。把本机签名文件妥善保存在可信设备或安全备份中，不能提交到 Git、上传为 Release 附件或放进 CI 日志。签名丢失后，用新签名构建的包不能直接覆盖现有安装。
+**保管好原签名私钥。** 旧 APK 和证书摘要只能用于核验，不能代替签名私钥。签名文件不可提交到 Git 或作为发布附件。

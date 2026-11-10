@@ -5,7 +5,7 @@
 ## Beta notes
 
 - This is an early public beta. Features and UI are still changing quickly, and upgrades may include breaking changes.
-- So far it has mainly been tested on one Android 14 phone. Other Android versions and other phones may hit problems we have not seen yet; [reports are welcome](../.github/CONTRIBUTING.md#reporting-issues).
+- So far it has mainly been tested on one Android 14 phone. Other Android versions and other phones may hit problems we have not seen yet; [report them to upstream Mika](https://github.com/wangzan101/Mika/issues/new/choose).
 - Mika operates third-party apps and websites on your behalf. Please read the disclaimer below first.
 
 ## Disclaimer

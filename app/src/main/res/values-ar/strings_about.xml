@@ -23,7 +23,7 @@
     <string name="about_guide_sub">البدء؛ أضف معرفة بالتطبيق حتى دون كتابة شيفرة</string>
     <string name="about_data_note">أثناء معالجة المكالمة بالذكاء الاصطناعي، يُرسل الصوت إلى خدمة الصوت التي أعددتها. لا تُحفظ تسجيلات صوتية، وتُشفّر النصوص على الهاتف. يتم التحقق من التحديثات عبر GitHub.</string>
     <string name="about_license_link">ترخيص Apache-2.0</string>
-    <string name="about_author">مبني على Mika من تطوير Wang Zan · © 2026</string>
+    <string name="about_author">حقوق الشفرة المصدرية للمشروع الأصلي © 2026 Wang Zan</string>
     <string name="about_license_title">ترخيص Apache-2.0</string>
     <string name="about_update_download">التنزيل من GitHub</string>
     <string name="about_update_download_in_app">التنزيل والتثبيت</string>

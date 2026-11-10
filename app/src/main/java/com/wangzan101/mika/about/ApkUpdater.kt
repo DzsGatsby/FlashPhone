@@ -50,7 +50,7 @@ class ApkUpdater(private val context: Context, private val net: NetProxy = NetPr
     }
 
     private fun matches(release: ReleaseInfo): Boolean = release.apkUrl != null &&
-        prefs.getString("url", null) == release.apkUrl &&
+        ApkIntegrity.isOfficialUrl(release.apkUrl) && prefs.getString("url", null) == release.apkUrl &&
         prefs.getLong("size", -1L) == (release.apkSize ?: -1L) &&
         prefs.getString("digest", null).equals(release.apkDigest, ignoreCase = true)
 
@@ -136,8 +136,13 @@ class ApkUpdater(private val context: Context, private val net: NetProxy = NetPr
             it.name.startsWith(target.name + ".part-") && partName.matches(it.name) }?.forEach { it.delete() }
     }
 
-    /** Drop obsolete or unreadable APKs on startup; active or paused system downloads can resume. */
+    /** Drop previous sources and obsolete APKs; current active or paused system downloads can resume. */
     fun dropInstalled() = synchronized(operations) {
+        val recordedUrl = prefs.getString("url", null)
+        if (recordedUrl != null && !ApkIntegrity.isOfficialUrl(recordedUrl)) {
+            cancel()
+            return@synchronized
+        }
         val target = file ?: return@synchronized
         if (recorded().phase != DownloadPhase.Ready) return@synchronized
         val archive = runCatching { archiveInfo(target, 0) }.getOrNull()

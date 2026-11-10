@@ -58,7 +58,7 @@ object UpdateSchedule {
 class UpdateChecker(
     private val file: File,
     private val currentVersion: String,
-    private val client: OkHttpClient = defaultClient(),
+    client: OkHttpClient = defaultClient(),
     private val releaseApi: String = MikaLinks.LATEST_RELEASE_API,
     private val now: () -> Long = System::currentTimeMillis,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -67,6 +67,8 @@ class UpdateChecker(
     private val devPackage: Boolean? = null,
     private val onUpdate: (ReleaseInfo?) -> Unit = {},
 ) {
+    // A repository move or unrelated redirect must not change the update source.
+    private val metadataClient = client.newBuilder().followRedirects(false).build()
     private val _state = MutableStateFlow(UpdateState())
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
@@ -119,11 +121,11 @@ class UpdateChecker(
 
     private fun get(url: String): String {
         val req = Request.Builder().url(url)
-            .header("User-Agent", "Mika/$currentVersion")
+            .header("User-Agent", "FlashPhone/$currentVersion")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .build()
-        client.newCall(req).execute().use { resp ->
+        metadataClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) error("HTTP ${resp.code}")
             return resp.body?.string() ?: error("empty body")
         }
@@ -136,6 +138,8 @@ class UpdateChecker(
         if (loaded) return
         loaded = true
         val o = runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull() ?: return
+        // Ignore both a version and its throttle timestamp if the feed has changed.
+        if ((o["source"] as? JsonPrimitive)?.content != releaseApi) return
         lastAttempt = (o["lastAttempt"] as? JsonPrimitive)?.longOrNull
         val latest = (o["latest"] as? JsonObject)?.let { Releases.fromJson(it, devPackage) }
         _state.update { it.withLatest(latest) }
@@ -143,6 +147,7 @@ class UpdateChecker(
 
     private fun save() {
         val o = buildJsonObject {
+            put("source", releaseApi)
             lastAttempt?.let { put("lastAttempt", it) }
             _state.value.latest?.let { put("latest", Releases.toJson(it)) }
         }
@@ -158,7 +163,9 @@ class UpdateChecker(
     }
 
     companion object {
-        /** 有的网络连 GitHub 时快时慢:超时放短,失败就换备用来源。走设置 › 网络代理。 */
+        internal const val CACHE_FILE_NAME = "update-flash-phone-v1.json"
+
+        /** GitHub 不可达时尽快返回；走设置 › 网络代理。 */
         fun defaultClient(): OkHttpClient = NetProxy.shared.client(OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(8, TimeUnit.SECONDS)

@@ -53,7 +53,7 @@ object UpdateDelivery {
         if (release.apkUrl == null || FeatureFlags.get(context).quitRequested()) return
         manager.createNotificationChannel(NotificationChannel(CHANNEL, tr(R.string.about_check), NotificationManager.IMPORTANCE_LOW))
         if (!manager.areNotificationsEnabled() || manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return
-        val prefs = context.getSharedPreferences("update-notification", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("flash-phone-update-notification", Context.MODE_PRIVATE)
         if (prefs.getString("version", null) == release.version) return
         val pending = PendingIntent.getActivity(context, NOTIFICATION_ID,
             Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_UPDATES, true)

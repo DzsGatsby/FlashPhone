@@ -1,6 +1,7 @@
 package com.wangzan101.mika.about
 
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
 import java.security.MessageDigest
 
@@ -21,14 +22,19 @@ class ApkRejected(val reason: Reason) : Exception(reason.name) {
  * 所以下载完的文件一律再验:大小与 SHA-256(发布元数据给了才验)、包名、版本号、签名证书。
  */
 internal object ApkIntegrity {
-    private val official = "${MikaLinks.RELEASES}/download/".toHttpUrl()
+    private val official = "${MikaLinks.RELEASES}/download".toHttpUrl()
 
-    fun requireOfficialUrl(url: String) {
-        val parsed = url.toHttpUrl()
-        require(parsed.isHttps && parsed.host == official.host && parsed.port == 443)
-        require(parsed.username.isEmpty() && parsed.password.isEmpty())
-        require(parsed.encodedPath.startsWith(official.encodedPath))
-        require(parsed.encodedPath.endsWith(".apk", ignoreCase = true))
+    fun requireOfficialUrl(url: String) = require(isOfficialUrl(url))
+
+    fun isOfficialUrl(url: String): Boolean {
+        val parsed = url.toHttpUrlOrNull() ?: return false
+        if (!parsed.isHttps || parsed.host != official.host || parsed.port != official.port ||
+            parsed.username.isNotEmpty() || parsed.password.isNotEmpty() ||
+            parsed.query != null || parsed.fragment != null ||
+            !parsed.encodedPath.startsWith("${official.encodedPath}/")) return false
+        val tail = parsed.pathSegments.drop(official.pathSegments.size)
+        return tail.size == 2 && tail.all { it.isNotEmpty() && it.none { c -> c == '/' || c == '\\' } } &&
+            tail.last().endsWith(".apk", ignoreCase = true)
     }
 
     /** 给了摘要就必须是 sha256 且对得上;别的写法也算对不上,不放过。 */

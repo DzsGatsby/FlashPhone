@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -37,6 +38,7 @@ data class ReleaseInfo(
 object Releases {
     private val json = Json { ignoreUnknownKeys = true }
     private val digestFormat = Regex("sha256:[0-9a-fA-F]{64}")
+    private val releaseTags = "${MikaLinks.RELEASES}/tag".toHttpUrl()
 
     private data class Asset(val name: String, val url: String, val size: Long?, val digest: String?)
 
@@ -50,6 +52,8 @@ object Releases {
     fun fromGitHub(text: String, deviceAbis: List<String> = emptyList(), devPackage: Boolean? = null): ReleaseInfo {
         val o = json.parseToJsonElement(text).jsonObject
         val tag = o.str("tag_name") ?: error("no tag_name")
+        val page = requireNotNull(officialPageUrl(o.str("html_url"))) { "untrusted release page" }
+        require(page.pathSegments.last() == tag)
         val body = o.str("body").orEmpty()
         val assets = (o["assets"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.apkAsset() }
             .filter { matchesPackage(it.name, devPackage) }
@@ -60,7 +64,7 @@ object Releases {
             name = o.str("name")?.takeIf { it.isNotBlank() } ?: version,
             notes = body.trim(),
             date = o.str("published_at")?.take(10)?.takeIf { it.length == 10 },
-            pageUrl = pageUrl(o.str("html_url"), tag),
+            pageUrl = page.toString(),
             apkUrl = apk?.url,
             apkSize = apk?.size,
             apkDigest = apk?.digest,
@@ -87,11 +91,12 @@ object Releases {
     /** Missing metadata is supported for old releases; malformed metadata never disables verification. */
     private fun JsonObject.verifiedMetadata(name: String, url: String, sizeKey: String, digestKey: String): Asset? = runCatching {
         ApkIntegrity.requireOfficialUrl(url)
-        val fileName = url.toHttpUrl().pathSegments.last()
+        val parsed = url.toHttpUrl()
+        val fileName = parsed.pathSegments.last()
         require(name.isEmpty() || name == fileName)
         val size = if (missing(sizeKey)) null else requireNotNull(strOrNumber(sizeKey)?.toLongOrNull()?.takeIf { it > 0 })
         val digest = if (missing(digestKey)) null else requireNotNull(str(digestKey)?.takeIf(digestFormat::matches))
-        Asset(fileName, url, size, digest)
+        Asset(fileName, parsed.toString(), size, digest)
     }.getOrNull()
 
     private fun JsonObject.missing(key: String): Boolean = this[key] == null || this[key] == JsonNull
@@ -102,15 +107,14 @@ object Releases {
         return devPackage == null || standalone == devPackage
     }
 
-    private fun pageUrl(candidate: String?, tag: String? = null): String {
-        val base = MikaLinks.RELEASES.toHttpUrl()
-        val page = candidate?.toHttpUrlOrNull()
-        if (page != null && page.isHttps && page.host == base.host && page.port == base.port &&
-            page.username.isEmpty() && page.password.isEmpty() &&
-            (page.encodedPath == base.encodedPath || page.encodedPath.startsWith("${base.encodedPath}/tag/"))) {
-            return page.toString()
+    private fun officialPageUrl(candidate: String?): HttpUrl? {
+        val page = candidate?.toHttpUrlOrNull() ?: return null
+        return page.takeIf {
+            it.isHttps && it.host == releaseTags.host && it.port == releaseTags.port &&
+                it.username.isEmpty() && it.password.isEmpty() && it.query == null && it.fragment == null &&
+                it.encodedPath.startsWith("${releaseTags.encodedPath}/") &&
+                it.pathSegments.size == releaseTags.pathSegments.size + 1
         }
-        return tag?.let { base.newBuilder().addPathSegment("tag").addPathSegment(it).build().toString() } ?: base.toString()
     }
 
     /** 存盘用:记下最近一次查到的版本,下次打开 App 时红点还在。 */
@@ -126,11 +130,14 @@ object Releases {
     }
 
     fun fromJson(o: JsonObject, devPackage: Boolean? = null): ReleaseInfo? = runCatching {
+        val version = requireNotNull(o.str("version"))
+        val page = requireNotNull(officialPageUrl(o.str("pageUrl")))
+        require(AppVersion.normalize(page.pathSegments.last()) == version)
         val apk = o.str("apkUrl")?.let { o.verifiedMetadata("", it, "apkSize", "apkDigest") }
             ?.takeIf { matchesPackage(it.name, devPackage) }
         ReleaseInfo(
-            version = o.str("version")!!, name = o.str("name") ?: o.str("version")!!, notes = o.str("notes").orEmpty(),
-            date = o.str("date"), pageUrl = pageUrl(o.str("pageUrl")), apkUrl = apk?.url,
+            version = version, name = o.str("name") ?: version, notes = o.str("notes").orEmpty(),
+            date = o.str("date"), pageUrl = page.toString(), apkUrl = apk?.url,
             apkSize = apk?.size, apkDigest = apk?.digest,
         )
     }.getOrNull()

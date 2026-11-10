@@ -62,7 +62,7 @@
 
 没有任何说明，Mika 也能看着屏幕把事办成。有些 App 和网站另外写了使用知识（入口在哪、常见做法、要注意什么），Mika 用到时自动查阅，少走弯路。比如进了聊天 App 直接知道怎么找联系人、翻聊天记录；打开招聘网站知道怎么筛岗位、打招呼。另有几类事情的通用做法。
 
-已经写了使用知识的 App 和网站，清单见 [README](readme/README.zh-CN.md) 里「能做什么」下面的折叠段（没写到的照样能用）。知识持续增加，人人可以补充：它们是放在 [`core/src/main/resources/knowledge/`](../core/src/main/resources/knowledge/) 和 [`core/src/main/resources/skills/`](../core/src/main/resources/skills/) 下的纯文本文件，[欢迎补充](../.github/CONTRIBUTING.zh-CN.md)。
+已经写了使用知识的 App 和网站，清单见 [继承组件清单](dev/inherited-catalog.md#内置知识)（没写到的照样能用）。知识持续增加，人人可以补充：它们是放在 [`core/src/main/resources/knowledge/`](../core/src/main/resources/knowledge/) 和 [`core/src/main/resources/skills/`](../core/src/main/resources/skills/) 下的纯文本文件，[欢迎补充](../.github/CONTRIBUTING.zh-CN.md)。
 
 ## 成批的事
 

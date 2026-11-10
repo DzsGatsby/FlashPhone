@@ -1,209 +1,37 @@
-<!-- translated-from: README.md @ 59fa62ede314 -->
-
-# Flash phone
-
-着信の自動応答、目的を指定した発信、通話の引き継ぎ、通話記録に対応する、独立した Android 向け AI 電話アシスタントです。ホーム画面は **着信応答 / 通話タスク / 記録 / 設定** の 4 タブに分かれています。[Mika](https://github.com/wangzan101/Mika) をベースに開発されています。 バックグラウンド待機を有効にするとロック中の着信に対応でき、確認済みのタスクはロック後に一度だけ発信できます。
-
-[Flash phone をダウンロード](https://github.com/DzsGatsby/Mika/releases/latest) · [電話機能と対応端末の条件](../ai-phone-calls.md) · [アプリの更新とリリース](../app-updates.md)
-
-- **着信応答**：ルールに従って応答します。自動応答を一時停止したり、重要な着信を自分で受けたり、通話の途中で引き継いだりできます。
-- **通話タスク**：電話番号、目的、必ず聞くこと、背景、制約を入力し、SIM を確認して発信します。通話記録には今回の依頼内容が残ります。
-- **記録**：依頼内容と元の文字起こしを分けて確認でき、以前のタスクを新しい下書きとして再利用できます。
-- **更新**：起動時に確認し、バックグラウンドで定期的に通知します。アプリ内でダウンロードし、Android の画面でインストールを確認します。独自の更新サーバーは不要です。
-
-以前の電話機能の試験版をお使いの場合は、上書きインストールで設定と記録を引き継げます。オリジナル版の Mika もそのまま残せます。このリポジトリで公開する **FlashPhone** APK を使用し、試験版を先にアンインストールしないでください。初回の更新後は Flash phone という名前で表示され、以降の更新もこのリポジトリから確認します。
-
-現在は初期リリースです。携帯電話回線での双方向の会話、画面遷移、上書き更新は実機でテスト済みです。新しいロック中の応答と一回限りの発信は実機での確認が必要です。音声クローンには別途サービスの有効化が、Codex で通話指示を相談するには利用可能な API キーが必要です。ダウンロードだけでは有効になりません。
-
-上流の Apache-2.0 ライセンス、著作者表記、サードパーティへの謝辞を保持しています。以下の上流プロジェクトの README に掲載されているダウンロードリンクは、オリジナル版の Mika 用です。
-
-<details>
-<summary>上流の Mika プロジェクトの README</summary>
+<!-- translated-from: README.md @ 9d5160db3e1b -->
 
 <div align="center">
-
-<img src="../media/logo.png" alt="Mika" width="88" />
-
-# Mika
-
-**スマホの中の AI アシスタント。ひと言伝えれば、アプリやウェブを操作して用事を片づけてくれます。**
-
-作業は見えないバックグラウンド画面で進むので、その間もスマホはいつもどおり使えます。
-
-<a href="https://github.com/wangzan101/Mika/releases/latest"><img src="https://img.shields.io/badge/APK%20%E3%82%92%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-Android%2011%2B-2ea043?style=for-the-badge&logo=android&logoColor=white" alt="APK をダウンロード" /></a>
-
-<a href="https://github.com/wangzan101/Mika/stargazers"><img src="https://img.shields.io/github/stars/wangzan101/Mika?style=flat&logo=github&label=Star&color=1f6feb" alt="stars" /></a>
-<a href="https://github.com/wangzan101/Mika/releases"><img src="https://img.shields.io/github/downloads/wangzan101/Mika/total?label=%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&color=2ea043" alt="downloads" /></a>
-<a href="https://github.com/wangzan101/Mika/releases/latest"><img src="https://img.shields.io/github/v/release/wangzan101/Mika?include_prereleases&label=%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3" alt="version" /></a>
-<a href="../../LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-lightgrey" alt="license" /></a>
-
-<br/>
-
-<a href="https://trendshift.io/repositories/326940#achievements"><img src="https://trendshift.io/api/badge/trendshift/repositories/326940/daily?language=Kotlin" alt="#1 Kotlin Repository of the Day" width="250" height="55" /></a>
-<a href="https://trendshift.io/repositories/326940#achievements"><img src="https://trendshift.io/api/badge/trendshift/repositories/326940/weekly?language=Kotlin" alt="#1 Kotlin Repository of the Week" width="250" height="55" /></a>
-<a href="https://trendshift.io/repositories/326940#achievements"><img src="https://trendshift.io/api/badge/trendshift/repositories/326940/daily" alt="#5 Repository of the Day" width="250" height="55" /></a>
-
-<br/>
+  <img src="../../app/src/main/res/drawable-nodpi/flash_phone_launcher.png" width="104" alt="Flash phone のアイコン" />
+  <h1>Flash phone</h1>
+  <p>お使いの SIM で電話を受けたりかけたりする Android 向け AI アシスタント。</p>
+  <p>
+    <a href="https://github.com/DzsGatsby/FlashPhone/releases/latest"><strong>APK をダウンロード</strong></a> ·
+    <a href="../README.en.md">利用ガイド（英語）</a> ·
+    <a href="https://github.com/DzsGatsby/FlashPhone/issues/new/choose">問題を報告</a>
+  </p>
+</div>
 
 [English](../../README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-Hant.md) · 日本語 · [한국어](README.ko.md) · [Español](README.es.md)
 
-<sub>この日本語版は中国語（簡体字）版からの翻訳です。不自然な表現や原文とのずれに気づいたら、ぜひ PR で直してください。</sub>
-
-<br/>
-
-<img src="../media/wechat-send-side.gif" alt="ひと言で、Mika がバックグラウンド画面で WeChat を開き、相手を探してメッセージを送る様子" width="640" />
-
-<sub>「ファイル転送アシスタントにメッセージを送って」のひと言で：左は Mika とのチャット、右はバックグラウンド画面での一つひとつの操作（4 倍速、チャット一覧はぼかし処理済み）</sub>
-
-</div>
-
-## ひと言で、用事がひとつ片づく
-
-<table>
-<tr>
-<td align="center" width="33%"><img src="../media/wechat-group.gif" width="230" alt="WeChat のグループを読み通して、今日の話題をまとめる" /><br/><b>「グループで今日なにを話してたかまとめて」</b><br/><sub>バックグラウンドで履歴を読み通してから要約</sub></td>
-<td align="center" width="33%"><img src="../media/amazon-cart.gif" width="230" alt="通販サイトで充電器を選んでカートに入れる" /><br/><b>「30 ドル以内で星 4.5 以上の充電器」</b><br/><sub>選んでカートに入れ、決済の手前で止まる</sub></td>
-<td align="center" width="33%"><img src="../media/xhs-summary.gif" width="230" alt="あるクリエイターの最近の投稿をまとめる" /><br/><b>「このクリエイターの最近の投稿をまとめて」</b><br/><sub>アプリを開いて一件ずつ読み、整理する</sub></td>
-</tr>
-</table>
-
-<details>
-<summary>ほかのデモ</summary>
-
-<table>
-<tr>
-<td align="center" width="33%"><img src="../media/boss-greet.gif" width="230" alt="求人サイトで 3 件の求人に挨拶を送る" /><br/>求人サイトで 3 件の求人に挨拶を送る</td>
-<td align="center" width="33%"><img src="../media/google-flights.gif" width="230" alt="いちばん安い直行便を探す" /><br/>サンフランシスコ発ニューヨーク行きの最安直行便を探す</td>
-<td align="center" width="33%"><img src="../media/hacker-news.gif" width="230" alt="トップ 5 件の記事とスコアを読み上げる" /><br/>ニュースサイトのトップ 5 件を読み上げる</td>
-</tr>
-<tr>
-<td align="center"><img src="../media/job-greet.jpg" width="230" alt="求人を探して挨拶を送る" /><br/>求人を探して挨拶を送る</td>
-<td align="center"><img src="../media/music-vip.jpg" width="230" alt="広告を見て音楽アプリの特典をもらう" /><br/>広告を見て音楽アプリの特典をもらう</td>
-<td align="center"><img src="../media/food-order.jpg" width="230" alt="割引条件を満たすようにデリバリーを注文し、支払い前に確認する" /><br/>割引を組み合わせてデリバリーを注文、支払い前に確認</td>
-</tr>
-</table>
-
-</details>
-
-<sub>デモに出てくる WeChat はメッセージアプリ、小紅書（RED）はライフスタイル系の SNS です。Mika は特定のアプリ専用ではなく、スマホに入っているどのアプリやサイトでも使えます。</sub>
-
-## Mika を選ぶ理由
-
-| | |
-|---|---|
-| 📱 **画面を取られない** | 別のバックグラウンド画面でアプリを開き、タップ、入力、スクロールをこなします。その間もスマホは普段どおり。様子を見たいときは小さなプレビューをタップ |
-| 🧩 **どのアプリでも使える** | 人と同じように画面を見てボタンを探すので、アプリ側の API も事前の対応作業もいりません |
-| 🌐 **ウェブページからそのまま頼める** | 内蔵ブラウザで見ているページに向かってひと言いえば、そのページ上で作業します。ページに触れればすぐ止まります |
-| 🧠 **使うほど賢くなる** | 伝えた好みを覚え、うまくいった作業は自動でスキルにまとめて、次からはより速く確実に |
-| 🔒 **データはスマホの中だけ** | Mika のサーバーはありません。自分のモデル API キーを使うか、ChatGPT・xAI・OpenRouter のアカウントでログイン |
-| 🆓 **オープンソースで無料** | Apache-2.0、コードはすべて公開 |
-
-## 3 ステップで始める
-
-1. **インストール**：[Releases](https://github.com/wangzan101/Mika/releases/latest) から APK をダウンロード。
-2. **モデルをつなぐ**：設定 › モデル でプロバイダーを選んで API キーを入力するか、アカウントでログイン（[モデルとログイン](../models.en.md)）。
-3. **スマホのアプリを操作させたいとき**：設定の「Set up phone control」ウィザードに沿って、ワイヤレスデバッグを一度だけペアリング（[セットアップガイド](../setup-guide.en.md)）。チャット、ウェブ、ファイル処理だけならこの手順は不要です。
-
-あとは話しかけるだけ：「明日の朝 9:40 と 10:00 にアラームをセットして」「毎朝 8 時に天気を見て、雨のときだけ教えて」。
-
-> 💡 パソコンが手元にあるなら、この一文をパソコンの AI エージェントに送れば、代わりにセットアップしてくれます：<br/>
-> `https://github.com/wangzan101/Mika/blob/main/docs/install-with-agent.en.md の手順に従って、USB で接続している Android スマホに Mika をインストールしてください。`
-
 ## できること
 
-| | |
-|---|---|
-| **アプリを操作** | 長いリストやチャット履歴を読む、タップや入力、アプリへのテキスト共有。ログイン、認証コード、支払いはあなたに任せます |
-| **ウェブを使う** | ログイン状態を保つ PC 版の内蔵ブラウザで、ページを読み、ダウンロードやアップロードも。ページ送りはペースを守り、ブロックされたらあなたに渡します |
-| **いま見ている画面** | フローティングカプセルをダブルタップすると、見ている画面を Mika に送れます：「これなんて返せばいい？」「メモしておいて」 |
-| **時間と条件** | 「明日の朝 9 時にリマインドして」「毎週金曜にこれをやって」。時間になると元の会話の中で実行します |
-| **いつでも口をはさめる、止められる** | 作業中でも話しかけて要望を足せます。まだ取り込まれていないものは長押しで取り消しや編集も可能。止めたときはどこまで進んだかを伝え、「続けて」でそこから再開します |
-| **押して話す** | 入力欄を押したまま話すと文字が入り、直してから送れます。フローティングカプセルは長押しで話し、指を離すとそのまま送信。端末の音声認識を使い、ない場合はプロバイダーの音声モデルを選べます |
-| **ファイルと計算** | 会話ごとに Linux サンドボックスがあり、Python、Node、シェルで送ったファイルを処理します（arm64） |
-| **パソコンからも使える** | パソコンの AI ツールから CLI + Skill または MCP で Mika に作業を頼めます（[パソコンから Mika を使う](../computer.en.md)） |
+- **着信を代わりに受ける。** AI が応答できる着信を設定し、重要な番号は自分で受けられます。自動応答は一時停止でき、通話を切らずに途中から引き継げます。
+- **目的を伝えて電話をかける。** 電話番号と SIM、聞きたいこと、背景、約束してよい範囲を入力し、内容を確認してから発信します。
+- **画面ロック中に電話を扱う。** 通話音声ヘルパーとバックグラウンド待機が有効なら、条件に合う着信に応答できます。確認済みの発信タスクは、45 秒以内にロックすると一度だけ発信を試みます。
+- **通話を振り返る。** 文字起こしと元のタスクを見比べ、対応済みにしたり、別のタスクの下書きに再利用したりできます。
 
-初期設定は**確認モード**です。お金がかかること（注文、支払い）だけは先に確認し、それ以外は最後までこなします。**自律モード**に切り替えることもできます。詳しくは[確認モードと自律モード](../modes.en.md)へ。
+## インストールと初期設定
 
-それぞれの使い方や細かい点は[機能の詳細](../features.en.md)をご覧ください。
+1. Android 12 以降の端末と有効な SIM を用意します。[GitHub の最新リリース](https://github.com/DzsGatsby/FlashPhone/releases/latest)で `FlashPhone-vX.Y.Z.apk` を入手し、Android の案内に従ってインストールします。求められたら、APK を開いたアプリからのインストールを許可します。
+2. 端末で通話音声ヘルパーをワイヤレスペアリングし、Volcengine のリアルタイム音声サービスの認証情報を設定します。音声対応は端末と Android のビルドによって異なります。
+3. お互いの音声が聞こえ、手動で通話を引き継げることを確認してから自動応答を有効にしてください。[設定と互換性のガイド（英語）](../README.en.md)も参照できます。
 
-<details>
-<summary>使い方の知識が用意されているアプリとサイト（載っていないものも普通に使えます）</summary>
+インストール済みの場合は **設定 → アプリ情報 → アップデートを確認** を使うか、署名済み APK を上書きインストールすると設定と履歴を引き継げます。[更新と移行のガイド（簡体字中国語）](../app-updates.md)を参照してください。
 
-一覧は英語版 README の [What it can do](../../README.md#what-it-can-do) にあり、内蔵の知識に合わせて自動で更新されます。
+## サービスとデータ
 
-</details>
+既存の SIM と標準の電話アプリを引き続き利用できます。AI が応答する間、通話音声は設定した音声サービスに送信されます。通話音声は録音せず、文字起こしは端末に暗号化して保存します。通信事業者と音声サービスの利用料が別途かかることがあります。
 
-<details>
-<summary>対応しているモデルプロバイダー</summary>
+## プロジェクトとライセンス
 
-内蔵のプロバイダープリセットと、「Custom」で接続できる API の種類は、英語版 README の [What it can do](../../README.md#what-it-can-do) に一覧があり、コードに合わせて自動で更新されます。
-
-API キーなしで、ChatGPT（Plus / Pro）、xAI / Grok、OpenRouter のアカウントでログインすることもできます。モデルの追加手順や、各サービスでログインするときの注意点は[モデルとログイン](../models.en.md)にまとめています。
-
-</details>
-
-## 対応スマホ
-
-| | 必要な環境 |
-|---|---|
-| チャット、ウェブ、ファイル | Android 11 以降 |
-| スマホのアプリ操作 | Android 12 以降。**Android 14 以降を推奨**（バックグラウンド画面が独自のフォーカスを持つので、メイン画面での入力を邪魔しません） |
-| Linux サンドボックス | arm64 端末 |
-
-自分のスマホで動くか不安なら、設定 › 復旧と修復 › **互換性セルフチェック** を実行してください。1 分ほどで 12 項目を確認でき、結果はワンタップで[私たちに送れます](https://github.com/wangzan101/Mika/issues/new?template=device-report.yml)。
-
-## プライバシーと安全
-
-- **Mika のサーバーはありません**：話した内容や画面の内容は、あなたが設定したモデルプロバイダーにだけ送られます。
-- API キーと記憶は暗号化してスマホに保存。会話と実行記録は端末内だけに残り、アップデートの確認で接続するのは GitHub だけです。
-- 他社のアプリやサイトを自動で操作すると、その利用規約に反する場合があります。ご自身で判断してください。大事な用事は確認モードで行い、結果を確かめてください。詳しくは[免責事項](../disclaimer.en.md)へ。
-
-<details>
-<summary><b>よくある質問</b></summary>
-
-**ワイヤレスデバッグが勝手にオフになる？** Android は Wi-Fi を切り替えたときや再起動したときにオフにします。許可しておけば Mika が自分でオンに戻します。それでもつながらなければ、「Set up phone control」に戻ってペアリングし直してください。
-
-**ワイヤレスデバッグの項目が見つからない？** 項目そのものがないスマホもあります。その場合はパソコンから USB 経由でスマホアシスタントを起動できます。[セットアップガイド](../setup-guide.en.md)を参照してください。
-
-**読み取れない、キャプチャできない画面がある？** 支払いやパスワード入力などの画面はスクリーンショットが禁止されているので、Mika はあなたに操作を代わってもらいます。
-
-**自分のパソコンで動かしているモデルは使える？** 使えます。プロバイダーで「Custom」を選び、ローカルネットワーク上のアドレスを入力してください。
-
-**アプリは日本語に対応している？** はい。画面は日本語のほか英語、アラビア語、簡体字中国語、繁体字中国語、韓国語、スペイン語、ポルトガル語、ロシア語、インドネシア語に対応し、システムの言語に合わせて切り替わります（設定 › 言語 でも変更可）。Mika には日本語で話しかけて大丈夫です。内蔵のアプリ・サイト知識は中国語で書かれていますが、モデルは問題なく読めます。
-
-**アップデートはどこから？** このリポジトリの [Releases](https://github.com/wangzan101/Mika/releases) だけで公開しています。アプリの「Mika について › アップデートを確認」からもそのまま更新できます。
-
-ほかの質問と回答は [FAQ](../faq.en.md) にあります。
-
-</details>
-
-## コミュニティと貢献
-
-- **ドキュメント**：すべてのドキュメントとおすすめの読む順番は[ドキュメント一覧](../README.en.md)へ
-- **コミュニティ**：[X のグループチャット](https://x.com/i/chat/group_join/g2116926829198246025/48B52j5svL)に参加できます。WeChat で作者に連絡するには、アプリの 「Mika について › 作者に連絡」 にある QR コードを読み取ってください（友達申請に「Mika」と書いてください）
-- **作者をフォロー**：X [@wangzan101](https://x.com/wangzan101)
-- **問題を報告**：[Issue を作成](https://github.com/wangzan101/Mika/issues/new/choose)。アプリの 「Mika について › フィードバックを送信」 から診断情報を添えられます
-- **貢献する**：アプリやサイトの使い方の知識を書き足す（プレーンテキストで、コードは不要）、またはコードで貢献。[コントリビューションガイド](../../.github/CONTRIBUTING.md)をご覧ください
-
-## Star History
-
-<a href="https://star-history.com/#wangzan101/Mika&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=wangzan101/Mika&type=Date&theme=dark&v=20261107-2304" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=wangzan101/Mika&type=Date&v=20261107-2304" width="600" />
-  </picture>
-</a>
-
-## コントリビューター
-
-Mika に関わってくれたすべての方に感謝します：
-
-<a href="https://github.com/wangzan101/Mika/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wangzan101/Mika&max=100&columns=12" alt="Contributors" />
-</a>
-
-## ライセンス
-
-[Apache-2.0](../../LICENSE) · [NOTICE](../../NOTICE) · [サードパーティコンポーネント](../../licenses/THIRD_PARTY_NOTICES.md)
-
-</details>
+Flash phone は [wangzan101 とコントリビューターによる Mika](https://github.com/wangzan101/Mika) をベースにした独立プロジェクトです。[Apache-2.0](../../LICENSE)、[上流の著作権表示](../../NOTICE)、[サードパーティーの表示](../../licenses/THIRD_PARTY_NOTICES.md)、[貢献ガイド（英語）](../../.github/CONTRIBUTING.md)を参照してください。

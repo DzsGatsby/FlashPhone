@@ -23,7 +23,7 @@
     <string name="about_guide_sub">С чего начать; можно добавлять знания о приложениях и без программирования</string>
     <string name="about_data_note">Во время обработки вызова ИИ передаёт звук настроенной голосовой службе. Аудиозаписи не сохраняются, расшифровки шифруются на телефоне. Для проверки обновлений используется GitHub.</string>
     <string name="about_license_link">Лицензия Apache-2.0</string>
-    <string name="about_author">На основе Mika, автор Wang Zan · © 2026</string>
+    <string name="about_author">Исходный код базового проекта © 2026 Wang Zan</string>
     <string name="about_license_title">Лицензия Apache-2.0</string>
     <string name="about_update_download">Скачать с GitHub</string>
     <string name="about_update_download_in_app">Скачать и установить</string>

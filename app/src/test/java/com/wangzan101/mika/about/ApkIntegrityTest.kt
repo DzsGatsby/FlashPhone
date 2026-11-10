@@ -11,7 +11,7 @@ class ApkIntegrityTest {
     @get:Rule val temp = TemporaryFolder()
 
     @Test fun acceptsOfficialApk() {
-        ApkIntegrity.requireOfficialUrl("${MikaLinks.RELEASES}/download/v0.2.0/Mika.apk")
+        ApkIntegrity.requireOfficialUrl("https://github.com/DzsGatsby/FlashPhone/releases/download/v1.0.8/FlashPhone-v1.0.8.apk")
     }
 
     @Test fun rejectsUntrustedDownloads() {
@@ -19,9 +19,11 @@ class ApkIntegrityTest {
         for (url in listOf(
             "http://github.com/$path/download/v0.2.0/Mika.apk",
             "https://github.com.evil.test/$path/download/v0.2.0/Mika.apk",
+            "https://github.com/DzsGatsby/Mika/releases/download/v1.0.8/FlashPhone-v1.0.8.apk",
             "https://github.com/other/Mika/releases/download/v0.2.0/Mika.apk",
             "https://github.com/$path/download/../../other.apk",
             "https://github.com/$path/download/%2e%2e/%2E%2e/%2e%2e/%2e%2e/other/x.apk",
+            "https://github.com/$path/download/v0.2.0%2fextra/Mika.apk",
             "https://objects.githubusercontent.com/$path/download/v0.2.0/Mika.apk",
             "https://github.com/$path/download/v0.2.0/Mika.zip",
             "https://github.com/$path/tag/v0.2.0",

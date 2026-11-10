@@ -124,7 +124,7 @@ class DocsConsistencyTest {
 
     /**
      * 会变的东西不写死个数:「18 份 App」「60 多个工具」「128 道评测题」(英文的「18 apps」「60+ tools」)这类写法一加内容就过期。
-     * 要列清单就用 README 里生成的段落(`./gradlew updateReadme`);确实要写个数的那一行末尾加 [countOk] 并说明为什么。
+     * 要列清单就用 继承组件清单里的生成段落(`./gradlew updateReadme`);确实要写个数的那一行末尾加 [countOk] 并说明为什么。
      */
     private val hardCount = Regex(
         """\d+\s*多?\s*(份|个|道|家)\s*(内置)?\s*(App|app|网站|站点|技能|工具|服务商|预设|(真机)?评测题)""" +
@@ -139,7 +139,7 @@ class DocsConsistencyTest {
             doc.readLines().withIndex().filter { (_, line) -> countOk !in line && hardCount.containsMatchIn(line) }
                 .map { (i, line) -> "$rel:${i + 1}: 「${hardCount.find(line)!!.value}」" }
         }
-        assertTrue("文档里写死了会变的个数,改成不带个数的说法(清单用 README 的生成段落):\n" + bad.joinToString("\n"), bad.isEmpty())
+        assertTrue("文档里写死了会变的个数,改成不带个数的说法(清单用继承组件清单里的生成段落):\n" + bad.joinToString("\n"), bad.isEmpty())
     }
 
     @Test fun countPatternCatchesTypicalWording() {

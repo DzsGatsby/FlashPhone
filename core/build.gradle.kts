@@ -58,10 +58,10 @@ val knowledgeIndex by tasks.registering(JavaExec::class) {
 }
 sourceSets.main { resources.srcDir(knowledgeIndex) }
 
-// README 里会变的清单(内置知识、服务商预设)从源头重新生成,见 testFixtures 里的 ReadmeSections;ReadmeSectionsTest 守着两边一致
+// 继承组件清单(内置知识、服务商预设)从源头重新生成,见 testFixtures 里的 ReadmeSections;ReadmeSectionsTest 守着两边一致
 val updateReadme by tasks.registering(JavaExec::class) {
     group = "documentation"
-    description = "重新生成 README.md、docs/readme/README.zh-CN.md 里 generated 标记之间的段落"
+    description = "重新生成 docs/dev/inherited-catalog* 里 generated 标记之间的段落"
     classpath = sourceSets["testFixtures"].runtimeClasspath
     mainClass.set("com.wangzan101.mika.core.docs.ReadmeSections")
     args(rootProject.projectDir.absolutePath)
@@ -103,7 +103,7 @@ tasks.test {
     inputs.files(rootProject.file("README.md"), rootProject.file("tools/sandbox/README.md")).withPropertyName("docsFiles")
     inputs.dir(rootProject.file("docs")).withPropertyName("docsDir")
     inputs.dir(rootProject.file("app/src")).withPropertyName("appSources")
-    // updateReadme 先改写 README,同一次构建里测试要读改写后的
+    // updateReadme 先改写继承组件清单,同一次构建里测试要读改写后的
     mustRunAfter(updateReadme)
     // 循环场景的消息序列金样;-PupdateSnapshots 时重新生成(见 LoopSnapshot)
     systemProperty("mika.snapshotDir", file("src/test/resources/loop-snapshots").absolutePath)

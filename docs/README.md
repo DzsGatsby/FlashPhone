@@ -1,38 +1,13 @@
-# Mika 文档
+# Flash phone 使用指南
 
-简体中文 | [English](README.en.md)
+简体中文 · [English](README.en.md) · [项目首页](readme/README.zh-CN.md) · [下载 APK](https://github.com/DzsGatsby/FlashPhone/releases/latest)
 
-这里是 Mika 的全部文档。第一次用，按「上手」的顺序读就够了；其余的遇到再查。
-
-## 上手（按顺序）
-
-| 文档 | 讲什么 | 什么时候看 |
-| --- | --- | --- |
-| [模型与登录](models.md) | 添加模型服务商、用账号登录、思考强度、用自己电脑或局域网里的模型 | 装好以后第一件事 |
-| [设置手机操作](setup-guide.md) | 配对无线调试、无障碍、用电脑经 USB 启动，一步一步来 | 要 Mika 操作手机 App 时；只聊天、上网、处理文件可以跳过 |
-| [询问与自主](modes.md) | 两种模式下哪些步骤先问你 | 开始让它办正事之前 |
-
-## 用起来
-
-| 文档 | 讲什么 |
+| 要做的事 | 指南 |
 | --- | --- |
-| [功能详细说明](features.md) | README 里「能做什么」每一项的细节：后台屏、浏览器、此刻的屏幕、定时、插话、记忆、沙箱等 |
-| [AI 接打电话（实验）](ai-phone-calls.md) | 火山实时语音、SIM 通话、自动接听、人工接管和真机验证 |
-| [常见问题](faq.md) | 安装、手机操作、模型、电脑、语言、隐私方面的问答 |
-| [免责声明与数据隐私](disclaimer.md) | Beta 说明、使用风险、数据存在哪、发给谁 |
+| 首次安装、配置火山实时语音、验证双向声音 | [AI 接打电话](ai-phone-calls.md#准备与首次验证) |
+| 设置锁屏自动接听、后台待命或锁屏后拨出 | [锁屏接打与后台待命](ai-phone-calls.md#锁屏接打与后台待命) |
+| 带目标拨号、接管通话、回看原文 | [AI 接打电话](ai-phone-calls.md) |
+| 在应用里检查更新或从旧版覆盖安装 | [应用更新与迁移](app-updates.md) |
+| 提交电话或机型兼容性问题 | [GitHub 机型反馈](https://github.com/DzsGatsby/FlashPhone/issues/new?template=device-report.yml) |
 
-## 从电脑使用
-
-先读[从电脑使用 Mika](computer.md)：选 CLI + Skill 还是 MCP、经 USB 还是 Wi-Fi / VPN 连接。选好以后按下面对应的一份做。
-
-| 文档 | 讲什么 |
-| --- | --- |
-| [CLI / Skill：安装、升级和卸载](computer-install.md) | 在电脑上装 `mika` 命令或 Agent 用的 Skill |
-| [CLI 与 Skill：连接与任务命令](cli.md) | 连接手机、派任务、查进度、追问和插话的命令 |
-| [飞书机器人](feishu.md) | 扫码新建、关联已有应用、私聊派任务与收取结果 |
-| [电脑连接（MCP）](mcp.md) | 让 MCP 客户端把任务交给 Mika：USB、Wi-Fi / VPN、工具、安全 |
-| [用电脑上的 AI 助手安装](install-with-agent.md) | 写给电脑上的 AI 助手看的安装步骤：手机经 USB 连着电脑时，把这份交给它，它替你装好 |
-
-## 参与开发
-
-想贡献代码、补 App 和网站的使用知识，先读[贡献指南](../.github/CONTRIBUTING.zh-CN.md)，再看[开发文档](dev/README.md)（架构、知识格式、路线图等）。
+开发相关：[贡献指南](../.github/CONTRIBUTING.zh-CN.md) · [电话设计与验收记录](ai-phone-calls-product.md)

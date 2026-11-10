@@ -15,6 +15,15 @@ class MikaLinksTest {
     private val device = MikaLinks.Device("Google", "Pixel 8", "14", 34, "0.1.0", "65fcf92")
 
     @Test
+    fun aboutLinksUseTheIndependentRepository() {
+        val repo = "https://github.com/DzsGatsby/FlashPhone"
+        assertEquals(repo, MikaLinks.REPO)
+        assertEquals("github.com/DzsGatsby/FlashPhone", MikaLinks.REPO_LABEL)
+        assertEquals("$repo#readme", MikaLinks.README)
+        assertEquals("$repo/releases", MikaLinks.RELEASES)
+    }
+
+    @Test
     fun bodyHasThreePrefilledLines() {
         val lines = MikaLinks.issueBody(device).lines()
         assertEquals("- 机型：Google Pixel 8", lines[0])
@@ -38,7 +47,7 @@ class MikaLinksTest {
     @Test
     fun issueUrlIsEncoded() {
         val url = MikaLinks.issueUrl(device)
-        assertTrue(url.startsWith("https://github.com/DzsGatsby/Mika/issues/new?title=&body="))
+        assertTrue(url.startsWith("https://github.com/DzsGatsby/FlashPhone/issues/new?title=&body="))
         val query = url.substringAfter('?')
         assertFalse("no raw spaces or newlines", query.any { it == ' ' || it == '\n' || it == '+' })
         assertFalse("no raw non-ASCII", query.any { it.code > 127 })

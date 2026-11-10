@@ -6,20 +6,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** README.md、docs/readme/README.zh-CN.md 里生成的段落(内置知识、服务商预设)和源头一致;不一致就跑 `./gradlew updateReadme`。 */
+/** 继承组件清单里生成的段落和源头一致;不一致就跑 `./gradlew updateReadme`。 */
 class ReadmeSectionsTest {
     private val root = File("..").canonicalFile
 
-    @Test fun readmeMatchesGenerated() {
-        val readme = File(root, ReadmeSections.README).readText()
-        val expected = ReadmeSections.render(readme, ReadmeSections.sections(root, english = true))
-        assertEquals("README.md 里生成的段落过期了,运行 ./gradlew updateReadme", expected, readme)
+    @Test fun englishCatalogMatchesGenerated() {
+        val catalog = File(root, ReadmeSections.CATALOG_EN).readText()
+        val expected = ReadmeSections.render(catalog, ReadmeSections.sections(root, english = true))
+        assertEquals("${ReadmeSections.CATALOG_EN} 里生成的段落过期了,运行 ./gradlew updateReadme", expected, catalog)
     }
 
-    @Test fun chineseReadmeMatchesGenerated() {
-        val readme = File(root, ReadmeSections.README_ZH).readText()
-        val expected = ReadmeSections.render(readme, ReadmeSections.sections(root, english = false))
-        assertEquals("${ReadmeSections.README_ZH} 里生成的段落过期了,运行 ./gradlew updateReadme", expected, readme)
+    @Test fun chineseCatalogMatchesGenerated() {
+        val catalog = File(root, ReadmeSections.CATALOG_ZH).readText()
+        val expected = ReadmeSections.render(catalog, ReadmeSections.sections(root, english = false))
+        assertEquals("${ReadmeSections.CATALOG_ZH} 里生成的段落过期了,运行 ./gradlew updateReadme", expected, catalog)
     }
 
     @Test fun renderReplacesOnlyBetweenMarkers() {

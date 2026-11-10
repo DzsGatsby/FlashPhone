@@ -1,37 +1,27 @@
-# Mika documentation
+# Flash phone user guide
 
-[简体中文](README.md) | English
+[简体中文](README.md) · [Project home](../README.md) · [Download the APK](https://github.com/DzsGatsby/FlashPhone/releases/latest)
 
-All of Mika's documentation lives here. If you're new, reading the "Getting started" docs in order is enough; look up the rest when you need it.
+## Set up your phone
 
-## Getting started (in order)
+1. Install the signed `FlashPhone-vX.Y.Z.apk` from the latest GitHub release. You need Android 12 or later, an active SIM, and the phone's primary Android user. The audio helper's two-way audio support depends on your device and Android build.
+2. Open **Settings** in Flash phone and set up its **Call audio helper**. Use wireless pairing from the phone: open Android's wireless debugging pairing dialog, leave its six-digit code visible, then enter the code in the Flash phone notification. Pairing starts the helper; the call itself does not travel through the debugging connection.
+3. Add your Volcengine real-time voice credentials. A speech recognition key alone is insufficient. Enable AI calling and grant the requested phone and notification permissions.
+4. With a test caller's permission, confirm that both sides can hear each other, that speaking can interrupt the AI, and that **Take over** keeps the ordinary phone call connected. After a successful test, confirm audio on this device before enabling automatic answering.
 
-| Doc | What it covers | When to read it |
-| --- | --- | --- |
-| [Models and sign-in](models.en.md) | Adding a model provider, signing in with an account, reasoning effort, models on your own computer or LAN | First thing after installing |
-| [Setting up phone control](setup-guide.en.md) | Pairing wireless debugging, accessibility, starting from a computer over USB, step by step | When you want Mika to operate phone apps; skip it if you only chat, browse and work with files |
-| [Ask and Autonomous](modes.en.md) | Which steps Mika asks you about first in each mode | Before you hand it real work |
+## Answer, call, and review
 
-## Using it
+- In **Answering**, set the rules, keep important numbers for yourself, and turn on background standby if you want AI to answer with the screen locked. Check the standby notification before relying on it. Standby can be interrupted by a reboot, force stop, or the phone's battery controls.
+- In **Call tasks**, fill in the number, SIM, goal, questions, and limits. Review the task to call now, or choose to dial once after locking the screen within 45 seconds. You can cancel before locking. The app does not redial expired or cancelled tasks.
+- In **Records**, compare the call transcript with your task and make a new draft from a previous task. Reusing a task does not place a call.
+- For a restart, update, or stopped helper, reopen Flash phone and check that the helper and standby are ready. Restarting the helper may require Wi-Fi that permits wireless debugging.
 
-| Doc | What it covers |
-| --- | --- |
-| [Features in detail](features.en.md) | The details behind each item under "What it can do" in the README: background screen, browser, the screen you're looking at, schedules, interrupting, memory, sandbox and more |
-| [FAQ](faq.en.md) | Questions about installing, phone control, models, computers, language and privacy |
-| [Disclaimer, data and privacy](disclaimer.en.md) | Beta notes, risks of use, where your data is stored and where it goes |
+See the [complete calling guide (简体中文)](ai-phone-calls.md) for audio limits, service costs, optional voice cloning, and discussing call instructions with Codex.
 
-## Using it from a computer
+## Updates and migration
 
-Start with [Use Mika from a computer](computer.en.md): pick CLI + Skill or MCP, and USB or Wi-Fi / VPN. Then follow the matching doc below.
+In Flash phone, open **Settings → About → Check for updates**, download the update and confirm in the Android installer. The independent release source is [DzsGatsby/FlashPhone](https://github.com/DzsGatsby/FlashPhone/releases).
 
-| Doc | What it covers |
-| --- | --- |
-| [CLI / Skill: install, update and remove](computer-install.en.md) | Installing the `mika` command or the Skill for your agent |
-| [CLI and Skill: connection and task commands](cli.en.md) | Commands to connect to the phone, submit tasks, check progress, answer questions and add instructions |
-| [Feishu bot](feishu.en.md) | QR creation, linking an existing app, private-message tasks and results |
-| [Computer access (MCP)](mcp.en.md) | Letting an MCP client hand tasks to Mika: USB, Wi-Fi / VPN, tools, security |
-| [Install with an AI agent on your computer](install-with-agent.en.md) | Installation steps written for an AI agent on your computer: with the phone on USB, hand it this doc and it sets things up for you |
+Versions through 1.0.7 that check the former release source can use the one-time 1.0.8 transition update. You can also download a signed APK directly from the new release page and install it over the existing app. Keep the existing installation to preserve settings and records. See the [release guide (简体中文)](app-updates.md).
 
-## Developing Mika
-
-To contribute code or add usage knowledge for apps and websites, read the [contributing guide](../.github/CONTRIBUTING.md) first, then the [developer docs](dev/README.en.md) (architecture, knowledge format, roadmap and more).
+[Report call or device compatibility issues](https://github.com/DzsGatsby/FlashPhone/issues/new?template=device-report.yml).

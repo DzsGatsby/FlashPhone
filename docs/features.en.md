@@ -62,7 +62,7 @@ Any app installed on your phone works, with no per-app integration: Mika looks a
 
 Even without any instructions, Mika can get things done by looking at the screen. For some apps and websites there is extra usage knowledge (where things are, common ways to do things, what to watch out for), which Mika looks up automatically when it needs it, so it takes fewer wrong turns. For example, in a chat app it already knows how to find a contact and scroll through chat history; on a job site it knows how to filter jobs and greet recruiters. There are also general how-to skills for a few kinds of tasks.
 
-The apps and websites that already have usage knowledge are listed in the collapsed section under "What it can do" in the [README](../README.md) (anything not listed still works). The knowledge keeps growing and anyone can add to it: it is plain text under [`core/src/main/resources/knowledge/`](../core/src/main/resources/knowledge/) and [`core/src/main/resources/skills/`](../core/src/main/resources/skills/). [Contributions welcome](../.github/CONTRIBUTING.md).
+The apps and websites that already have usage knowledge are listed in the [inherited component catalog](dev/inherited-catalog.en.md#built-in-knowledge) (anything not listed still works). The knowledge keeps growing and anyone can add to it: it is plain text under [`core/src/main/resources/knowledge/`](../core/src/main/resources/knowledge/) and [`core/src/main/resources/skills/`](../core/src/main/resources/skills/). [Contributions welcome](../.github/CONTRIBUTING.md).
 
 ## Batch jobs
 

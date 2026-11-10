@@ -23,7 +23,7 @@
     <string name="about_guide_sub">Primeiros passos; adicione conhecimento sobre apps mesmo sem programar</string>
     <string name="about_data_note">Durante o atendimento por IA, o áudio vai para o serviço de voz configurado. Não são guardadas gravações; as transcrições são criptografadas no telefone. A verificação de atualizações conecta-se ao GitHub.</string>
     <string name="about_license_link">Licença Apache-2.0</string>
-    <string name="about_author">Baseado no Mika, de Wang Zan · © 2026</string>
+    <string name="about_author">Código de origem © 2026 Wang Zan</string>
     <string name="about_license_title">Licença Apache-2.0</string>
     <string name="about_update_download">Baixar do GitHub</string>
     <string name="about_update_download_in_app">Baixar e instalar</string>

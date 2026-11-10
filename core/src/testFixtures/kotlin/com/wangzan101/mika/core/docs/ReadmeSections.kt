@@ -5,18 +5,17 @@ import com.wangzan101.mika.core.knowledge.KnowledgeIndex
 import java.io.File
 
 /**
- * README 里会变的清单(内置知识、服务商预设)从源头生成,夹在 `<!-- generated:<名>:start -->` 和 `<!-- generated:<名>:end -->` 之间。
- * 英文 README.md(仓库首页)和简体中文 docs/readme/README.zh-CN.md 用同一份源头,各出一种语言;英文版里知识的显示名照原样写(不另起译名)。
- * `./gradlew updateReadme` 改写这两份 README;core 的 `ReadmeSectionsTest` 守着它们和生成结果一致。其他译文不带生成段落。
+ * 继承组件清单(内置知识、服务商预设)从源头生成,夹在 `<!-- generated:<名>:start -->` 和 `<!-- generated:<名>:end -->` 之间。
+ * 英文和简体中文清单使用同一份源头;英文版里知识的显示名照原样写。
+ * `./gradlew updateReadme` 改写两份清单;core 的 `ReadmeSectionsTest` 守着它们和生成结果一致。
  *
  * 知识清单用构建索引的同一个 [KnowledgeIndex.build],顺序就是索引的顺序。服务商预设在 app 的 `ProviderPresets.kt` 里,
  * core 加载不了安卓模块的类,这里按「`ProviderPreset("名字", ProviderConfig.Kind.<类型>, "地址"`」逐条读源码;
  * app 的 `ReadmePresetsTest` 拿真对象 `ProviderPresets.all` 对照,读法跟不上源码时那边失败。
  */
 object ReadmeSections {
-    /** 仓库首页,英文,也是各份译文的原文。 */
-    const val README = "README.md"
-    const val README_ZH = "docs/readme/README.zh-CN.md"
+    const val CATALOG_EN = "docs/dev/inherited-catalog.en.md"
+    const val CATALOG_ZH = "docs/dev/inherited-catalog.md"
     const val KNOWLEDGE = "knowledge"
     const val PROVIDERS = "providers"
     const val RESOURCES = "core/src/main/resources"
@@ -85,7 +84,7 @@ object ReadmeSections {
         return listOf(NOTE_EN, "Presets for $names and more; for any other provider pick $pick, which takes any $kinds endpoint.").joinToString("\n")
     }
 
-    /** 仓库根目录 [root] 下各段该有的内容;[english] 为真时是 README.md(英文)的版本,否则是 README.zh-CN.md 的。 */
+    /** 仓库根目录 [root] 下各段该有的内容;[english] 控制清单语言。 */
     fun sections(root: File, english: Boolean = true): Map<String, String> {
         val index = KnowledgeIndex.build(File(root, RESOURCES))
         check(index.errors.isEmpty()) { "内置知识校验没通过:\n" + index.errors.joinToString("\n") }
@@ -95,12 +94,12 @@ object ReadmeSections {
         else mapOf(KNOWLEDGE to knowledge(index.entries), PROVIDERS to providers(presets))
     }
 
-    /** 把 [readme] 里每段标记之间换成 [sections] 的内容;标记缺了或顺序不对直接失败。 */
-    fun render(readme: String, sections: Map<String, String>): String =
-        sections.entries.fold(readme) { text, (name, body) ->
+    /** 把 [catalog] 里每段标记之间换成 [sections] 的内容;标记缺了或顺序不对直接失败。 */
+    fun render(catalog: String, sections: Map<String, String>): String =
+        sections.entries.fold(catalog) { text, (name, body) ->
             val s = text.indexOf(start(name))
             val e = text.indexOf(end(name))
-            check(s >= 0 && e > s) { "README 里缺少 ${start(name)} … ${end(name)}" }
+            check(s >= 0 && e > s) { "组件清单里缺少 ${start(name)} … ${end(name)}" }
             text.substring(0, s + start(name).length) + "\n" + body + "\n" + text.substring(e)
         }
 
@@ -108,7 +107,7 @@ object ReadmeSections {
     @JvmStatic
     fun main(args: Array<String>) {
         val root = File(args[0])
-        listOf(README to true, README_ZH to false).forEach { (name, english) ->
+        listOf(CATALOG_EN to true, CATALOG_ZH to false).forEach { (name, english) ->
             val file = File(root, name)
             val before = file.readText()
             val after = render(before, sections(root, english))
