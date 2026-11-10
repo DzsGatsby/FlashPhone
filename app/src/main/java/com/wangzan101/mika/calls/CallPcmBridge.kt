@@ -1,6 +1,9 @@
 package com.wangzan101.mika.calls
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -25,10 +28,23 @@ internal class CallPcmBridge(
         counters: CallMediaCounters?,
         onTranscript: (String, String) -> Unit,
         onFinalTranscript: (String, String) -> Unit = { _, _ -> },
+        awaitFarewellDrain: suspend (CallFarewellFence) -> Boolean = { false },
+        commitFarewell: () -> Boolean = { false },
     ): Unit = coroutineScope {
         val playbackQueue = CallPlaybackQueue()
         val writerLock = Mutex()
         val assistantText = StringBuilder()
+        val farewell = CallFarewellPlayback()
+        val finished = CompletableDeferred<Unit>()
+        var farewellWaiter: Job? = null
+        fun cancelFarewellWaiter() { farewellWaiter?.cancel(); farewellWaiter = null }
+        fun checkFarewell() {
+            val fence = farewell.takeFence() ?: return
+            farewellWaiter = launch {
+                if (awaitFarewellDrain(fence) && commitDrainedFarewell(commitFarewell)) finished.complete(Unit)
+            }
+        }
+
         fun flushAssistantText(completed: Boolean = false) {
             if (assistantText.isNotBlank()) {
                 val text = assistantText.toString()
@@ -73,46 +89,77 @@ internal class CallPcmBridge(
                     }
                 }
             }
-            try {
-                session.events.collect { event ->
-                    counters?.eventReceived(event)
-                    when (event) {
-                        is VolcRealtimeEvent.Audio -> {
-                            val queuedBytes = playbackQueue.offer(event.pcm)
-                            if (queuedBytes == null) {
-                                counters?.outputRejected()
-                                throw CallMediaFailure("通话待播音频积压超过安全上限，已交还系统")
+            val eventReader = launch {
+                try {
+                    session.events.collect { event ->
+                        counters?.eventReceived(event)
+                        when (event) {
+                            is VolcRealtimeEvent.Audio -> {
+                                val queuedBytes = playbackQueue.offer(event.pcm)
+                                if (queuedBytes == null) {
+                                    counters?.outputRejected()
+                                    throw CallMediaFailure("通话待播音频积压超过安全上限，已交还系统")
+                                }
+                                cancelFarewellWaiter()
+                                farewell.audio(event.pcm.size)
+                                counters?.outputQueued(queuedBytes)
                             }
-                            counters?.outputQueued(queuedBytes)
+                            VolcRealtimeEvent.UserSpeaking, VolcRealtimeEvent.AssistantInterrupted -> {
+                                cancelFarewellWaiter()
+                                farewell.cancelCandidate()
+                                playbackQueue.invalidate()
+                                // First release any writer blocked on a full pipe. Flush again under
+                                // the writer lock to remove the last chunk that raced the first flush.
+                                val cleared = interruptPlayback() && withTimeoutOrNull(750) {
+                                    writerLock.withLock { interruptPlayback() }
+                                } == true
+                                if (!cleared) throw CallMediaFailure("通话音频无法及时停止，已交还系统")
+                                farewell.afterPairedFlush()
+                                flushAssistantText()
+                            }
+                            is VolcRealtimeEvent.UserTranscript -> {
+                                cancelFarewellWaiter()
+                                if (event.isFinal) {
+                                    farewell.callerFinal(event.text, event.isCompleteFinal)
+                                    onTranscript("caller", event.text)
+                                    onFinalTranscript("caller", event.text)
+                                } else farewell.cancelCandidate()
+                            }
+                            VolcRealtimeEvent.AssistantAudioStarted -> {
+                                cancelFarewellWaiter()
+                                farewell.audioStarted()
+                            }
+                            VolcRealtimeEvent.AssistantAudioEnded -> {
+                                farewell.audioEnded()
+                                checkFarewell()
+                            }
+                            is VolcRealtimeEvent.AssistantTranscript -> {
+                                val room = CallHistory.MAX_LINE_LENGTH - assistantText.length
+                                if (room > 0) assistantText.append(event.delta.take(room))
+                            }
+                            VolcRealtimeEvent.AssistantTextEnded -> {
+                                farewell.assistantFinal(assistantText.toString())
+                                flushAssistantText(completed = true)
+                                checkFarewell()
+                            }
+                            is VolcRealtimeEvent.Failed -> throw event.error
+                            VolcRealtimeEvent.Closed -> throw CallMediaFailure("火山语音会话已结束，电话由系统处理")
+                            else -> Unit
                         }
-                        VolcRealtimeEvent.UserSpeaking, VolcRealtimeEvent.AssistantInterrupted -> {
-                            playbackQueue.invalidate()
-                            // First release any writer blocked on a full pipe. Flush again under
-                            // the writer lock to remove the last chunk that raced the first flush.
-                            val cleared = interruptPlayback() && withTimeoutOrNull(750) {
-                                writerLock.withLock { interruptPlayback() }
-                            } == true
-                            if (!cleared) throw CallMediaFailure("通话音频无法及时停止，已交还系统")
-                            flushAssistantText()
-                        }
-                        is VolcRealtimeEvent.UserTranscript -> if (event.isFinal) {
-                            onTranscript("caller", event.text)
-                            onFinalTranscript("caller", event.text)
-                        }
-                        is VolcRealtimeEvent.AssistantTranscript -> {
-                            val room = CallHistory.MAX_LINE_LENGTH - assistantText.length
-                            if (room > 0) assistantText.append(event.delta.take(room))
-                        }
-                        VolcRealtimeEvent.AssistantTextEnded -> flushAssistantText(completed = true)
-                        is VolcRealtimeEvent.Failed -> throw event.error
-                        VolcRealtimeEvent.Closed -> throw CallMediaFailure("火山语音会话已结束，电话由系统处理")
-                        else -> Unit
                     }
+                    throw CallMediaFailure("火山语音连接已断开，电话由系统处理")
+                } finally {
+                    input.cancel()
+                    flushAssistantText()
                 }
-                throw CallMediaFailure("火山语音连接已断开，电话由系统处理")
+            }
+            try {
+                // Keep the event reader active until the waiter actually issues the hangup.
+                finished.await()
+                eventReader.cancelAndJoin()
             } finally {
-                input.cancel()
-                flushAssistantText()
+                cancelFarewellWaiter()
+                eventReader.cancel()
             }
         } finally {
             // Closing both FDs is what releases a blocking read or write in a cancelled child.
@@ -122,6 +169,12 @@ internal class CallPcmBridge(
             runCatching { playback.close() }
         }
     }
+}
+
+/** No suspension between checking for cancellation and committing on the call dispatcher. */
+internal suspend fun commitDrainedFarewell(commit: () -> Boolean): Boolean {
+    currentCoroutineContext().ensureActive()
+    return commit()
 }
 
 /** Bounded by time at 24 kHz PCM16 mono, independent of cloud packet boundaries. */

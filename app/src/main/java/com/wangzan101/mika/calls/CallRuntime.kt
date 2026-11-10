@@ -949,10 +949,17 @@ class CallRuntime(private val app: MikaApp) {
             w.stopReason.record("AI 音频连接失败，电话由系统处理")
         } finally {
             withContext(NonCancellable) {
-                val reason = w.stopReason.value ?: "AI 已退出，电话由系统处理"
                 w.mediaStage = MediaStage.RELEASE
                 runCatching { w.session?.close() }.onFailure { debugMediaException(w, it) }
                 val restored = try { restoreAudio(w) } finally { releaseCallWakeLock(w) }
+                if (w.stopReason.value == FAREWELL_ENDING) {
+                    val target = w.track
+                    val ended = target != null && (confirmedEnded(target) ||
+                        waitFor(CallPolicy.CONTROL_TIMEOUT_MS) { confirmedEnded(target) } || confirmedEnded(target))
+                    w.stopReason.refine(FAREWELL_ENDING, if (ended) "通话已收尾，Android 已挂断"
+                        else "通话已收尾，Android 未确认挂断，已交还系统")
+                }
+                val reason = w.stopReason.value ?: "AI 已退出，电话由系统处理"
                 w.mediaCounters?.playbackDiagnostic()?.let { Log.d("MikaCallMedia", "playback $it") }
                 w.track?.let {
                     if (w.telecomActionIssued) {
@@ -1060,7 +1067,7 @@ class CallRuntime(private val app: MikaApp) {
         }
         val remaining = (w.config.maxCallSeconds * 1_000L - (SystemClock.elapsedRealtime() - w.activeElapsed)).coerceAtLeast(1)
         w.mediaStage = MediaStage.PCM_BRIDGE
-        val completed = withTimeoutOrNull(remaining) {
+        withTimeoutOrNull(remaining) {
             coroutineScope {
                 val watchdog = launch {
                     var lastBytes = -1L
@@ -1108,29 +1115,58 @@ class CallRuntime(private val app: MikaApp) {
                                 publish()
                             }
                         },
+                        awaitFarewellDrain = { fence ->
+                            if (!sameActiveMuteTarget(w, target) || target.suppressed || work !== w) false
+                            else awaitFarewellPlayback(helper, w, fence)
+                        },
+                        commitFarewell = {
+                            // No suspension: speech can still cancel the waiter up to this point.
+                            if (target.suppressed || w.stopReason.value != null || shell !== helper ||
+                                !settings.state.value.enabled || !sameActiveMuteTarget(w, target) ||
+                                !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) false
+                            else if (runCatching { target.call.disconnect() }.isSuccess) w.stopReason.record(FAREWELL_ENDING)
+                            else false
+                        },
                     )
                 } finally {
                     watchdog.cancel()
                 }
-                true
             }
         }
-        if (completed != true) {
-            val timeoutReason = "已达到 AI 通话时长上限"
-            if (!w.stopReason.record(timeoutReason)) return
-            w.mediaStage = MediaStage.RELEASE
-            w.session?.close()
-            val restored = restoreAudio(w)
-            w.aiActive = false
-            w.bridging = false
-            if (!restored || target.suppressed || liveCalls().singleOrNull() !== target || target.phase != CallPhase.ACTIVE) return
-            if (runCatching { target.call.disconnect() }.isSuccess &&
-                (waitFor(CallPolicy.CONTROL_TIMEOUT_MS) { confirmedEnded(target) } || confirmedEnded(target))) {
-                w.stopReason.refine(timeoutReason, "达到时长上限，Android 已挂断")
-            } else {
-                w.stopReason.refine(timeoutReason, "达到时长上限，Android 未确认挂断，已交还系统")
-            }
+        // A natural ending already issued the owner-bound disconnect with media still running.
+        if (w.stopReason.value == FAREWELL_ENDING) return
+        val ending = "已达到 AI 通话时长上限"
+        if (!w.stopReason.record(ending)) return
+        w.mediaStage = MediaStage.RELEASE
+        w.session?.close()
+        val restored = restoreAudio(w)
+        w.aiActive = false
+        w.bridging = false
+        if (!restored || work !== w || target.suppressed || !sameActiveMuteTarget(w, target)) return
+        val ended = runCatching { target.call.disconnect() }.isSuccess &&
+            (waitFor(CallPolicy.CONTROL_TIMEOUT_MS) { confirmedEnded(target) } || confirmedEnded(target))
+        w.stopReason.refine(ending, if (ended) "达到时长上限，Android 已挂断"
+            else "达到时长上限，Android 未确认挂断，已交还系统")
+    }
+
+    private suspend fun awaitFarewellPlayback(helper: IMikaShell, w: Work, fence: CallFarewellFence): Boolean {
+        suspend fun reached(): Boolean {
+            val stats = withContext(Dispatchers.IO) { runCatching { helper.callAudioStats(w.audioOwner) }.getOrNull() }
+            return stats?.getBoolean("active") == true && fence.reached(
+                playedEpoch = stats.getLong("upPlaybackEpoch", -1L),
+                acceptedBytes = stats.getLong("upPlaybackEpochDataBytes", -1L),
+                primeFrames = stats.getLong("upPlaybackPrimeFrames", -1L),
+                playedFrames = stats.getLong("upPlaybackHeadFrames", -1L),
+                fresh = stats.getBoolean("upPlaybackHeadFresh"),
+                routed = stats.getBoolean("upPlaybackRouteReady"),
+            )
         }
+        return withTimeoutOrNull(10_000L) {
+            while (!reached()) delay(100L)
+            // Keep the collector live through the quiet tail; any new speech cancels this waiter.
+            delay(if (fence.explicit) 1_000L else 3_500L)
+            reached()
+        } == true
     }
 
     private fun appendTranscript(lines: MutableList<CallTranscriptLine>, role: String, text: String): Boolean {
@@ -1563,6 +1599,7 @@ class CallRuntime(private val app: MikaApp) {
         const val STANDBY_START_MS = 5_000L
         const val MUTE_ACK_MS = 2_000L
         const val CALL_CHANGED = "指定通话已变化或结束，请重新读取电话状态"
+        private const val FAREWELL_ENDING = "通话已收尾，正在结束通话"
         const val TOKEN = "com.wangzan101.mika.CALL_REQUEST_TOKEN"
         fun disconnected(call: Call): Boolean =
             call.state == Call.STATE_DISCONNECTED || call.state == Call.STATE_DISCONNECTING

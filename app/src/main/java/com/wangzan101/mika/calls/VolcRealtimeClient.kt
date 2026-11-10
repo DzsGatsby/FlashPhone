@@ -58,7 +58,12 @@ sealed interface VolcRealtimeEvent {
     /** PCM s16le, mono, 24 kHz. */
     data class Audio(val pcm: ByteArray) : VolcRealtimeEvent
     data object UserSpeaking : VolcRealtimeEvent
-    data class UserTranscript(val text: String, val isFinal: Boolean) : VolcRealtimeEvent
+    data class UserTranscript(
+        val text: String,
+        val isFinal: Boolean,
+        /** Only a complete, non-blank provider final can authorize call control. */
+        val isCompleteFinal: Boolean = isFinal,
+    ) : VolcRealtimeEvent
     data object UserSpeechEnded : VolcRealtimeEvent
     data object AssistantAudioStarted : VolcRealtimeEvent
     data object AssistantAudioEnded : VolcRealtimeEvent
@@ -271,11 +276,15 @@ class VolcRealtimeSession internal constructor(
                 }
             }
             VolcRealtimeProtocol.USER_COMPLETED -> {
-                val transcript = (frame.string("transcript") ?: frame.string("text"))?.takeIf { it.isNotBlank() }
-                    ?: userText.toString()
+                val explicitFinal = (frame.string("transcript") ?: frame.string("text"))?.takeIf { it.isNotBlank() }
+                val transcript = explicitFinal ?: userText.toString()
                 currentUserItem = null
                 userText = StringBuilder()
-                if (transcript.isNotBlank()) publish(VolcRealtimeEvent.UserTranscript(transcript.take(MAX_TRANSCRIPT_CHARS), isFinal = true))
+                if (transcript.isNotBlank()) publish(VolcRealtimeEvent.UserTranscript(
+                    transcript.take(MAX_TRANSCRIPT_CHARS),
+                    isFinal = true,
+                    isCompleteFinal = explicitFinal != null && explicitFinal.length <= MAX_TRANSCRIPT_CHARS,
+                ))
                 publish(VolcRealtimeEvent.UserSpeechEnded)
             }
             VolcRealtimeProtocol.USER_FAILED -> {

@@ -234,6 +234,12 @@ internal class ShellCallAudio(private val context: Context) {
             private set
         var playbackHeadFrames = -1L
             private set
+        var playbackEpoch = 0L
+            private set
+        var playbackEpochDataBytes = 0L
+            private set
+        var playbackPrimeFrames = 0L
+            private set
         var flushMaxMs = 0L
             private set
         private var zeroSinceMs = -1L
@@ -248,6 +254,7 @@ internal class ShellCallAudio(private val context: Context) {
             } else if (bytes > 0) {
                 endZeroStreak(atMs)
                 lastWriteMs = atMs
+                playbackEpochDataBytes += bytes.toLong()
             }
         }
 
@@ -264,6 +271,15 @@ internal class ShellCallAudio(private val context: Context) {
         fun recordPlaybackHead(rawFrames: Int) { playbackHeadFrames = rawFrames.toLong() and 0xffff_ffffL }
 
         fun resetPlaybackHead() { playbackHeadFrames = -1L }
+
+        fun recordTrackFlush() {
+            playbackEpoch++
+            playbackEpochDataBytes = 0L
+            playbackPrimeFrames = 0L
+            resetPlaybackHead()
+        }
+
+        fun recordPrime(bytes: Int) { playbackPrimeFrames += bytes.toLong() / 2L }
 
         fun recordFlush(durationMs: Long) { flushMaxMs = maxOf(flushMaxMs, durationMs) }
 
@@ -331,9 +347,11 @@ internal class ShellCallAudio(private val context: Context) {
                 track.setStartThresholdInFrames(minOf(PLAY_RATE / 50, track.bufferSizeInFrames).coerceAtLeast(1))
             } else track.bufferSizeInFrames
             val silence = ByteArray(initialFrames.coerceIn(1, PLAY_RATE / 4) * 2)
-            check(track.write(silence, 0, silence.size, AudioTrack.WRITE_NON_BLOCKING) > 0) {
+            val accepted = track.write(silence, 0, silence.size, AudioTrack.WRITE_NON_BLOCKING)
+            check(accepted > 0) {
                 "Uplink track did not accept its initial silence."
             }
+            playbackDiagnostics.recordPrime(accepted)
         }
 
         private fun updateRoutes() {
@@ -423,8 +441,7 @@ internal class ShellCallAudio(private val context: Context) {
 
             // Preferred-device success is not evidence of routing. The direct path must
             // never send non-silence while the actual sink is unknown or a handset speaker.
-            val safeToWrite = backend == REDIRECT || txDevice == AudioDeviceInfo.TYPE_TELEPHONY
-            if (!safeToWrite) {
+            if (!playbackRouteReady()) {
                 playbackDiagnostics.endZeroStreak(now)
                 if (routeMissingSince == 0L) routeMissingSince = now
                 check(txDevice < 0 && now - routeMissingSince < ROUTE_TIMEOUT_MS) {
@@ -470,7 +487,7 @@ internal class ShellCallAudio(private val context: Context) {
                     } while (n > 0)
                     track.pause()
                     track.flush()
-                    playbackDiagnostics.resetPlaybackHead()
+                    playbackDiagnostics.recordTrackFlush()
                     txDevice = -1
                     track.play()
                     primePlayback()
@@ -480,16 +497,19 @@ internal class ShellCallAudio(private val context: Context) {
             }
         }
 
-        private fun samplePlaybackHead() {
-            try {
-                playbackDiagnostics.recordPlaybackHead(track.playbackHeadPosition)
-            } catch (_: Exception) {
-                // Vendor tracks may not expose a head position. Keep only the last good value for this track epoch.
-            }
+        private fun playbackRouteReady(): Boolean = backend == REDIRECT || txDevice == AudioDeviceInfo.TYPE_TELEPHONY
+
+        private fun samplePlaybackHead(): Boolean = try {
+            playbackDiagnostics.recordPlaybackHead(track.playbackHeadPosition)
+            true
+        } catch (_: Exception) {
+            // Vendor tracks may not expose a head position. Keep the last good value but mark it stale.
+            false
         }
 
         fun snapshot(alive: Boolean, reason: String): Bundle = synchronized(io) {
-            if (alive && !closed) samplePlaybackHead()
+            val playbackActive = alive && !closed
+            val headFresh = playbackActive && samplePlaybackHead()
             val now = SystemClock.elapsedRealtime()
             Bundle().apply {
                 putBoolean("active", alive)
@@ -502,6 +522,11 @@ internal class ShellCallAudio(private val context: Context) {
                 putLong("upWriteZeroMaxMs", playbackDiagnostics.zeroMaxMs(now))
                 putLong("upLastWriteAgeMs", playbackDiagnostics.lastWriteAgeMs(now))
                 putLong("upPlaybackHeadFrames", playbackDiagnostics.playbackHeadFrames)
+                putLong("upPlaybackEpoch", playbackDiagnostics.playbackEpoch)
+                putLong("upPlaybackEpochDataBytes", playbackDiagnostics.playbackEpochDataBytes)
+                putLong("upPlaybackPrimeFrames", playbackDiagnostics.playbackPrimeFrames)
+                putBoolean("upPlaybackHeadFresh", headFresh)
+                putBoolean("upPlaybackRouteReady", playbackActive && playbackRouteReady())
                 putLong("upFlushMaxMs", playbackDiagnostics.flushMaxMs)
                 putInt("downPeak", downPeak)
                 putInt("rxDevice", rxDevice)
@@ -532,6 +557,7 @@ internal class ShellCallAudio(private val context: Context) {
             runCatching { down.close() }
             runCatching { up.close() }
             runCatching { track.pause() }
+            // Teardown never opens another playback epoch. Keep final diagnostics readable.
             runCatching { track.flush() }
             runCatching { track.release() }
             runCatching { record.stop() }

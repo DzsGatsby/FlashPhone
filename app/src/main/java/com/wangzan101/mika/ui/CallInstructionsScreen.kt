@@ -9,11 +9,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallRuntime
 import com.wangzan101.mika.calls.codex.*
@@ -22,6 +27,7 @@ import com.wangzan101.mika.settings.ProviderConfig
 import com.wangzan101.mika.settings.ProviderStore
 import com.wangzan101.mika.ui.components.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -73,7 +79,8 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
     DisposableEffect(owner) { onDispose { owner.dispose() } }
     BackHandler { if (draft != null) draft = null else onBack() }
 
-    PageScaffold(stringResource(R.string.call_instructions_title), onBack, Modifier.testTag("call-instructions")) {
+    PageScaffold(stringResource(R.string.call_instructions_title), onBack,
+        Modifier.testTag("call-instructions").imePadding()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(tab == 0, { tab = 0 }, label = { Text(stringResource(R.string.call_instructions_rules)) })
             FilterChip(tab == 1, { tab = 1 }, label = { Text(stringResource(R.string.call_instructions_chat)) })
@@ -121,7 +128,7 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
                     }
                     OutlinedTextField(model, { model = it.take(160) }, label = { Text(stringResource(R.string.call_instructions_model)) },
                         supportingText = { Text(stringResource(R.string.call_instructions_model_hint)) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                        modifier = Modifier.fillMaxWidth().keepsKeyboard(), enabled = !busy)
                     existing.forEach { provider ->
                         TextButton(onClick = { scope.launch { owner.configureProvider(provider.id, model) } },
                             enabled = !busy && model.isNotBlank()) {
@@ -130,7 +137,7 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
                     }
                     OutlinedTextField(key, { key = it }, label = { Text(stringResource(R.string.call_instructions_api_key)) },
                         visualTransformation = PasswordVisualTransformation(), singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), enabled = !busy)
+                        modifier = Modifier.fillMaxWidth().keepsKeyboard(), enabled = !busy)
                     MikaButton(stringResource(R.string.call_instructions_connect), {
                         val entered = key.trim()
                         val requestedModel = model.trim()
@@ -178,7 +185,7 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
                 TextButton(onClick = { scope.launch { owner.cancel() } }) { Text(stringResource(R.string.call_instructions_stop)) }
             } else {
                 OutlinedTextField(input, { input = it.take(CodexOwnerRuntime.MAX_INPUT_CHARS) }, label = { Text(stringResource(R.string.call_instructions_message)) },
-                    modifier = Modifier.fillMaxWidth().testTag("call-owner-input"), minLines = 2, maxLines = 8)
+                    modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-owner-input"), minLines = 2, maxLines = 8)
                 MikaButton(stringResource(R.string.call_instructions_send), {
                     val text = input
                     scope.launch { if (owner.send(text)) input = "" }
@@ -215,9 +222,22 @@ private fun InstructionEditor(row: CallInstruction, saveError: String?, onDismis
     var response by remember(row) { mutableStateOf(row.response) }
     var expiry by remember(row) { mutableStateOf(row.expiresAtMs) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(if (row.id.isBlank()) R.string.call_instructions_add else R.string.call_instructions_edit)) },
+        modifier = Modifier.imePadding(),
+        properties = DialogProperties(decorFitsSystemWindows = false),
         text = {
+            val titleFocus = remember { FocusRequester() }
+            val window = LocalWindowInfo.current
+            val keyboard = LocalSoftwareKeyboardController.current
+            LaunchedEffect(row, window) {
+                // A text field can take focus before the dialog owns the IME window.
+                snapshotFlow { window.isWindowFocused }.first { it }
+                titleFocus.requestFocus()
+                withFrameNanos { }
+                keyboard?.show()
+            }
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it.take(64) }, label = { Text(stringResource(R.string.call_instructions_heading)) }, singleLine = true)
+                OutlinedTextField(title, { title = it.take(64) }, label = { Text(stringResource(R.string.call_instructions_heading)) },
+                    modifier = Modifier.focusRequester(titleFocus).testTag("call-instruction-title-input"), singleLine = true)
                 OutlinedTextField(situation, { situation = it.take(200) }, label = { Text(stringResource(R.string.call_instructions_situation)) }, maxLines = 3)
                 OutlinedTextField(response, { response = it }, label = { Text(stringResource(R.string.call_instructions_response)) },
                     supportingText = { Text(response.length.toString() + " / 800") }, isError = response.length > 800, minLines = 3, maxLines = 7)

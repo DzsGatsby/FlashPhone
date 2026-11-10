@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -137,6 +138,54 @@ class VolcRealtimeClientTest {
                 collect.await()
             }
             assertTrue(messages.tryReceive().isFailure)
+        }
+    }
+
+    @Test fun onlyExplicitUntruncatedUserCompletionIsACompleteFinal() = runBlocking {
+        withServer { server, http ->
+            val prefix = "conversation.item.input_audio_transcription"
+            val limit = 16_384
+            val longText = "再见" + "啊".repeat(limit)
+            server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    when (Json.parseToJsonElement(text).jsonObject.type) {
+                        "session.create" -> listOf(
+                            """{"type":"session.created"}""",
+                            """{"type":"$prefix.delta","delta":"再见"}""",
+                            """{"type":"$prefix.completed"}""",
+                            """{"type":"$prefix.completed","transcript":"$longText"}""",
+                            """{"type":"$prefix.completed","transcript":"   "}""",
+                            """{"type":"$prefix.delta","delta":"再见"}""",
+                            """{"type":"$prefix.failed"}""",
+                            """{"type":"$prefix.completed","text":"再见"}""",
+                        ).forEach { webSocket.send(it) }
+                        "session.close" -> webSocket.send("""{"type":"session.closed"}""")
+                    }
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(code, null)
+                }
+            }))
+            val expected = listOf(
+                VolcRealtimeEvent.UserTranscript("再见", isFinal = false),
+                VolcRealtimeEvent.UserTranscript("再见", isFinal = true, isCompleteFinal = false),
+                VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserTranscript(longText.take(limit), isFinal = true, isCompleteFinal = false),
+                VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserTranscript("再见", isFinal = false),
+                VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserTranscript("再见", isFinal = true),
+                VolcRealtimeEvent.UserSpeechEnded,
+            )
+            val session = transport(server, http).connect(VolcRealtimeCredentials(apiKey = "test-key"))
+            try {
+                assertEquals(expected, withTimeout(3_000) { session.events.take(expected.size).toList() })
+            } finally {
+                session.close()
+                withTimeout(3_000) { session.awaitClosed() }
+            }
         }
     }
 

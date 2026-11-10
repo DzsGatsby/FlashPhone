@@ -5,17 +5,20 @@ import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -25,6 +28,22 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallPcmBridgeTest {
+    @Test fun `caller resuming during the final playback query cannot commit a stale hangup`() = runTest {
+        val playbackQuery = CompletableDeferred<Boolean>()
+        var committed = false
+        val waiter = launch {
+            // A Binder operation can still return a positive result after speech cancels the waiter.
+            if (withContext(NonCancellable) { playbackQuery.await() }) {
+                commitDrainedFarewell { committed = true; true }
+            }
+        }
+        runCurrent()
+        waiter.cancel()
+        playbackQuery.complete(true)
+        waiter.join()
+        assertFalse(committed)
+    }
+
     @Test fun `closing a blocked capture cannot replace the bridge deadline with an IO fault`() = runTest {
         val capture = BlockingCapture()
         val timed = async {
