@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Keep both the handset and the face inside the circular launcher mask. -->
+<!-- Align the full-bleed portrait with the launcher viewport; keep the face and grip in its center. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/flash_phone_icon_art"
-    android:inset="21%" />
+    android:inset="17%" />
