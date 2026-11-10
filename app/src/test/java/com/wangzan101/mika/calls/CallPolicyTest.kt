@@ -134,7 +134,9 @@ class CallPolicyTest {
             assertTrue(prompt.contains("你好"))
             assertFalse(prompt.contains("通话开始时明确说明自己是 AI"))
             assertFalse(prompt.contains("Flash phone"))
-            assertTrue(prompt.contains("被问及身份时，如实说明是机主的 AI 电话助手"))
+            assertTrue(prompt.contains("只有对方直接问接话者的身份"))
+            assertTrue(prompt.contains("‘喂，能听到吗’，只答‘能听到，您说’"))
+            assertFalse(prompt.contains("你是 AI 电话助手"))
         }
     }
 

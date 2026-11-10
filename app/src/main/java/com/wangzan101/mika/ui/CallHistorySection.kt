@@ -270,7 +270,7 @@ private fun CallHistoryItem(
 @Composable
 internal fun CallTranscriptText(line: CallTranscriptLine) {
     Column {
-        Text(if (line.role == "assistant") "Mika" else stringResource(R.string.calls_caller),
+        Text(stringResource(if (line.role == "assistant") R.string.app_name else R.string.calls_caller),
             style = MaterialTheme.typography.labelMedium, color = MikaTheme.colors.ink3)
         Text(line.text, style = MaterialTheme.typography.bodyMedium)
     }
