@@ -263,8 +263,10 @@ internal class ShellCallAudio(private val context: Context) {
             zeroSinceMs = -1L
         }
 
-        fun zeroMaxMs(nowMs: Long): Long = if (zeroSinceMs < 0L) completedZeroMaxMs
-            else maxOf(completedZeroMaxMs, observationTime(nowMs) - zeroSinceMs)
+        fun zeroMaxMs(nowMs: Long): Long = maxOf(completedZeroMaxMs, currentZeroStreakMs(nowMs))
+
+        fun pendingWriteStalled(nowMs: Long): Boolean =
+            stoppedAtMs < 0L && currentZeroStreakMs(nowMs) >= MAX_UPLINK_WRITE_STALL_MS
 
         fun lastWriteAgeMs(nowMs: Long): Long = if (lastWriteMs < 0L) -1L else observationTime(nowMs) - lastWriteMs
 
@@ -289,6 +291,9 @@ internal class ShellCallAudio(private val context: Context) {
         }
 
         private fun observationTime(nowMs: Long) = stoppedAtMs.takeIf { it >= 0L } ?: nowMs
+
+        private fun currentZeroStreakMs(nowMs: Long): Long = if (zeroSinceMs < 0L) 0L
+            else observationTime(nowMs) - zeroSinceMs
     }
 
     private inner class Session(
@@ -460,7 +465,11 @@ internal class ShellCallAudio(private val context: Context) {
             if (sampleBytes > 0) {
                 val count = track.write(upBuffer, upOffset, sampleBytes, AudioTrack.WRITE_NON_BLOCKING)
                 check(count >= 0) { "Uplink write failed ($count)." }
-                playbackDiagnostics.recordWrite(count, SystemClock.elapsedRealtime())
+                val writtenAt = SystemClock.elapsedRealtime()
+                playbackDiagnostics.recordWrite(count, writtenAt)
+                // A non-blocking write can keep returning zero while the capture path still
+                // progresses. Fail only with PCM waiting on this session's current route.
+                check(!playbackDiagnostics.pendingWriteStalled(writtenAt)) { "Uplink playback stopped accepting audio." }
                 upOffset += count
                 upBytes += count
                 progressed = progressed || count > 0
@@ -628,6 +637,7 @@ internal class ShellCallAudio(private val context: Context) {
         private const val DEVICE_CHECK_MS = 100L
         private const val ROUTE_TIMEOUT_MS = 700L
         private const val MAX_CAPTURE_STALL_MS = 500L
+        private const val MAX_UPLINK_WRITE_STALL_MS = 1_500L
         private const val MAX_FLUSH_BYTES = 256 * 1024
         private val PIPE_CLOSED get() = OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL
 

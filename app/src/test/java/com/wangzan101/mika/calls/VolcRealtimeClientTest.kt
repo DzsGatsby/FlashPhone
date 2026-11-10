@@ -103,6 +103,8 @@ class VolcRealtimeClientTest {
                 """{"type":"conversation.item.input_audio_transcription.delta","item_id":"user-1","delta":"呀"}""",
                 """{"type":"conversation.item.input_audio_transcription.completed","item_id":"user-1","transcript":"你好呀。"}""",
                 """{"type":"response.output_audio.started","response_id":"new"}""",
+                // The previous response's cancel acknowledgment may follow the replacement's start.
+                """{"type":"response.canceled","response_id":"old"}""",
                 """{"type":"response.output_audio.delta","response_id":"old","delta":"AgI="}""",
                 """{"type":"response.output_audio.delta","response_id":"new","delta":"AwQ="}""",
                 """{"type":"response.output_text.delta","delta":"您好"}""",

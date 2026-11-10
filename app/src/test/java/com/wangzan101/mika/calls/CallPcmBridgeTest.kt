@@ -2,23 +2,34 @@ package com.wangzan101.mika.calls
 
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okio.ByteString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -28,6 +39,63 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallPcmBridgeTest {
+    @Test fun `idle speech and duplicate interruption do not flush or stop following spoken replies`() = runBlocking {
+        val session = VolcRealtimeSession(VolcRealtimeConfig(), closeTimeoutMs = 100L)
+        val socket = FakeSocket()
+        val playback = Channel<ByteArray>(8)
+        val capture = BlockingCapture()
+        var flushes = 0
+        val bridge = CallPcmBridge(capture, object : OutputStream() {
+            override fun write(value: Int) = error("PCM should be written as a block")
+            override fun write(bytes: ByteArray, offset: Int, count: Int) {
+                check(playback.trySend(bytes.copyOfRange(offset, offset + count)).isSuccess)
+            }
+        }) { flushes++; true }
+        session.listener.onOpen(socket, Response.Builder().request(socket.request()).protocol(Protocol.HTTP_1_1)
+            .code(101).message("Switching Protocols").build())
+        fun receiveFrame(frame: String) = session.listener.onMessage(socket, frame)
+        fun callerTurn(id: String) = receiveFrame("""{"type":"conversation.item.input_audio_transcription.started","item_id":"$id"}""")
+        fun finishCallerTurn(id: String) = receiveFrame("""{"type":"conversation.item.input_audio_transcription.completed","item_id":"$id","transcript":"还有一个问题"}""")
+        fun reply(id: String, delta: String) {
+            receiveFrame("""{"type":"response.output_audio.started","response_id":"$id"}""")
+            receiveFrame("""{"type":"response.output_audio.delta","response_id":"$id","delta":"$delta"}""")
+        }
+        receiveFrame("""{"type":"session.created"}""")
+        val running = launch(start = CoroutineStart.UNDISPATCHED) {
+            bridge.run(session, "", counters = null, onTranscript = { _, _ -> })
+        }
+        try {
+            withTimeout(4_000L) {
+                val flushCounts = mutableListOf<Int>()
+                callerTurn("turn1")
+                finishCallerTurn("turn1")
+                reply("reply1", "AQI=")
+                assertArrayEquals(byteArrayOf(1, 2), playback.receive())
+                flushCounts += flushes
+
+                callerTurn("turn2")
+                receiveFrame("""{"type":"response.canceled"}""")
+                finishCallerTurn("turn2")
+                reply("reply2", "AwQ=")
+                assertArrayEquals(byteArrayOf(3, 4), playback.receive())
+                flushCounts += flushes
+
+                // A standalone cancellation while audio exists must still clear playback.
+                receiveFrame("""{"type":"response.canceled"}""")
+                callerTurn("turn3")
+                finishCallerTurn("turn3")
+                reply("reply3", "BQY=")
+                assertArrayEquals(byteArrayOf(5, 6), playback.receive())
+                flushCounts += flushes
+                assertEquals("One paired flush per interruption with audio, none with an empty epoch", listOf(0, 2, 4), flushCounts)
+            }
+        } finally {
+            running.cancelAndJoin()
+            session.close()
+            playback.close()
+        }
+    }
+
     @Test fun `caller resuming during the final playback query cannot commit a stale hangup`() = runTest {
         val playbackQuery = CompletableDeferred<Boolean>()
         var committed = false
@@ -166,5 +234,14 @@ class CallPcmBridgeTest {
         }
 
         override fun close() { closed.countDown() }
+    }
+
+    private class FakeSocket : WebSocket {
+        override fun request(): Request = Request.Builder().url("https://localhost/").build()
+        override fun queueSize(): Long = 0L
+        override fun send(text: String): Boolean = true
+        override fun send(bytes: ByteString): Boolean = true
+        override fun close(code: Int, reason: String?): Boolean = true
+        override fun cancel() = Unit
     }
 }

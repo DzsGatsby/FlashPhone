@@ -1,6 +1,7 @@
 package com.wangzan101.mika.calls
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -61,6 +62,27 @@ class CallMediaCountersTest {
         assertEquals(960L, result["playback_written_bytes"])
         assertEquals(1L, result["playback_rejected_packets"])
         assertEquals(640L, result["playback_shell_accepted_bytes"])
+    }
+
+    @Test fun laterUnansweredSpeechDoesNotInheritAudioFromThePreviousTurn() {
+        val counters = CallMediaCounters(measureInputSignal = false)
+        assertNull(counters.recordReport())
+        counters.eventReceived(VolcRealtimeEvent.Audio(ByteArray(640))) // greeting is not a reply to the caller
+        assertEquals(CallAudioReport.Turn.NONE, counters.recordReport()?.lastObservedTurn)
+        repeat(2) {
+            counters.eventReceived(VolcRealtimeEvent.UserSpeaking)
+            counters.eventReceived(VolcRealtimeEvent.UserTranscript("private text", isFinal = true))
+            counters.eventReceived(VolcRealtimeEvent.Audio(ByteArray(640)))
+        }
+        counters.eventReceived(VolcRealtimeEvent.UserSpeaking)
+        assertEquals(CallAudioReport.Turn.SPEECH_DETECTED, counters.recordReport()?.lastObservedTurn)
+        counters.eventReceived(VolcRealtimeEvent.UserTranscript("last private text", isFinal = true))
+        val report = checkNotNull(counters.recordReport())
+        assertEquals(3L, report.completeTranscripts)
+        assertEquals(CallAudioReport.Turn.TRANSCRIPT_RECEIVED, report.lastObservedTurn)
+        assertEquals(1920L, report.receivedAudioBytes)
+        assertNull(report.deviceAcceptedBytes)
+        assertFalse(report.supportSummary().contains("private"))
     }
 
     private fun pcm(vararg samples: Int): ByteArray = ByteArray(samples.size * 2) { index ->

@@ -1,6 +1,7 @@
 package com.wangzan101.mika.cap.phone.shell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -51,6 +52,37 @@ class ShellCallAudioTest {
         stats.recordFlush(21L)
         stats.recordFlush(12L)
         assertEquals(21L, stats.flushMaxMs)
+    }
+
+    @Test
+    fun pendingUplinkStallRequiresContinuousZeroWritesRatherThanAQuietCall() {
+        val stats = ShellCallAudio.PlaybackDiagnostics()
+        assertFalse(stats.pendingWriteStalled(10_000L))
+        stats.recordWrite(960, 10_000L)
+        assertFalse(stats.pendingWriteStalled(30_000L))
+
+        stats.recordWrite(0, 30_000L)
+        stats.recordWrite(0, 31_499L)
+        assertFalse(stats.pendingWriteStalled(31_499L))
+        stats.recordWrite(0, 31_500L)
+        assertTrue(stats.pendingWriteStalled(31_500L))
+    }
+
+    @Test
+    fun actualProgressAndDiscardedPlaybackCannotCarryAStallIntoTheNextReply() {
+        val stats = ShellCallAudio.PlaybackDiagnostics()
+        stats.recordWrite(0, 500L)
+        stats.recordWrite(2, 1_999L)
+        stats.recordWrite(0, 2_000L)
+        assertFalse(stats.pendingWriteStalled(3_499L))
+
+        stats.endZeroStreak(3_499L) // Flush or loss of the confirmed route.
+        assertFalse(stats.pendingWriteStalled(9_000L))
+        stats.recordWrite(0, 9_000L)
+        assertFalse(stats.pendingWriteStalled(9_001L))
+        stats.stop(10_500L)
+        assertFalse(stats.pendingWriteStalled(20_000L))
+        assertEquals(1_500L, stats.zeroMaxMs(20_000L))
     }
 
     @Test

@@ -107,14 +107,18 @@ internal class CallPcmBridge(
                             VolcRealtimeEvent.UserSpeaking, VolcRealtimeEvent.AssistantInterrupted -> {
                                 cancelFarewellWaiter()
                                 farewell.cancelCandidate()
-                                playbackQueue.invalidate()
-                                // First release any writer blocked on a full pipe. Flush again under
-                                // the writer lock to remove the last chunk that raced the first flush.
-                                val cleared = interruptPlayback() && withTimeoutOrNull(750) {
-                                    writerLock.withLock { interruptPlayback() }
-                                } == true
-                                if (!cleared) throw CallMediaFailure("通话音频无法及时停止，已交还系统")
-                                farewell.afterPairedFlush()
+                                if (farewell.hasPlaybackSinceFlush) {
+                                    playbackQueue.invalidate()
+                                    // First release any writer blocked on a full pipe. Flush again under
+                                    // the writer lock to remove the last chunk that raced the first flush.
+                                    val cleared = interruptPlayback() && withTimeoutOrNull(750) {
+                                        writerLock.withLock { interruptPlayback() }
+                                    } == true
+                                    if (!cleared) throw CallMediaFailure("通话音频无法及时停止，已交还系统")
+                                    farewell.afterPairedFlush()
+                                }
+                                // Some providers report a second cancellation after user speech starts.
+                                // Without newly accepted PCM, another flush would only reset the route.
                                 flushAssistantText()
                             }
                             is VolcRealtimeEvent.UserTranscript -> {

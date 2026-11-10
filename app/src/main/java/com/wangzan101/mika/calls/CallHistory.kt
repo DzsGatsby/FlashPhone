@@ -29,8 +29,27 @@ data class CallRecord(
     val transcript: List<CallTranscriptLine>,
     val handled: Boolean = false,
     val task: CallTaskBrief? = null,
+    val audioReport: CallAudioReport? = null,
 ) {
     override fun toString(): String = "CallRecord(direction=$direction, result=$result)"
+}
+
+/** Only bounded counters; copied reports never include numbers, IDs, speech or credentials. */
+@Serializable
+data class CallAudioReport(
+    val speechStarts: Long,
+    val completeTranscripts: Long,
+    val lastObservedTurn: Turn,
+    val receivedAudioBytes: Long,
+    val pipeWrittenBytes: Long,
+    val deviceAcceptedBytes: Long?,
+) {
+    @Serializable
+    enum class Turn { NONE, SPEECH_DETECTED, TRANSCRIPT_RECEIVED, REPLY_AUDIO_RECEIVED }
+
+    fun supportSummary(): String = "Flash phone audio: speech_starts=$speechStarts " +
+        "complete_transcripts=$completeTranscripts last_observed_turn=${lastObservedTurn.name} " +
+        "reply_bytes=$receivedAudioBytes pipe_bytes=$pipeWrittenBytes device_bytes=${deviceAcceptedBytes ?: "unknown"}"
 }
 
 internal class CallHistory(private val storage: Storage) {

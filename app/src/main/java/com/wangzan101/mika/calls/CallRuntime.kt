@@ -973,11 +973,12 @@ class CallRuntime(private val app: MikaApp) {
                         else "通话已收尾，Android 未确认挂断，已交还系统")
                 }
                 val reason = w.stopReason.value ?: "AI 已退出，电话由系统处理"
-                w.mediaCounters?.playbackDiagnostic()?.let { Log.d("MikaCallMedia", "playback $it") }
+                if (BuildConfig.DEBUG) w.mediaCounters.playbackDiagnostic()?.let { Log.d("MikaCallMedia", "playback $it") }
                 w.track?.let {
                     if (w.telecomActionIssued) {
                         val record = CallRecord(w.id, it.number, w.direction, w.activeAt ?: it.createdAt,
-                            System.currentTimeMillis(), reason, w.transcript.toList(), task = w.task)
+                            System.currentTimeMillis(), reason, w.transcript.toList(), task = w.task,
+                            audioReport = w.mediaCounters.recordReport())
                         scope.launch { records.append(record) }
                     }
                 }
@@ -1273,7 +1274,7 @@ class CallRuntime(private val app: MikaApp) {
         runCatching {
             helper.stopCallAudio(w.audioOwner)
             val stats = helper.callAudioStats(w.audioOwner) ?: return@runCatching false
-            w.mediaCounters?.outputShellAccepted(
+            w.mediaCounters.outputShellAccepted(
                 bytes = stats.getLong("upBytes", -1L),
                 zeroCount = stats.getLong("upWriteZeroCount", -1L),
                 zeroMaxMs = stats.getLong("upWriteZeroMaxMs", -1L),
@@ -1595,7 +1596,7 @@ class CallRuntime(private val app: MikaApp) {
         val stopReason = CallStopReason()
         var mediaStage = MediaStage.PREFLIGHT
         var mediaDiagnosticCount = 0
-        val mediaCounters = if (BuildConfig.DEBUG) CallMediaCounters() else null
+        val mediaCounters = CallMediaCounters(measureInputSignal = BuildConfig.DEBUG)
         var session: VolcRealtimeSession? = null
         val audioOwner = Binder()
         var audioHelper: IMikaShell? = null

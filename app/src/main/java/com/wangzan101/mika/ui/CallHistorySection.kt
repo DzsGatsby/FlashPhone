@@ -1,5 +1,8 @@
 package com.wangzan101.mika.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -188,7 +191,8 @@ private fun CallHistoryItem(
 ) {
     var showTask by rememberSaveable(record.id) { mutableStateOf(false) }
     var showTranscript by rememberSaveable(record.id) { mutableStateOf(false) }
-    val locale = LocalContext.current.resources.configuration.locales[0]
+    val context = LocalContext.current
+    val locale = context.resources.configuration.locales[0]
     val formatter = remember(locale) { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale) }
     val start = remember(record.startedAtMs, formatter) { formatter.format(Date(record.startedAtMs)) }
     val end = remember(record.endedAtMs, formatter) { formatter.format(Date(record.endedAtMs)) }
@@ -252,6 +256,17 @@ private fun CallHistoryItem(
                             record.transcript.forEach { CallTranscriptText(it) }
                         }
                     }
+                }
+                record.audioReport?.let { report ->
+                    val label = stringResource(R.string.diagnostics_copy)
+                    val copied = stringResource(R.string.diagnostics_copied)
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        if (clipboard != null) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText(label, report.supportSummary()))
+                            Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
+                        }
+                    }, modifier = Modifier.testTag("call-record-diagnostics-copy")) { Text(label) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = onMark, enabled = !busy, modifier = Modifier.weight(1f).testTag("call-history-mark")) {

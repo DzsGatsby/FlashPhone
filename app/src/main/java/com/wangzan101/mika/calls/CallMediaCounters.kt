@@ -2,8 +2,8 @@ package com.wangzan101.mika.calls
 
 import kotlin.math.abs
 
-/** Fixed-size, debug-only observations. Never retains PCM, event text or wall-clock timestamps. */
-internal class CallMediaCounters {
+/** Fixed-size observations. Never retains PCM, event text or wall-clock timestamps. */
+internal class CallMediaCounters(private val measureInputSignal: Boolean = true) {
     private var inputFramesAccepted = 0L
     private var inputBytesAccepted = 0L
     private var inputPeakMax = 0L
@@ -34,9 +34,12 @@ internal class CallMediaCounters {
     private var shellFlushMaxMs = -1L
     private var providerFailedEvents = 0L
     private var providerClosedEvents = 0L
+    private var completeUserTranscripts = 0L
+    private var lastObservedTurn = CallAudioReport.Turn.NONE
 
     /** Called only after sendPcm16 accepts the frame locally; not a server delivery acknowledgement. */
     fun inputAccepted(frame: ByteArray, acceptedAtNanos: Long) {
+        if (!measureInputSignal) return
         var peak = 0
         var sumSquares = 0L
         var offset = 0
@@ -98,10 +101,22 @@ internal class CallMediaCounters {
     @Synchronized
     fun eventReceived(event: VolcRealtimeEvent) {
         when (event) {
-            VolcRealtimeEvent.UserSpeaking -> userSpeakingEvents++
+            VolcRealtimeEvent.UserSpeaking -> {
+                userSpeakingEvents++
+                lastObservedTurn = CallAudioReport.Turn.SPEECH_DETECTED
+            }
             VolcRealtimeEvent.UserSpeechEnded -> userSpeechEndedEvents++
             is VolcRealtimeEvent.UserTranscript -> {
-                if (event.isFinal) userTranscriptFinalEvents++ else userTranscriptPartialEvents++
+                if (event.isFinal) {
+                    userTranscriptFinalEvents++
+                    if (event.isCompleteFinal) {
+                        completeUserTranscripts++
+                        lastObservedTurn = CallAudioReport.Turn.TRANSCRIPT_RECEIVED
+                    }
+                } else {
+                    userTranscriptPartialEvents++
+                    lastObservedTurn = CallAudioReport.Turn.SPEECH_DETECTED
+                }
             }
             VolcRealtimeEvent.AssistantAudioStarted -> assistantAudioStartedEvents++
             VolcRealtimeEvent.AssistantAudioEnded -> assistantAudioEndedEvents++
@@ -110,11 +125,25 @@ internal class CallMediaCounters {
             is VolcRealtimeEvent.Audio -> {
                 assistantAudioEvents++
                 assistantAudioBytes += event.pcm.size
+                if (event.pcm.isNotEmpty() && lastObservedTurn == CallAudioReport.Turn.TRANSCRIPT_RECEIVED) {
+                    lastObservedTurn = CallAudioReport.Turn.REPLY_AUDIO_RECEIVED
+                }
             }
             is VolcRealtimeEvent.Failed -> providerFailedEvents++
             VolcRealtimeEvent.Closed -> providerClosedEvents++
             else -> Unit
         }
+    }
+
+    /** An observation of the last provider turn, not proof of what either person heard. */
+    @Synchronized
+    fun recordReport(): CallAudioReport? {
+        if (lastObservedTurn == CallAudioReport.Turn.NONE && assistantAudioBytes == 0L &&
+            playbackShellAcceptedBytes < 0L) return null
+        return CallAudioReport(
+            userSpeakingEvents, completeUserTranscripts, lastObservedTurn, assistantAudioBytes, playbackWrittenBytes,
+            playbackShellAcceptedBytes.takeIf { it >= 0L },
+        )
     }
 
     @Synchronized

@@ -254,7 +254,7 @@ class VolcRealtimeSession internal constructor(
             }
         }
         if (phase != Phase.ACTIVE) return
-        val responseId = frame.string("response_id")?.takeIf { it.isNotEmpty() }
+        val responseId = frame.string("response_id")?.takeIf { it.isNotBlank() }
         when (type) {
             VolcRealtimeProtocol.USER_STARTED -> {
                 currentUserItem = frame.string("item_id")?.takeIf { it.isNotEmpty() }
@@ -321,6 +321,10 @@ class VolcRealtimeSession internal constructor(
                 publish(VolcRealtimeEvent.AssistantAudioEnded)
             }
             VolcRealtimeProtocol.CANCELED -> {
+                // A late cancellation for an older response must not flush the replacement.
+                val currentId = audioId
+                if (responseId != null && (responseId == interruptedAudioId ||
+                        (currentId != null && responseId != currentId))) return
                 interruptAudio()
                 publish(VolcRealtimeEvent.AssistantInterrupted)
             }

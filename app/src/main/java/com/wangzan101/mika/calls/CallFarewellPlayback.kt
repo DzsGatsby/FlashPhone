@@ -20,6 +20,9 @@ internal class CallFarewellPlayback {
     private var audioEnded = false
     private var goodbyeSpoken = false
 
+    // Includes queued and in-flight data, so a blocked writer never makes an epoch appear empty.
+    val hasPlaybackSinceFlush: Boolean get() = totalBytes > 0L
+
     fun afterPairedFlush() {
         epoch += 2
         totalBytes = 0

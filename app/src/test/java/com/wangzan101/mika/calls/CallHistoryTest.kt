@@ -92,13 +92,16 @@ class CallHistoryTest {
         )
         assertFalse(legacy.handled)
         assertNull(legacy.task)
+        assertNull(legacy.audioReport)
     }
 
     @Test fun outgoingTaskRoundTripsWithoutClaimingCompletionOrReusingItOnTheNextCall() = runBlocking {
         val task = CallTaskBrief("问清服务时间", listOf("周末开门吗？"), "门店", "不预约").validatedSnapshot()
-        val attempted = record(1).copy(direction = CallDirection.OUTGOING, result = "通话已结束", task = task)
+        val report = CallAudioReport(3, 3, CallAudioReport.Turn.TRANSCRIPT_RECEIVED, 2880, 1920, 1920)
+        val attempted = record(1).copy(direction = CallDirection.OUTGOING, result = "通话已结束", task = task, audioReport = report)
         val decoded = Json.decodeFromString<CallRecord>(Json.encodeToString(attempted))
         assertEquals(task, decoded.task)
+        assertEquals(report, decoded.audioReport)
         assertEquals("通话已结束", decoded.result)
         assertFalse(decoded.handled)
         assertFalse(decoded.toString().contains(task.goal))
@@ -110,6 +113,7 @@ class CallHistoryTest {
         val reopened = CallHistory(storage)
         reopened.load()
         assertNull(reopened.state.value.first().task)
+        assertNull(reopened.state.value.first().audioReport)
         assertEquals(task, reopened.state.value.last().task)
     }
 }
