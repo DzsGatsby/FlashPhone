@@ -286,6 +286,7 @@ def main():
         print("Dry run: no build, tag, release, or upload was performed.")
         return
 
+    subprocess.run([sys.executable, "tools/i18n/translations.py", "check"], cwd=ROOT, check=True, timeout=60)
     subprocess.run(GRADLE, cwd=ROOT, check=True, timeout=1800)
     clean_commit(commit)
     size, digest = verify_apk(aapt, apksigner, apk, version, code, expected_signer)
