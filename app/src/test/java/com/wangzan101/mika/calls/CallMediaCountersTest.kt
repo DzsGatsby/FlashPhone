@@ -85,6 +85,29 @@ class CallMediaCountersTest {
         assertFalse(report.supportSummary().contains("private"))
     }
 
+    @Test fun inputAfterTheLatestReplyIsMeasuredSeparatelyFromEarlierSpeechAndRecognitionFailures() {
+        val counters = CallMediaCounters()
+        counters.inputAccepted(pcm(400, -400), 100_000_000L)
+        counters.eventReceived(VolcRealtimeEvent.AssistantAudioEnded)
+        counters.inputAccepted(pcm(500, -500), 120_000_000L)
+        counters.eventReceived(VolcRealtimeEvent.AssistantAudioEnded)
+        counters.inputAccepted(pcm(0, 0), 140_000_000L)
+        counters.inputAccepted(pcm(450, -450), 160_000_000L)
+        counters.eventReceived(VolcRealtimeEvent.InputAudioCommitted)
+        counters.eventReceived(VolcRealtimeEvent.UserTranscriptionFailed)
+        counters.eventReceived(VolcRealtimeEvent.UserTranscriptionEmpty)
+        counters.outputShellAccepted(0, captureSilencedMs = 2_000L)
+
+        val report = checkNotNull(counters.recordReport())
+        assertEquals(2L, report.inputFramesAfterLastReply)
+        assertEquals(1L, report.inputSignalFramesAfterLastReply)
+        assertEquals(2_000L, report.captureSilencedMaxMs)
+        assertEquals(1L, report.recognitionFailures)
+        assertEquals(1L, report.emptyRecognitions)
+        assertEquals(1L, report.providerInputCommits)
+        assertEquals(0L, report.completeTranscripts)
+    }
+
     private fun pcm(vararg samples: Int): ByteArray = ByteArray(samples.size * 2) { index ->
         val sample = samples[index / 2]
         (if (index % 2 == 0) sample else sample shr 8).toByte()

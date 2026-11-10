@@ -80,6 +80,7 @@ internal fun shellAudioStopDiagnostic(reason: String?): String? = when (val code
     "Handset microphone was unmuted." -> "设备麦克风静音已解除，AI 已交还通话"
     "Cellular audio mode ended.", "Cellular audio ended." -> "运营商通话音频模式已结束，电话由系统处理"
     "Downlink consumer stopped draining audio." -> "运营商下行音频传输阻塞，电话由系统处理"
+    "Android silenced the cellular audio capture." -> "安卓停止向 AI 提供通话声音，已交还系统"
     "Uplink playback stopped accepting audio." -> "运营商上行音频播放无进展，电话由系统处理"
     "Helper released.", "Call audio owner died." -> "内置助手已释放电话音频，电话由系统处理"
     else -> when {

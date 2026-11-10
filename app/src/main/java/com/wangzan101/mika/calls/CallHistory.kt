@@ -43,13 +43,24 @@ data class CallAudioReport(
     val receivedAudioBytes: Long,
     val pipeWrittenBytes: Long,
     val deviceAcceptedBytes: Long?,
+    val inputFramesAfterLastReply: Long? = null,
+    val inputSignalFramesAfterLastReply: Long? = null,
+    val captureSilencedMaxMs: Long? = null,
+    val recognitionFailures: Long? = null,
+    val emptyRecognitions: Long? = null,
+    val providerInputCommits: Long? = null,
 ) {
     @Serializable
     enum class Turn { NONE, SPEECH_DETECTED, TRANSCRIPT_RECEIVED, REPLY_AUDIO_RECEIVED }
 
     fun supportSummary(): String = "Flash phone audio: speech_starts=$speechStarts " +
         "complete_transcripts=$completeTranscripts last_observed_turn=${lastObservedTurn.name} " +
-        "reply_bytes=$receivedAudioBytes pipe_bytes=$pipeWrittenBytes device_bytes=${deviceAcceptedBytes ?: "unknown"}"
+        "reply_bytes=$receivedAudioBytes pipe_bytes=$pipeWrittenBytes device_bytes=${deviceAcceptedBytes ?: "unknown"} " +
+        "input_frames_after_audio_done=${inputFramesAfterLastReply ?: "unknown"} " +
+        "input_frames_rms_gt_200_after_audio_done=${inputSignalFramesAfterLastReply ?: "unknown"} " +
+        "android_silenced_max_ms=${captureSilencedMaxMs ?: "unknown"} " +
+        "asr_failures=${recognitionFailures ?: "unknown"} asr_empty=${emptyRecognitions ?: "unknown"} " +
+        "provider_input_commits=${providerInputCommits ?: "unknown"}"
 }
 
 internal class CallHistory(private val storage: Storage) {

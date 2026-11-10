@@ -97,7 +97,8 @@ class CallHistoryTest {
 
     @Test fun outgoingTaskRoundTripsWithoutClaimingCompletionOrReusingItOnTheNextCall() = runBlocking {
         val task = CallTaskBrief("问清服务时间", listOf("周末开门吗？"), "门店", "不预约").validatedSnapshot()
-        val report = CallAudioReport(3, 3, CallAudioReport.Turn.TRANSCRIPT_RECEIVED, 2880, 1920, 1920)
+        val report = CallAudioReport(3, 3, CallAudioReport.Turn.TRANSCRIPT_RECEIVED, 2880, 1920, 1920,
+            inputFramesAfterLastReply = 50, inputSignalFramesAfterLastReply = 20, recognitionFailures = 1)
         val attempted = record(1).copy(direction = CallDirection.OUTGOING, result = "通话已结束", task = task, audioReport = report)
         val decoded = Json.decodeFromString<CallRecord>(Json.encodeToString(attempted))
         assertEquals(task, decoded.task)

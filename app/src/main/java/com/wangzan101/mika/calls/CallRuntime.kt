@@ -1281,6 +1281,7 @@ class CallRuntime(private val app: MikaApp) {
                 lastWriteAgeMs = stats.getLong("upLastWriteAgeMs", -1L),
                 playbackHeadFrames = stats.getLong("upPlaybackHeadFrames", -1L),
                 flushMaxMs = stats.getLong("upFlushMaxMs", -1L),
+                captureSilencedMs = if (stats.getBoolean("clientSilencedKnown")) stats.getLong("clientSilencedMaxMs", -1L) else -1L,
             )
             !stats.getBoolean("active") && stats.getBoolean("microphoneRestored")
         }.onFailure { debugMediaException(w, it) }.getOrDefault(false).also {
@@ -1596,7 +1597,7 @@ class CallRuntime(private val app: MikaApp) {
         val stopReason = CallStopReason()
         var mediaStage = MediaStage.PREFLIGHT
         var mediaDiagnosticCount = 0
-        val mediaCounters = CallMediaCounters(measureInputSignal = BuildConfig.DEBUG)
+        val mediaCounters = CallMediaCounters()
         var session: VolcRealtimeSession? = null
         val audioOwner = Binder()
         var audioHelper: IMikaShell? = null

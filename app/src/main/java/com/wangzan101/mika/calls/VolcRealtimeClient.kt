@@ -65,6 +65,10 @@ sealed interface VolcRealtimeEvent {
         val isCompleteFinal: Boolean = isFinal,
     ) : VolcRealtimeEvent
     data object UserSpeechEnded : VolcRealtimeEvent
+    /** Provider observations only; these do not start, stop, or retry a turn. */
+    data object InputAudioCommitted : VolcRealtimeEvent
+    data object UserTranscriptionEmpty : VolcRealtimeEvent
+    data object UserTranscriptionFailed : VolcRealtimeEvent
     data object AssistantAudioStarted : VolcRealtimeEvent
     data object AssistantAudioEnded : VolcRealtimeEvent
     data object AssistantInterrupted : VolcRealtimeEvent
@@ -256,6 +260,7 @@ class VolcRealtimeSession internal constructor(
         if (phase != Phase.ACTIVE) return
         val responseId = frame.string("response_id")?.takeIf { it.isNotBlank() }
         when (type) {
+            VolcRealtimeProtocol.INPUT_AUDIO_COMMITTED -> publish(VolcRealtimeEvent.InputAudioCommitted)
             VolcRealtimeProtocol.USER_STARTED -> {
                 currentUserItem = frame.string("item_id")?.takeIf { it.isNotEmpty() }
                 userText = StringBuilder()
@@ -286,11 +291,13 @@ class VolcRealtimeSession internal constructor(
                     isCompleteFinal = explicitFinal != null && explicitFinal.length <= MAX_TRANSCRIPT_CHARS,
                 ))
                 publish(VolcRealtimeEvent.UserSpeechEnded)
+                if (transcript.isBlank()) publish(VolcRealtimeEvent.UserTranscriptionEmpty)
             }
             VolcRealtimeProtocol.USER_FAILED -> {
                 currentUserItem = null
                 userText = StringBuilder()
                 publish(VolcRealtimeEvent.UserSpeechEnded)
+                publish(VolcRealtimeEvent.UserTranscriptionFailed)
             }
             VolcRealtimeProtocol.TEXT_DELTA -> frame.string("delta")?.takeIf { it.isNotEmpty() }?.let {
                 publish(VolcRealtimeEvent.AssistantTranscript(it))

@@ -22,6 +22,39 @@ class ShellCallAudioTest {
     }
 
     @Test
+    fun continuousFreshFrameworkSilenceTripsAtTwoSeconds() {
+        val capture = ShellCallAudio.CaptureSilenceDiagnostics()
+        for (atMs in 0L until 2_000L step 100L) assertFalse(capture.observe(true, atMs))
+        assertFalse(capture.observe(true, 1_999L))
+        assertEquals(1_999L, capture.maxMs)
+        assertTrue(capture.observe(true, 2_000L))
+        assertEquals(2_000L, capture.maxMs)
+    }
+
+    @Test
+    fun normalAndUnknownObservationsBreakSilencingWithoutExtendingTheReportedMaximum() {
+        val capture = ShellCallAudio.CaptureSilenceDiagnostics()
+        for (atMs in 0L..1_800L step 100L) assertFalse(capture.observe(true, atMs))
+        assertFalse(capture.observe(false, 1_900L))
+        for (atMs in 2_000L..3_700L step 100L) assertFalse(capture.observe(true, atMs))
+        assertFalse(capture.observe(null, 3_800L))
+        for (atMs in 3_900L..5_700L step 100L) assertFalse(capture.observe(true, atMs))
+        for (atMs in 5_800L..10_000L step 100L) assertFalse(capture.observe(false, atMs))
+        assertFalse(capture.observe(null, 20_000L))
+        assertEquals(1_800L, capture.maxMs)
+    }
+
+    @Test
+    fun missingPollsCannotTurnOldSilencingIntoAContinuousInterval() {
+        val capture = ShellCallAudio.CaptureSilenceDiagnostics()
+        for (atMs in 0L..1_900L step 100L) assertFalse(capture.observe(true, atMs))
+        for (atMs in 2_301L..4_201L step 100L) assertFalse(capture.observe(true, atMs))
+        assertEquals(1_900L, capture.maxMs)
+        assertTrue(capture.observe(true, 4_301L))
+        assertEquals(2_000L, capture.maxMs)
+    }
+
+    @Test
     fun playbackDiagnosticsTracksPendingZeroWritesAndFreezesAtStop() {
         val stats = ShellCallAudio.PlaybackDiagnostics()
         assertEquals(-1L, stats.lastWriteAgeMs(0L))

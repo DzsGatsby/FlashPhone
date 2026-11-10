@@ -143,17 +143,21 @@ class VolcRealtimeClientTest {
         }
     }
 
-    @Test fun onlyExplicitUntruncatedUserCompletionIsACompleteFinal() = runBlocking {
+    @Test fun userTurnObservationsDistinguishCommitEmptyAndFailureWithoutSendingCommands() = runBlocking {
         withServer { server, http ->
             val prefix = "conversation.item.input_audio_transcription"
             val limit = 16_384
             val longText = "再见" + "啊".repeat(limit)
+            val sent = Channel<String>(8)
             server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onMessage(webSocket: WebSocket, text: String) {
-                    when (Json.parseToJsonElement(text).jsonObject.type) {
+                    val type = Json.parseToJsonElement(text).jsonObject.type
+                    check(sent.trySend(type).isSuccess)
+                    when (type) {
                         "session.create" -> listOf(
                             """{"type":"session.created"}""",
                             """{"type":"$prefix.delta","delta":"再见"}""",
+                            """{"type":"input_audio_buffer.committed"}""",
                             """{"type":"$prefix.completed"}""",
                             """{"type":"$prefix.completed","transcript":"$longText"}""",
                             """{"type":"$prefix.completed","transcript":"   "}""",
@@ -171,13 +175,16 @@ class VolcRealtimeClientTest {
             }))
             val expected = listOf(
                 VolcRealtimeEvent.UserTranscript("再见", isFinal = false),
+                VolcRealtimeEvent.InputAudioCommitted,
                 VolcRealtimeEvent.UserTranscript("再见", isFinal = true, isCompleteFinal = false),
                 VolcRealtimeEvent.UserSpeechEnded,
                 VolcRealtimeEvent.UserTranscript(longText.take(limit), isFinal = true, isCompleteFinal = false),
                 VolcRealtimeEvent.UserSpeechEnded,
                 VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserTranscriptionEmpty,
                 VolcRealtimeEvent.UserTranscript("再见", isFinal = false),
                 VolcRealtimeEvent.UserSpeechEnded,
+                VolcRealtimeEvent.UserTranscriptionFailed,
                 VolcRealtimeEvent.UserTranscript("再见", isFinal = true),
                 VolcRealtimeEvent.UserSpeechEnded,
             )
@@ -188,6 +195,9 @@ class VolcRealtimeClientTest {
                 session.close()
                 withTimeout(3_000) { session.awaitClosed() }
             }
+            assertEquals("session.create", sent.tryReceive().getOrThrow())
+            assertEquals("session.close", sent.tryReceive().getOrThrow())
+            assertTrue(sent.tryReceive().isFailure)
         }
     }
 

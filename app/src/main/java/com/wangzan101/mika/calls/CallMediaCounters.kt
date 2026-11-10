@@ -36,6 +36,12 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
     private var providerClosedEvents = 0L
     private var completeUserTranscripts = 0L
     private var lastObservedTurn = CallAudioReport.Turn.NONE
+    private var framesWhenLastAudioEnded: Long? = null
+    private var signalFramesWhenLastAudioEnded: Long? = null
+    private var captureSilencedMaxMs: Long? = null
+    private var recognitionFailures = 0L
+    private var emptyRecognitions = 0L
+    private var providerInputCommits = 0L
 
     /** Called only after sendPcm16 accepts the frame locally; not a server delivery acknowledgement. */
     fun inputAccepted(frame: ByteArray, acceptedAtNanos: Long) {
@@ -80,6 +86,7 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
         lastWriteAgeMs: Long = -1L,
         playbackHeadFrames: Long = -1L,
         flushMaxMs: Long = -1L,
+        captureSilencedMs: Long = -1L,
     ) {
         playbackShellAcceptedBytes = maxOf(playbackShellAcceptedBytes, bytes)
         shellWriteZeroCount = maxOf(shellWriteZeroCount, zeroCount)
@@ -87,6 +94,7 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
         if (lastWriteAgeMs >= 0) shellLastWriteAgeMs = lastWriteAgeMs
         if (playbackHeadFrames >= 0) shellPlaybackHeadFrames = playbackHeadFrames
         shellFlushMaxMs = maxOf(shellFlushMaxMs, flushMaxMs)
+        if (captureSilencedMs >= 0L) captureSilencedMaxMs = maxOf(captureSilencedMaxMs ?: 0L, captureSilencedMs)
     }
 
     /** Only numeric fields; a successful pipe or AudioTrack write does not prove the far end heard audio. */
@@ -106,6 +114,9 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
                 lastObservedTurn = CallAudioReport.Turn.SPEECH_DETECTED
             }
             VolcRealtimeEvent.UserSpeechEnded -> userSpeechEndedEvents++
+            VolcRealtimeEvent.UserTranscriptionFailed -> recognitionFailures++
+            VolcRealtimeEvent.UserTranscriptionEmpty -> emptyRecognitions++
+            VolcRealtimeEvent.InputAudioCommitted -> providerInputCommits++
             is VolcRealtimeEvent.UserTranscript -> {
                 if (event.isFinal) {
                     userTranscriptFinalEvents++
@@ -119,7 +130,13 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
                 }
             }
             VolcRealtimeEvent.AssistantAudioStarted -> assistantAudioStartedEvents++
-            VolcRealtimeEvent.AssistantAudioEnded -> assistantAudioEndedEvents++
+            VolcRealtimeEvent.AssistantAudioEnded -> {
+                assistantAudioEndedEvents++
+                if (measureInputSignal) {
+                    framesWhenLastAudioEnded = inputFramesAccepted
+                    signalFramesWhenLastAudioEnded = inputRmsOver200Frames
+                }
+            }
             VolcRealtimeEvent.AssistantInterrupted -> assistantInterruptedEvents++
             VolcRealtimeEvent.AssistantTextEnded -> assistantTextEndedEvents++
             is VolcRealtimeEvent.Audio -> {
@@ -139,10 +156,17 @@ internal class CallMediaCounters(private val measureInputSignal: Boolean = true)
     @Synchronized
     fun recordReport(): CallAudioReport? {
         if (lastObservedTurn == CallAudioReport.Turn.NONE && assistantAudioBytes == 0L &&
-            playbackShellAcceptedBytes < 0L) return null
+            playbackShellAcceptedBytes < 0L && captureSilencedMaxMs == null &&
+            recognitionFailures == 0L && emptyRecognitions == 0L && providerInputCommits == 0L) return null
         return CallAudioReport(
             userSpeakingEvents, completeUserTranscripts, lastObservedTurn, assistantAudioBytes, playbackWrittenBytes,
             playbackShellAcceptedBytes.takeIf { it >= 0L },
+            inputFramesAfterLastReply = framesWhenLastAudioEnded?.let { inputFramesAccepted - it },
+            inputSignalFramesAfterLastReply = signalFramesWhenLastAudioEnded?.let { inputRmsOver200Frames - it },
+            captureSilencedMaxMs = captureSilencedMaxMs,
+            recognitionFailures = recognitionFailures,
+            emptyRecognitions = emptyRecognitions,
+            providerInputCommits = providerInputCommits,
         )
     }
 

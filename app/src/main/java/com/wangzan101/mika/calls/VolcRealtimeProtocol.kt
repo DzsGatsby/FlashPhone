@@ -38,6 +38,7 @@ internal object VolcRealtimeProtocol {
 
     const val SESSION_CREATED = "session.created"
     const val SESSION_CLOSED = "session.closed"
+    const val INPUT_AUDIO_COMMITTED = "input_audio_buffer.committed"
     const val USER_STARTED = "conversation.item.input_audio_transcription.started"
     const val USER_DELTA = "conversation.item.input_audio_transcription.delta"
     const val USER_COMPLETED = "conversation.item.input_audio_transcription.completed"

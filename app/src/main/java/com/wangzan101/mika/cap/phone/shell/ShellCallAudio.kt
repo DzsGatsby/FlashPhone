@@ -228,6 +228,29 @@ internal class ShellCallAudio(private val context: Context) {
         val deviceEncoding: Int,
     )
 
+    /** Counts only intervals corroborated by fresh, consecutive framework observations. */
+    internal class CaptureSilenceDiagnostics {
+        var maxMs = 0L
+            private set
+        private var firstSilencedAtMs = -1L
+        private var lastSilencedAtMs = -1L
+
+        fun observe(silenced: Boolean?, atMs: Long): Boolean {
+            if (silenced != true) {
+                firstSilencedAtMs = -1L
+                lastSilencedAtMs = -1L
+                return false
+            }
+            if (lastSilencedAtMs < 0L || atMs - lastSilencedAtMs !in 0L..MAX_CAPTURE_SILENCE_POLL_GAP_MS) {
+                firstSilencedAtMs = atMs
+            }
+            lastSilencedAtMs = atMs
+            val spanMs = atMs - firstSilencedAtMs
+            maxMs = maxOf(maxMs, spanMs)
+            return spanMs >= MAX_CAPTURE_SILENCED_MS
+        }
+    }
+
     /** Scalar uplink observations only. Session serializes access under its I/O lock. */
     internal class PlaybackDiagnostics {
         var writeZeroCount = 0L
@@ -306,6 +329,7 @@ internal class ShellCallAudio(private val context: Context) {
     ) {
         private val io = Any()
         private val playbackDiagnostics = PlaybackDiagnostics()
+        private val captureSilence = CaptureSilenceDiagnostics()
         private var closed = false
         private var downBytes = 0L
         private var upBytes = 0L
@@ -362,11 +386,11 @@ internal class ShellCallAudio(private val context: Context) {
         private fun updateRoutes() {
             rxDevice = record.routedDevice?.type ?: -1
             txDevice = track.routedDevice?.type ?: -1
-            try {
+            val observation = try {
                 record.activeRecordingConfiguration?.let { config ->
                     val client = config.clientFormat
                     val device = config.format
-                    val observation = RecordingDiagnostics(
+                    RecordingDiagnostics(
                         config.isClientSilenced,
                         config.clientAudioSource,
                         client.sampleRate,
@@ -376,18 +400,23 @@ internal class ShellCallAudio(private val context: Context) {
                         device.channelCount,
                         device.encoding,
                     )
-                    recordingDiagnostics = observation
-                    clientSilencedEver = clientSilencedEver || observation.silenced
                 }
             } catch (_: Exception) {
-                // Diagnostics may be unavailable on a vendor ROM. Keep the last good observation.
+                null
             }
+            // Retain the last known diagnostic, but never let it extend the live guard.
+            if (observation != null) {
+                recordingDiagnostics = observation
+                clientSilencedEver = clientSilencedEver || observation.silenced
+            }
+            val captureSilenced = captureSilence.observe(observation?.silenced, SystemClock.elapsedRealtime())
             check(rxDevice < 0 || rxDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
                 "Downlink unexpectedly routed to device type $rxDevice."
             }
             check(txDevice < 0 || txDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
                 "Uplink unexpectedly routed to device type $txDevice."
             }
+            check(!captureSilenced) { "Android silenced the cellular audio capture." }
         }
 
         fun launch() {
@@ -544,6 +573,7 @@ internal class ShellCallAudio(private val context: Context) {
                 putBoolean("clientSilencedKnown", config != null)
                 putBoolean("clientSilenced", config?.silenced == true)
                 putBoolean("clientSilencedEver", clientSilencedEver)
+                putLong("clientSilencedMaxMs", captureSilence.maxMs)
                 putInt("clientSource", config?.source ?: -1)
                 putInt("clientRate", config?.clientRate?.takeIf { it > 0 } ?: -1)
                 putInt("clientChannels", config?.clientChannels?.takeIf { it > 0 } ?: -1)
@@ -637,6 +667,8 @@ internal class ShellCallAudio(private val context: Context) {
         private const val DEVICE_CHECK_MS = 100L
         private const val ROUTE_TIMEOUT_MS = 700L
         private const val MAX_CAPTURE_STALL_MS = 500L
+        private const val MAX_CAPTURE_SILENCED_MS = 2_000L
+        private const val MAX_CAPTURE_SILENCE_POLL_GAP_MS = DEVICE_CHECK_MS * 3
         private const val MAX_UPLINK_WRITE_STALL_MS = 1_500L
         private const val MAX_FLUSH_BYTES = 256 * 1024
         private val PIPE_CLOSED get() = OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL

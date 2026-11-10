@@ -94,6 +94,8 @@ class TelecomMuteLeaseTest {
     @Test fun shellReasonIsSpecificButNeverLeaksRawContent() {
         assertEquals("设备麦克风静音已解除，AI 已交还通话",
             shellAudioStopDiagnostic("Handset microphone was unmuted."))
+        assertEquals("安卓停止向 AI 提供通话声音，已交还系统",
+            shellAudioStopDiagnostic("Android silenced the cellular audio capture."))
         assertEquals("设备上行未路由至运营商通话，电话由系统处理",
             shellAudioStopDiagnostic("Uplink did not route to the telephony device (private diagnostic)."))
         assertNull(shellAudioStopDiagnostic("unknown private diagnostic"))
