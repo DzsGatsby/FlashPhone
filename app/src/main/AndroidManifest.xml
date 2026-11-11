@@ -66,6 +66,19 @@
                 android:value="Keeps the user-enabled incoming call assistant available while the screen is locked and carries one user-confirmed outgoing call across screen lock, with a visible ongoing notification and no idle audio capture" />
         </service>
 
+        <service android:name=".calls.remote.CallDeviceAgentService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled authenticated outbound device connection for remote cellular call tasks, with a persistent notification; no general application automation or idle audio capture" />
+        </service>
+        <receiver android:name=".calls.remote.CallDeviceAgentReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <service android:name=".about.UpdateJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
         <receiver android:name=".calls.CallNotificationAction" android:exported="false" />
         <receiver android:name=".setup.PairingCodeReceiver" android:exported="false" />

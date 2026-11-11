@@ -21,6 +21,9 @@ import android.telephony.TelephonyManager
 import android.util.Log
 import com.wangzan101.mika.BuildConfig
 import com.wangzan101.mika.MikaApp
+import com.wangzan101.mika.calls.remote.validatedDeviceTask
+import com.wangzan101.mika.calls.remote.RemoteCallHandle
+import com.wangzan101.mika.calls.remote.RemoteCallSnapshot
 import com.wangzan101.mika.calls.instructions.CallInstructionStore
 import com.wangzan101.mika.shell.IMikaShell
 import kotlinx.coroutines.CancellationException
@@ -113,6 +116,7 @@ class CallRuntime(private val app: MikaApp) {
     private var configuring = false
     private var detail: String? = null
     private var work: Work? = null
+    private val remoteCalls = linkedMapOf<String, RemoteCallHandle>()
     private var audioReady = false
     private var audioDetail: String? = null
     private var probeEpoch = 0
@@ -333,7 +337,7 @@ class CallRuntime(private val app: MikaApp) {
         standbyService = null
         standbyRunning.value = false
         lockedDial?.let { finishLockedDial(it, "后台电话服务停止，未执行锁屏拨出") }
-        if (work?.let { it.direction == CallDirection.OUTGOING ||
+        if (work?.let { (it.direction == CallDirection.OUTGOING && it.remote == null) ||
                 (it.automatic && it.answerSent && !interactiveForeground()) } == true) {
             cancelWork("后台电话服务已停止，通话由系统处理")
         }
@@ -455,6 +459,15 @@ class CallRuntime(private val app: MikaApp) {
         } else file
     }
 
+    internal suspend fun exportRecordingForRemote(workId: String): File? = onMain {
+        if (history.value.none { it.id == workId && it.recording?.id == workId }) return@onMain null
+        val file = recordings.exportFile(workId)
+        if (history.value.none { it.id == workId && it.recording?.id == workId }) {
+            file?.let { recordings.closeExport(it) }; null
+        } else file
+    }
+    internal suspend fun closeRemoteRecording(file: File) { recordings.closeExport(file) }
+
     fun closeRecording(file: File) { scope.launch { runCatching { recordings.closePlayback(file) } } }
 
     private suspend fun pruneRecordings() = recordingMetadataLock.withLock {
@@ -575,9 +588,67 @@ class CallRuntime(private val app: MikaApp) {
         }
     }
 
-    suspend fun dial(number: String, simId: String? = null, task: CallTaskBrief? = null): CallActionResult = onMain {
+    suspend fun dial(number: String, simId: String? = null, task: CallTaskBrief? = null): CallActionResult =
+        dialInternal(number, simId, task, null)
+
+    /** Only the enrolled phone-specific agent can supply this lease; no durable outgoing replay. */
+    internal suspend fun startRemoteDial(taskId: String, number: String, simId: String?, task: CallTaskBrief,
+        expiresAt: Long, authorized: () -> Boolean): RemoteCallHandle = onMain {
+        check(taskId !in remoteCalls) { "远程任务已存在" }
+        check(remoteCalls.values.none { !it.state.value.terminal }) { "已有远程电话任务" }
+        val handle = RemoteCallHandle(taskId, expiresAt, authorized)
+        remoteCalls[taskId] = handle
+        scope.launch {
+            try {
+                val result = dialInternal(number, simId, task, handle)
+                if (handle.state.value.workId == null) handle.update(handle.state.value.copy(phase = "failed",
+                    reason = result.message, workFinished = true))
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                if (handle.state.value.workId == null) handle.update(handle.state.value.copy(phase = "failed",
+                    reason = "远程电话未能启动", workFinished = true))
+            }
+        }
+        handle
+    }
+
+    internal suspend fun controlRemoteCall(taskId: String, expectedCallId: String?, hangUp: Boolean): CallActionResult = onMain {
+        val handle = remoteCalls[taskId] ?: return@onMain fail("本设备没有该远程电话任务")
+        val snapshot = handle.state.value
+        if (!snapshot.acceptsControl(expectedCallId, hangUp)) return@onMain fail(CALL_CHANGED)
+        val active = work?.takeIf { it.remote === handle }
+        if (hangUp) {
+            if (expectedCallId == null || liveCalls().singleOrNull()?.id != expectedCallId) return@onMain fail(CALL_CHANGED)
+            hangup(expectedCallId)
+        } else {
+            handle.cancelRequested = true
+            if (active == null) {
+                if (!snapshot.issued) {
+                    handle.update(snapshot.copy(phase = "canceled", workFinished = true, reason = "远程任务已取消，未拨号"))
+                    return@onMain ok("远程任务已取消，未拨号")
+                }
+                return@onMain fail("该任务的 AI 已退出")
+            }
+            active.track?.suppressed = true
+            val stopped = cancelWork("远程机主已取消 AI 任务，电话由系统处理")
+            if (awaitCleanup(stopped)) ok("AI 已停止；取消不会自动挂断电话") else fail("AI 已停止，音频恢复尚未确认")
+        }
+    }
+
+    internal suspend fun stopRemoteWork() = onMain {
+        if (work?.remote != null) {
+            work?.remote?.cancelRequested = true
+            awaitCleanup(cancelWork("远程执行已关闭，电话由系统处理"))
+        }
+    }
+
+    internal suspend fun releaseRemoteHandle(taskId: String) = onMain {
+        remoteCalls[taskId]?.takeIf { it.state.value.terminal && it.state.value.workFinished }?.let { remoteCalls.remove(taskId) }
+    }
+
+    private suspend fun dialInternal(number: String, simId: String?, task: CallTaskBrief?, remote: RemoteCallHandle?): CallActionResult = onMain {
         val taskSnapshot = try {
-            task?.validatedSnapshot()
+            if (remote != null && task != null) validatedDeviceTask(task) else task?.validatedSnapshot()
         } catch (e: IllegalArgumentException) {
             return@onMain report(e.message ?: "本次拨打交代无效")
         }
@@ -602,7 +673,11 @@ class CallRuntime(private val app: MikaApp) {
                 else -> "请选择一张有效的 SIM，或明确选择系统默认 SIM"
             })
         val sim = sims.single { it.info.id == picked.id }
-        val attempt = Work(CallDirection.OUTGOING, config, requestedNumber = normalized, sim = sim, task = taskSnapshot)
+        if (remote != null && (!remote.allowed() || System.currentTimeMillis() >= remote.expiresAt)) {
+            return@onMain report("远程执行未开启或任务已过期，未拨号")
+        }
+        val attempt = Work(CallDirection.OUTGOING, config, requestedNumber = normalized, sim = sim, task = taskSnapshot, remote = remote)
+        remote?.update(RemoteCallSnapshot(workId = attempt.id))
         startWork(attempt)
         awaitResult(attempt)
     }
@@ -877,6 +952,11 @@ class CallRuntime(private val app: MikaApp) {
     internal fun onCallRemoved(service: MikaInCallService, call: Call) {
         val removed = tracked[call]?.takeIf { it.service === service } ?: return
         tracked.remove(call)
+        remoteCalls.values.filter { it.state.value.callId == removed.id && !it.state.value.terminal }.forEach { handle ->
+            val ended = confirmedEnded(removed)
+            handle.update(handle.state.value.copy(phase = if (ended) "ended" else "interrupted", carrierEnded = ended,
+                aiActive = false, reason = if (ended) callEndMessage(removed) else "Android 通话回调已断开，结束状态未知"))
+        }
         if (work?.track === removed) cancelWork(
             if (confirmedEnded(removed)) callEndMessage(removed) else "Android 通话状态已断开，电话由系统处理",
         )
@@ -916,6 +996,7 @@ class CallRuntime(private val app: MikaApp) {
 
     /** A user-confirmed outgoing attempt owns a temporary lease, independent of auto-answer. */
     private suspend fun ensureOutgoingForegroundService(w: Work) {
+        if (w.remote != null) { requireOutgoingForegroundService(w); return }
         if (standbyService == null) {
             if (!requestCallForegroundService(incoming = false)) {
                 throw CallProblem(standbyStartError ?: "外呼后台电话服务未能启动，未拨号")
@@ -931,8 +1012,9 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     private fun requireOutgoingForegroundService(w: Work) {
-        if (work !== w || standbyService?.leaseAvailable != true || !hasOutgoingForegroundWork() ||
-            !CallStandbyService.notificationsAvailable(app)) {
+        val leaseReady = if (w.remote != null) w.remote.allowed() else
+            standbyService?.leaseAvailable == true && CallStandbyService.notificationsAvailable(app)
+        if (work !== w || !leaseReady || !hasOutgoingForegroundWork()) {
             throw CallProblem(standbyStartError ?: "外呼后台电话服务不可用，AI 未执行后续操作")
         }
     }
@@ -960,16 +1042,21 @@ class CallRuntime(private val app: MikaApp) {
                     .getOrElse { throw CallProblem("无法读取电话交代，未由 AI 操作电话") }
             }
             validateTarget(w)
+            val realtimeConfig = try {
+                VolcRealtimeConfig(
+                    systemPrompt = CallPolicy.prompt(w.config.systemPrompt, w.direction, ownerRules, task = w.task),
+                    speaker = w.config.speaker,
+                )
+            } catch (_: IllegalArgumentException) {
+                throw CallProblem("本次目标与已保存交代合计过长，未由 AI 接管；请缩短后重新确认任务")
+            }
             val session = startCallSession(
                 direction = w.direction,
                 connect = {
                     validateSessionTarget(w, helper)
                     w.mediaStage = MediaStage.VOLC_CONNECT
                     val connected = withTimeoutOrNull(5_000L) {
-                        VolcRealtimeClient().connect(credentials, VolcRealtimeConfig(
-                            systemPrompt = CallPolicy.prompt(w.config.systemPrompt, w.direction, ownerRules, task = w.task),
-                            speaker = w.config.speaker,
-                        )).also { w.session = it } // Adopt before the timeout/cancellation return boundary.
+                        VolcRealtimeClient().connect(credentials, realtimeConfig).also { w.session = it } // Adopt before the timeout/cancellation return boundary.
                     } ?: throw CallProblem("火山实时语音连接超时，未由 AI 接管")
                     if (!connected.setMuted(true)) throw CallProblem("火山实时语音未进入就绪状态")
                     validateSessionTarget(w, helper)
@@ -1012,6 +1099,7 @@ class CallRuntime(private val app: MikaApp) {
                             putBundle(TelecomManager.EXTRA_OUTGOING_CALL_EXTRAS, Bundle().apply { putString(TOKEN, w.id) })
                         }
                         validateLockedDial(w)
+                        validateRemoteDial(w)
                         requireOutgoingForegroundService(w)
                         w.placed = true
                         w.telecomActionIssued = true
@@ -1101,6 +1189,18 @@ class CallRuntime(private val app: MikaApp) {
                         finishLockedDial(it, reason, cancelUnplacedWork = false)
                     }
                     work = null
+                    w.remote?.let { handle ->
+                        val before = handle.state.value
+                        handle.update(before.copy(workFinished = true, issued = w.telecomActionIssued,
+                            callId = w.track?.id ?: before.callId, aiActive = false, reason = reason,
+                            phase = when {
+                                before.carrierEnded -> "ended"
+                                !w.telecomActionIssued -> if (handle.cancelRequested) "canceled" else "failed"
+                                w.track != null && confirmedEnded(w.track!!) -> "ended"
+                                w.track == null -> "interrupted"
+                                else -> "handed_off"
+                            }, carrierEnded = before.carrierEnded || (w.track?.let(::confirmedEnded) == true)))
+                    }
                     detail = if (restored) reason else "$reason；音频恢复尚未确认"
                     if (w.lockedDialTicket != null) lockedDialDetail = detail
                     stopBackgroundStandbyIfUnneeded()
@@ -1484,6 +1584,15 @@ class CallRuntime(private val app: MikaApp) {
         } else {
             if (liveCalls().isNotEmpty()) throw CallProblem("已有通话，未拨号")
             validateLockedDial(w)
+            validateRemoteDial(w)
+        }
+    }
+
+    private fun validateRemoteDial(w: Work) {
+        w.remote?.let { handle ->
+            if (!handle.allowed() || remoteCalls[handle.taskId] !== handle || System.currentTimeMillis() >= handle.expiresAt) {
+                throw CallProblem("远程拨号授权已失效或任务已过期，未拨号")
+            }
         }
     }
 
@@ -1538,6 +1647,27 @@ class CallRuntime(private val app: MikaApp) {
         withTimeoutOrNull(timeout) { changes.first { test() }; true } == true
 
     private fun publish() {
+        // Real Telecom termination is independent of the AI work/history lifetime.
+        remoteCalls.values.forEach { handle ->
+            val old = handle.state.value
+            if (!old.terminal) {
+                val owned = work?.takeIf { it.remote === handle }
+                val target = owned?.track ?: tracked.values.singleOrNull { it.id == old.callId }
+                val ended = target?.let(::confirmedEnded) == true
+                handle.update(old.copy(workId = owned?.id ?: old.workId, callId = target?.id ?: old.callId,
+                    issued = owned?.telecomActionIssued ?: old.issued, carrierEnded = ended,
+                    aiActive = owned?.aiActive == true && owned.stopReason.value == null,
+                    phase = when {
+                        ended -> "ended"
+                        owned == null && old.workFinished -> "handed_off"
+                        owned?.aiActive == true && owned.stopReason.value == null -> "ai_active"
+                        target?.phase == CallPhase.ACTIVE -> "active"
+                        target?.phase == CallPhase.RINGING -> "ringing"
+                        owned?.placed == true -> "dialing"
+                        else -> "preparing"
+                    }))
+            }
+        }
         val config = settings.state.value
         val enabled = config.enabled
         val calls = if (enabled) liveCalls() else emptyList()
@@ -1742,6 +1872,7 @@ class CallRuntime(private val app: MikaApp) {
         val expectedCallId: String? = null,
         val task: CallTaskBrief? = null,
         val lockedDialTicket: LockedDialGate.Ticket? = null,
+        val remote: RemoteCallHandle? = null,
     ) {
         val id = UUID.randomUUID().toString()
         val result = CompletableDeferred<CallActionResult>()

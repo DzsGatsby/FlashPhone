@@ -26,11 +26,19 @@ English · [简体中文](docs/readme/README.zh-CN.md) · [繁體中文](docs/re
 
 Already installed? Use **About → Check for updates** (the top-right info icon; older versions use Settings → About), or install the signed APK over the existing app to keep your settings and call records. See the [release and migration guide (简体中文)](docs/app-updates.md).
 
+## Multiple devices and agent tools
+
+Version 1.1.0 adds an optional private control plane: Android, iPhone and desktop browsers share one owner's device list, telephone tasks, transcripts and protected recordings. Pair an Android execution device once and explicitly enable remote telephone tasks in its settings. The browser and the seven `flashphone_*` MCP tools use the same tasks, including their final results; a dial request is not reported as a completed conversation. See the [setup and usage guide (简体中文)](tools/control-plane/README.md) and [Codex / Grok Bot skill](tools/flashphone-client/skill/SKILL.md).
+
+The Mac/iPhone bridge is experimental and currently blocked by Apple's iCloud/FaceTime account requirement on the development machine. Its actual call controls and two-way carrier audio remain unverified; the bridge advertises no dial capability until these checks pass. The web console on an iPhone can already act as a controller independently of iPhone call execution. [Mac bridge status and setup](tools/mac-bridge/README.md).
+
 ## Service and data
 
 Flash phone uses your existing SIM and keeps your usual dialer available. During an AI call, voice audio goes to the configured voice service. The AI-managed phase is automatically recorded locally, with caller capture on the left and AI audio accepted by the device's phone track on the right. Recording stops at manual takeover. Recordings and transcripts are encrypted on the device; local playback does not upload recordings. Track acceptance does not prove the other party heard every sample, since an interruption can discard queued audio. Carrier and voice service charges may apply.
 
 Recordings are limited to 600 seconds each, 50 files and 200 MiB in total; the oldest recordings are evicted as needed. After pairing and supported grants, automatic recovery attempts to reopen wireless debugging on connected, system-trusted Wi-Fi and restore previously authorized incoming standby after boot, unlock or update. This does not bypass Wi-Fi trust, force-stop, or manufacturer restrictions and does not grant root. The new recording and recovery paths have offline checks; real-phone recording and recovery still need device validation.
+
+When remote telephone tasks are explicitly enabled, that task's transcript and available recording are also uploaded over HTTPS to the owner's authenticated control plane and private R2 bucket. They have no public sharing URL. This remote copy is separate from ordinary local playback and has its own bounded retention. The control plane routes tasks and results; it does not relay voice audio or run a voice model.
 
 ## Project and license
 

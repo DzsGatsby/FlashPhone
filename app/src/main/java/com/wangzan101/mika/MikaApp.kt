@@ -85,6 +85,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
 
     /** Native cellular AI calls: the local settings screen owns the opt-in and credentials. */
     val calls by lazy { com.wangzan101.mika.calls.CallRuntime(this) }
+    val callDeviceAgent by lazy { com.wangzan101.mika.calls.remote.CallDeviceAgent(this) }
     val callPort by lazy { com.wangzan101.mika.calls.AndroidPhoneCallPort(calls) }
 
     /** 微信渠道：凭证、监听和渠道适配器整个进程一份；任务仍由 TaskService 执行。 */
@@ -375,6 +376,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         // A Telecom cold start needs only the audio helper, never the old assistant runtime.
         phone.shellManager.start()
         phone.callRecovery.start()
+        callDeviceAgent.restoreAuthorizedConnection()
         scope.launch(Dispatchers.IO) {
             runCatching { com.wangzan101.mika.about.ApkUpdater(this@MikaApp).dropInstalled() }
         }

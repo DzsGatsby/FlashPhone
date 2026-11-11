@@ -111,8 +111,15 @@ class ManifestProvidersTest {
             return (0 until nodes.length).map { (nodes.item(it) as Element).getAttributeNS(androidNs, "name") }.toSet()
         }
         assertEquals(setOf(".ui.MainActivity"), names("activity"))
-        assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".about.UpdateJobService"), names("service"))
-        assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver", ".cap.phone.setup.PhoneCallRestoreReceiver"), names("receiver"))
+        assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".calls.remote.CallDeviceAgentService", ".about.UpdateJobService"), names("service"))
+        assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver", ".cap.phone.setup.PhoneCallRestoreReceiver", ".calls.remote.CallDeviceAgentReceiver"), names("receiver"))
+        val remote = doc.getElementsByTagName("service").let { nodes ->
+            (0 until nodes.length).map { nodes.item(it) as Element }
+                .single { it.getAttributeNS(androidNs, "name") == ".calls.remote.CallDeviceAgentService" }
+        }
+        assertEquals("false", remote.getAttributeNS(androidNs, "exported"))
+        assertEquals("specialUse", remote.getAttributeNS(androidNs, "foregroundServiceType"))
+        assertEquals(0, remote.getElementsByTagName("intent-filter").length)
         assertTrue("Phone recovery grant must be declared", "android.permission.WRITE_SECURE_SETTINGS" in names("uses-permission"))
         assertTrue("Unrelated permission is declared", names("uses-permission").intersect(setOf(
             "android.permission.CAMERA", "android.permission.SYSTEM_ALERT_WINDOW",

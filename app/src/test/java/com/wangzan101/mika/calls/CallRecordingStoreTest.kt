@@ -431,6 +431,38 @@ class CallRecordingStoreTest {
         assertTrue(records.listFiles().orEmpty().sumOf { if (it.isFile) it.length() else 0L } <= CallRecordingLimits.MAX_TOTAL_BYTES)
     }
 
+    @Test fun `remote export lease survives local playback replacement and releases only its own plaintext`() = runBlocking {
+        val store = store()
+        val firstId = id(); val secondId = id()
+        assertNotNull(store.start(firstId, ByteArrayInputStream(simple())).finish())
+        assertNotNull(store.start(secondId, ByteArrayInputStream(simple())).finish())
+        val export = checkNotNull(store.exportFile(firstId))
+        val exportBytes = export.readBytes()
+        val firstPlayer = checkNotNull(store.playbackFile(firstId))
+        val secondPlayer = checkNotNull(store.playbackFile(secondId))
+        assertFalse(firstPlayer.exists())
+        assertTrue(export.exists())
+        assertTrue(exportBytes.contentEquals(secondPlayer.readBytes()))
+        store.closeExport(export)
+        assertFalse(export.exists())
+        assertTrue(secondPlayer.exists())
+        store.closePlayback(secondPlayer)
+    }
+
+    @Test fun `remote export rejects traversal and arbitrary cleanup while the next capture can start`() = runBlocking {
+        val store = store(); val firstId = id()
+        assertNotNull(store.start(firstId, ByteArrayInputStream(simple())).finish())
+        assertNull(store.exportFile("../private"))
+        val unrelated = temporary.newFile("keep.wav")
+        store.closeExport(unrelated)
+        assertTrue(unrelated.exists())
+        val export = checkNotNull(store.exportFile(firstId))
+        assertNotNull(store.start(id(), ByteArrayInputStream(simple())).finish())
+        assertTrue(export.exists())
+        store.closeExport(export)
+        assertFalse(export.exists())
+    }
+
     private fun store(cipher: KeyCipher = cipher()) = CallRecordingStore(records, playback, cipher)
     private fun cipher(): KeyCipher {
         val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()

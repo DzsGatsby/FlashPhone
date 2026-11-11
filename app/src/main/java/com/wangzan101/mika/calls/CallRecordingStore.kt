@@ -47,6 +47,7 @@ class CallRecordingStore internal constructor(
     private val committing = mutableSetOf<CallRecordingSession>()
     private val tombstones = mutableSetOf<String>()
     private var playback: File? = null
+    private val remoteExports = mutableSetOf<File>()
 
     init {
         // Crash leftovers are removed on app initialization, even before the next recording/playback.
@@ -123,6 +124,42 @@ class CallRecordingStore internal constructor(
             withContext(NonCancellable) { acquired?.let { closePlayback(it) } }
             throw cancelled
         }
+    }
+
+    /** Independent private upload lease: it never closes or replaces a local player's WAV. */
+    internal suspend fun exportFile(id: String): File? {
+        if (!CallRecordingLimits.validId(id)) return null
+        var acquired: File? = null
+        try {
+            return withContext(Dispatchers.IO) {
+                val lease = lock.withLock {
+                    initialize()
+                    check(remoteExports.isEmpty()) { "Recording export is busy" }
+                    val source = recording(id)
+                    if (!source.isFile || id in tombstones || protected(source)) return@withLock null
+                    val temporary = File.createTempFile("remote-", ".wav", playbackDirectory)
+                    acquired = temporary
+                    remoteExports.add(temporary)
+                    source to temporary
+                } ?: return@withContext null
+                try {
+                    archive.decrypt(id, lease.first, lease.second)
+                    coroutineContext.ensureActive()
+                    lease.second
+                } catch (error: Exception) {
+                    closeExport(lease.second)
+                    if (error is CancellationException) throw error
+                    null
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            withContext(NonCancellable) { acquired?.let { closeExport(it) } }
+            throw cancelled
+        }
+    }
+
+    internal suspend fun closeExport(file: File) = withContext(NonCancellable + Dispatchers.IO) {
+        lock.withLock { if (remoteExports.remove(file)) file.delete() }
     }
 
     /** A stale player release must never remove a newer player's plaintext. Release MediaPlayer first. */

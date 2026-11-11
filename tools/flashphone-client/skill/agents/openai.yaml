@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flash phone"
+  short_description: "选择电话设备执行任务并取回真实结果"
+  default_prompt: "通过 Flash phone 执行用户交代的电话任务，并跟踪到真实结果。"

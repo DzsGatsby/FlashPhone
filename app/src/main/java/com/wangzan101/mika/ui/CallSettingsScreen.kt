@@ -70,6 +70,7 @@ fun CallSettingsScreen(
     updateAvailable: Boolean = false,
     focusRequest: Int = 0,
 ) {
+    var remoteOpen by rememberSaveable { mutableStateOf(false) }
     var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
     var instructionsOpen by rememberSaveable { mutableStateOf(false) }
     var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
@@ -77,12 +78,14 @@ fun CallSettingsScreen(
     val taskDraft = rememberSaveable(saver = CallTaskDraft.Saver) { CallTaskDraft() }
     LaunchedEffect(focusRequest) {
         if (focusRequest > 0 && focusRequest != handledFocusRequest) {
+            remoteOpen = false
             voiceCloneOpen = false
             instructionsOpen = false
             handledFocusRequest = focusRequest
         }
     }
     when {
+        remoteOpen -> com.wangzan101.mika.calls.remote.CallDeviceSettingsScreen { remoteOpen = false }
         voiceCloneOpen -> VoiceCloneScreen(runtime) { voiceCloneOpen = false }
         instructionsOpen -> CallInstructionsScreen(runtime) { instructionsOpen = false }
         else -> workspaceState.SaveableStateProvider("call-workspace") {
@@ -96,6 +99,7 @@ fun CallSettingsScreen(
                 onAbout = onAbout,
                 updateAvailable = updateAvailable,
                 focusRequest = focusRequest,
+                onRemote = { remoteOpen = true },
             ) {
                 voiceCloneOpen = true
             }
@@ -114,6 +118,7 @@ private fun CallSettingsWorkspace(
     onAbout: () -> Unit,
     updateAvailable: Boolean,
     focusRequest: Int,
+    onRemote: () -> Unit,
     onVoiceClone: () -> Unit,
 ) {
     val config by runtime.settings.state.collectAsState()
@@ -423,7 +428,12 @@ private fun CallSettingsWorkspace(
                                     if (taskDraft.hasContent) pendingReuse = number to brief else reuse(number, brief)
                                 },
                             )
-                            CallWorkspaceTab.Settings -> FlashSystemCenter(
+                            CallWorkspaceTab.Settings -> {
+                                OutlinedButton(onClick = onRemote, modifier = Modifier.fillMaxWidth()) {
+                                    Text("连接设备账号 / 远程电话任务")
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                FlashSystemCenter(
                                 config = config,
                                 state = state,
                                 ready = ready,
@@ -444,6 +454,7 @@ private fun CallSettingsWorkspace(
                                 },
                                 onDefaultSim = { id -> scope.launch { save { it.copy(defaultOutgoingSimId = id) } } },
                             )
+                            }
                         }
                     }
                 }

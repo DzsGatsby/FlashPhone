@@ -1,0 +1,16 @@
+{
+  "main_module": "worker.js",
+  "compatibility_date": "2026-11-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "bindings": [
+    {"type": "durable_object_namespace", "name": "OWNERS", "class_name": "OwnerControl"},
+    {"type": "r2_bucket", "name": "RECORDINGS", "bucket_name": "flash-phone-recordings"}
+  ],
+  "migrations": {"new_tag": "control-v1", "new_sqlite_classes": ["OwnerControl"]},
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "logs": {"enabled": true, "invocation_logs": false},
+    "traces": {"enabled": true, "head_sampling_rate": 0.01}
+  }
+}
