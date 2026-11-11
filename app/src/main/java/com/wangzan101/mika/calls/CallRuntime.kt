@@ -1583,10 +1583,14 @@ class CallRuntime(private val app: MikaApp) {
         return number == null || isEmergency(number) == false
     }
 
-    private fun matchesOutgoing(w: Work, tracked: Tracked): Boolean =
-        tracked.direction == CallDirection.OUTGOING && tracked.number == w.requestedNumber &&
-            tracked.call.details?.accountHandle == w.sim?.handle &&
-            runCatching { tracked.call.details?.intentExtras?.getString(TOKEN) == w.id }.getOrDefault(false)
+    private fun matchesOutgoing(w: Work, tracked: Tracked): Boolean = OutgoingCallMatch.matches(
+        requestedNumber = w.requestedNumber,
+        observedNumber = tracked.number,
+        direction = tracked.direction,
+        accountMatches = w.sim?.handle?.let { it == tracked.call.details?.accountHandle } == true,
+        requestedToken = w.id,
+        observedToken = runCatching { tracked.call.details?.intentExtras?.getString(TOKEN) }.getOrNull(),
+    )
 
     private suspend fun readSims() {
         sims = if (!access.hasPhonePermissions()) emptyList() else withContext(Dispatchers.IO) {
