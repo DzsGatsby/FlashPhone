@@ -203,6 +203,7 @@ internal fun CallTaskScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {

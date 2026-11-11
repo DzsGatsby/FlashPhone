@@ -757,7 +757,7 @@ private fun FlashWorkspaceSwitcher(
 }
 
 @Composable
-private fun CurrentCallCard(
+internal fun CurrentCallCard(
     state: CallRuntimeState,
     feedback: CallActionResult?,
     canAnswer: Boolean,
@@ -770,7 +770,7 @@ private fun CurrentCallCard(
     onTranscript: () -> Unit,
 ) {
     val c = MikaTheme.colors
-    var showFullTranscript by rememberSaveable(state.callId) { mutableStateOf(true) }
+    var transcriptRequest by rememberSaveable(state.callId) { mutableIntStateOf(0) }
     val cancelAuto = state.autoAnswerStage == CallAutoAnswerStage.COUNTDOWN ||
         state.autoAnswerStage == CallAutoAnswerStage.PREPARING
     val ringing = state.phase == CallPhase.RINGING && state.autoAnswerStage != CallAutoAnswerStage.ANSWERING
@@ -836,7 +836,7 @@ private fun CurrentCallCard(
                 if (state.aiActive || state.liveTranscript.isNotEmpty()) {
                     IconButton(
                         onClick = {
-                            showFullTranscript = true
+                            transcriptRequest++
                             onTranscript()
                         },
                         modifier = Modifier
@@ -849,18 +849,6 @@ private fun CurrentCallCard(
                             tint = c.accent,
                         )
                     }
-                }
-            }
-
-            if (state.aiActive || state.liveTranscript.isNotEmpty()) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(c.fill, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    LiveCallTranscript(state.callId, state.liveTranscript)
                 }
             }
 
@@ -927,6 +915,18 @@ private fun CurrentCallCard(
                     }
                 }
             }
+            if (state.aiActive || state.liveTranscript.isNotEmpty()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(c.fill, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    LiveCallTranscript(state.callId, state.liveTranscript, transcriptRequest)
+                }
+            }
+
             feedback?.let {
                 Text(
                     text = it.message,
@@ -942,8 +942,11 @@ private fun CurrentCallCard(
 }
 
 @Composable
-private fun LiveCallTranscript(callId: String?, lines: List<CallTranscriptLine>) {
+private fun LiveCallTranscript(callId: String?, lines: List<CallTranscriptLine>, expandRequest: Int = 0) {
     var expanded by rememberSaveable(callId) { mutableStateOf(false) }
+    LaunchedEffect(callId, expandRequest) {
+        if (expandRequest > 0) expanded = true
+    }
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -976,7 +979,11 @@ private fun LiveCallTranscript(callId: String?, lines: List<CallTranscriptLine>)
         val visibleLines = if (expanded) lines else lines.takeLast(3)
         val offset = if (expanded) 0 else (lines.size - visibleLines.size).coerceAtLeast(0)
         Column(
-            Modifier.padding(top = 4.dp).testTag("call-live-transcript"),
+            Modifier
+                .heightIn(max = 120.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(top = 4.dp)
+                .testTag("call-live-transcript"),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             visibleLines.forEachIndexed { idx, line ->
