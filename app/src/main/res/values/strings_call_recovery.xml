@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">Automatic recovery</string>
+    <string name="calls_recovery_note">Restore the audio helper and background activity where Android permits.</string>
+    <string name="calls_recovery_off">Off</string>
+    <string name="calls_recovery_applying">Applying settings…</string>
+    <string name="calls_recovery_network_blocked">Android has not allowed wireless debugging on this Wi-Fi. Open its settings to allow it.</string>
+    <string name="calls_recovery_wireless_refused">Android refused permission to turn on wireless debugging automatically.</string>
+    <string name="calls_recovery_wireless_failed">Wireless debugging could not be restored. Open its settings or retry.</string>
+    <string name="calls_recovery_waiting_helper">Waiting for the audio helper; permissions can be applied after it connects.</string>
+    <string name="calls_recovery_waiting_wifi">Waiting for Wi-Fi to restore the helper.</string>
+    <string name="calls_recovery_wireless_ready">Permission granted to turn on wireless debugging when needed.</string>
+    <string name="calls_recovery_background_restricted">Background activity has not been confirmed as allowed.</string>
+    <string name="calls_recovery_battery_managed">Battery optimization is still on.</string>
+    <string name="calls_recovery_background_ready">Background activity is allowed.</string>
+    <string name="calls_recovery_battery_refused">Android did not grant the battery optimization exemption.</string>
+    <string name="calls_recovery_save_failed">Could not save this setting. Try again.</string>
+    <string name="calls_recovery_wireless_status">Wireless recovery: %1$s</string>
+    <string name="calls_recovery_background_status">Background: %1$s</string>
+    <string name="calls_recovery_open_background">Open background settings</string>
+    <string name="calls_recovery_retry">Retry and check</string>
+    <string name="calls_recovery_background_unknown">Background status has not been checked.</string>
+</resources>

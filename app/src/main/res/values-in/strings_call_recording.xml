@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">Rekaman panggilan · disimpan di ponsel ini</string>
+    <string name="calls_recording_partial">Rekaman sebagian · beberapa audio tidak dapat disimpan.</string>
+    <string name="calls_recording_channels">Kiri: lawan bicara · kanan: suara AI yang dikirim ke panggilan</string>
+    <string name="calls_recording_output_note">Trek AI berisi audio yang dikirim oleh ponsel ini. Rekaman tidak memastikan apa yang didengar lawan bicara.</string>
+    <string name="calls_recording_seek">Posisi rekaman</string>
+    <string name="calls_recording_call_active">Rekaman tidak dapat diputar selama panggilan.</string>
+    <string name="calls_recording_failed">Rekaman ini tidak dapat diputar. Coba lagi.</string>
+    <string name="calls_recording_loading">Memuat…</string>
+    <string name="calls_recording_pause">Jeda</string>
+    <string name="calls_recording_retry">Coba lagi</string>
+    <string name="calls_recording_play">Putar</string>
+    <string name="calls_recording_stop">Hentikan</string>
+    <string name="calls_recording_missing">Tidak ada rekaman yang dapat diputar untuk panggilan ini.</string>
+</resources>

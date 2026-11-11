@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">الاستعادة التلقائية</string>
+    <string name="calls_recovery_note">استعادة مساعد الصوت والعمل في الخلفية ضمن ما يسمح به Android.</string>
+    <string name="calls_recovery_off">متوقفة</string>
+    <string name="calls_recovery_applying">جارٍ تطبيق الإعدادات…</string>
+    <string name="calls_recovery_network_blocked">لم يسمح Android بتصحيح الأخطاء اللاسلكي على شبكة Wi-Fi هذه. افتح الإعدادات للسماح به.</string>
+    <string name="calls_recovery_wireless_refused">رفض Android إذن تفعيل تصحيح الأخطاء اللاسلكي تلقائيًا.</string>
+    <string name="calls_recovery_wireless_failed">تعذّرت استعادة تصحيح الأخطاء اللاسلكي. افتح إعداداته أو حاول مجددًا.</string>
+    <string name="calls_recovery_waiting_helper">بانتظار مساعد الصوت؛ يمكن تطبيق الأذونات بعد اتصاله.</string>
+    <string name="calls_recovery_waiting_wifi">بانتظار Wi-Fi لاستعادة المساعد.</string>
+    <string name="calls_recovery_wireless_ready">مُنح إذن تفعيل تصحيح الأخطاء اللاسلكي عند الحاجة.</string>
+    <string name="calls_recovery_background_restricted">لم يتم تأكيد السماح بالنشاط في الخلفية.</string>
+    <string name="calls_recovery_battery_managed">لا يزال تحسين البطارية مفعّلًا.</string>
+    <string name="calls_recovery_background_ready">النشاط في الخلفية مسموح.</string>
+    <string name="calls_recovery_battery_refused">لم يمنح Android الإعفاء من تحسين البطارية.</string>
+    <string name="calls_recovery_save_failed">تعذّر حفظ هذا الإعداد. حاول مجددًا.</string>
+    <string name="calls_recovery_wireless_status">الاستعادة اللاسلكية: %1$s</string>
+    <string name="calls_recovery_background_status">الخلفية: %1$s</string>
+    <string name="calls_recovery_open_background">فتح إعدادات الخلفية</string>
+    <string name="calls_recovery_retry">إعادة المحاولة والتحقق</string>
+    <string name="calls_recovery_background_unknown">لم يتم التحقق من حالة العمل في الخلفية.</string>
+</resources>

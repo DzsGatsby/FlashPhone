@@ -45,6 +45,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.util.UUID
 
 data class CallActionResult(val ok: Boolean, val message: String)
@@ -64,6 +65,7 @@ data class CallRuntimeState(
     val autoAnswerBlockedReason: String? = null,
     val liveTranscript: List<CallTranscriptLine> = emptyList(),
     val historyWriteFailed: Boolean = false,
+    val historyPlaybackAllowed: Boolean = false,
     val simOptions: List<CallSim> = emptyList(),
     val shellConnected: Boolean = false,
     val notificationsAvailable: Boolean = false,
@@ -95,6 +97,8 @@ class CallRuntime(private val app: MikaApp) {
     private val telephony get() = app.getSystemService(TelephonyManager::class.java)
     private val notifications = CallNotifications(app)
     private val records = CallHistory(app)
+    private val recordings = CallRecordingStore(app)
+    private val pendingRecordingIds = mutableSetOf<String>()
     val history = records.state
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val accessLock = Mutex()
@@ -178,7 +182,10 @@ class CallRuntime(private val app: MikaApp) {
                 previous = current
             }
         }
-        scope.launch { records.load() }
+        scope.launch {
+            records.load()
+            if (!records.writeFailed.value) pruneRecordings()
+        }
         scope.launch { records.writeFailed.collect { publish() } }
         scope.launch(Dispatchers.IO) { instructions.load() }
         scope.launch {
@@ -223,7 +230,6 @@ class CallRuntime(private val app: MikaApp) {
                 val eligible = visible && !standbyStarting && standbyService?.stickyAutoAnswer != true &&
                     work == null && lockedDial == null && !unobservedManagedCall && liveCalls().isEmpty() &&
                     hasAuthorizedIncomingStandby() && interactiveForeground() &&
-                    autoAnswerBlocker(settings.state.value) == null &&
                     CallStandbyService.notificationsAvailable(app, create = true)
                 if (resume.take(visible, eligible)) requestCallForegroundService(incoming = true)
             }
@@ -243,6 +249,19 @@ class CallRuntime(private val app: MikaApp) {
         if (!requestCallForegroundService(incoming = true)) return@onMain fail(standbyStartError ?: "后台待命未启动")
         state.first { !it.backgroundStandbyStarting }
         if (isIncomingStandbyRunning()) ok("后台待命已启动") else fail(standbyStartError ?: "后台待命未启动")
+    }
+
+    /** Boot/unlock/update restore only the owner's incoming policy, never a saved outgoing task. */
+    fun restoreAuthorizedStandbyFromSystem() {
+        scope.launch {
+            if (!hasAuthorizedIncomingStandby() || standbyStarting || isIncomingStandbyRunning()) return@launch
+            if (!CallStandbyService.notificationsAvailable(app, create = true)) {
+                standbyStartError = "请允许后台待命通知"
+                publish()
+                return@launch
+            }
+            requestCallForegroundService(incoming = true)
+        }
     }
 
     private fun requestCallForegroundService(incoming: Boolean): Boolean {
@@ -409,11 +428,56 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     suspend fun deleteHistory(id: String): CallActionResult = onMain {
-        historyResult(records.delete(id), "已删除通话记录")
+        val result = records.delete(id)
+        if (result == CallHistory.Result.SAVED) {
+            runCatching { recordings.delete(id) }
+            pruneRecordings()
+        }
+        historyResult(result, "已删除通话记录")
     }
 
     suspend fun clearHistory(): CallActionResult = onMain {
-        historyResult(records.clear(), "已清空通话记录")
+        val result = records.clear()
+        if (result == CallHistory.Result.SAVED) pruneRecordings()
+        historyResult(result, "已清空通话记录")
+    }
+
+    /** Playback never competes with a live carrier call for the phone audio route. */
+    suspend fun openRecording(id: String): File? = onMain {
+        if (work != null || lockedDial != null || liveCalls().isNotEmpty() || managedCallPresent() != false || history.value.none { it.recording?.id == id }) return@onMain null
+        val file = runCatching { recordings.playbackFile(id) }.getOrNull()
+        if (work != null || lockedDial != null || liveCalls().isNotEmpty() || managedCallPresent() != false || history.value.none { it.recording?.id == id }) {
+            file?.let { recordings.closePlayback(it) }
+            null
+        } else file
+    }
+
+    fun closeRecording(file: File) { scope.launch { runCatching { recordings.closePlayback(file) } } }
+
+    private suspend fun pruneRecordings() {
+        // Keep a recording finalized just before its history append; active capture owns its files.
+        val ids = history.value.mapNotNull { it.recording?.id }.toMutableSet()
+        work?.id?.let(ids::add)
+        ids.addAll(pendingRecordingIds)
+        runCatching { recordings.prune(ids) }
+    }
+
+    private fun saveFinishedRecord(record: CallRecord, session: CallRecordingSession?) {
+        pendingRecordingIds.add(record.id)
+        scope.launch {
+            try {
+                // Publish the actual end time promptly. Audio archiving never delays handoff or cleanup.
+                runCatching { records.append(record) }
+                val info = runCatching { session?.finish() }.getOrNull()
+                if (info != null && records.setRecording(record.id, info) == CallHistory.Result.NOT_FOUND) {
+                    // A record deleted while archiving must not be recreated by a late completion.
+                    runCatching { recordings.delete(info.id) }
+                }
+            } finally {
+                pendingRecordingIds.remove(record.id)
+                if (!records.writeFailed.value) pruneRecordings()
+            }
+        }
     }
 
     private fun historyResult(result: CallHistory.Result, message: String): CallActionResult = when (result) {
@@ -962,9 +1026,12 @@ class CallRuntime(private val app: MikaApp) {
             w.stopReason.record("AI 音频连接失败，电话由系统处理")
         } finally {
             withContext(NonCancellable) {
+                val endedAt = System.currentTimeMillis()
                 w.mediaStage = MediaStage.RELEASE
                 runCatching { w.session?.close() }.onFailure { debugMediaException(w, it) }
                 val restored = try { restoreAudio(w) } finally { releaseCallWakeLock(w) }
+                val recordingSession = w.recording
+                w.recording = null
                 if (w.stopReason.value == FAREWELL_ENDING) {
                     val target = w.track
                     val ended = target != null && (confirmedEnded(target) ||
@@ -977,10 +1044,14 @@ class CallRuntime(private val app: MikaApp) {
                 w.track?.let {
                     if (w.telecomActionIssued) {
                         val record = CallRecord(w.id, it.number, w.direction, w.activeAt ?: it.createdAt,
-                            System.currentTimeMillis(), reason, w.transcript.toList(), task = w.task,
+                            endedAt, reason, w.transcript.toList(), task = w.task,
                             audioReport = w.mediaCounters.recordReport())
-                        scope.launch { records.append(record) }
+                        saveFinishedRecord(record, recordingSession)
                     }
+                }
+                if (!w.telecomActionIssued && recordingSession != null) scope.launch {
+                    runCatching { recordingSession.finish() }
+                    runCatching { recordings.delete(w.id) }
                 }
                 if (work === w) {
                     lockedDial?.takeIf { it.ticket === w.lockedDialTicket }?.let {
@@ -1060,17 +1131,29 @@ class CallRuntime(private val app: MikaApp) {
             }
             val down = result.fd("downlink")
             val up = result.fd("uplink")
+            val monitor = result.fd("recording")
             if (down == null || up == null ||
                 result.getInt("captureRate") != VolcRealtimeClient.INPUT_SAMPLE_RATE ||
                 result.getInt("playRate") != VolcRealtimeClient.OUTPUT_SAMPLE_RATE) {
                 runCatching { down?.close() }
                 runCatching { up?.close() }
+                runCatching { monitor?.close() }
                 throw CallProblem("内置助手的电话音频格式不兼容")
             }
             val capture = ParcelFileDescriptor.AutoCloseInputStream(down)
             val playback = ParcelFileDescriptor.AutoCloseOutputStream(up)
             w.capture = capture
             w.playback = playback
+            if (monitor != null) {
+                if (result.getInt("recordingProtocol") == 1) {
+                    val input = ParcelFileDescriptor.AutoCloseInputStream(monitor)
+                    // Optional recording must never stop an otherwise usable carrier call.
+                    w.recording = runCatching { recordings.start(w.id, input) }.getOrElse {
+                        runCatching { input.close() }
+                        null
+                    }
+                } else runCatching { monitor.close() }
+            }
             CallPcmBridge(capture, playback) {
                 withContext(Dispatchers.IO) { runCatching { helper.flushCallAudio(w.audioOwner) }.getOrDefault(false) }
             }
@@ -1439,6 +1522,7 @@ class CallRuntime(private val app: MikaApp) {
             autoAnswerBlockedReason = blocker.takeIf { autoStage == CallAutoAnswerStage.BLOCKED },
             liveTranscript = liveTranscript.toList(),
             historyWriteFailed = records.writeFailed.value,
+            historyPlaybackAllowed = work == null && lockedDial == null && liveCalls().isEmpty() && managedCallPresent() == false,
             simOptions = sims.map { it.info },
             shellConnected = shell != null,
             notificationsAvailable = notificationReady,
@@ -1605,6 +1689,7 @@ class CallRuntime(private val app: MikaApp) {
         var wakeLock: PowerManager.WakeLock? = null
         var capture: ParcelFileDescriptor.AutoCloseInputStream? = null
         var playback: ParcelFileDescriptor.AutoCloseOutputStream? = null
+        var recording: CallRecordingSession? = null
     }
 
     private class CallProblem(message: String) : Exception(message)

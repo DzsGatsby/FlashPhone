@@ -29,6 +29,7 @@ import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
 
@@ -44,6 +45,9 @@ internal fun CallHistorySection(
     onMark: suspend (String, Boolean) -> CallActionResult,
     onDelete: suspend (String) -> CallActionResult,
     onReuseTask: ((String, CallTaskBrief) -> Unit)? = null,
+    onOpenRecording: suspend (String) -> File? = { null },
+    onCloseRecording: (File) -> Unit = {},
+    playbackEnabled: Boolean = true,
 ) {
     var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -143,6 +147,9 @@ internal fun CallHistorySection(
                         onReuse = if (record.number != null && record.task != null && onReuseTask != null) {
                             { onReuseTask(record.number, record.task) }
                         } else null,
+                        onOpenRecording = onOpenRecording,
+                        onCloseRecording = onCloseRecording,
+                        playbackEnabled = playbackEnabled && pendingDelete != record.id,
                     )
                 }
             }
@@ -188,6 +195,8 @@ internal fun CallHistorySection(
 private fun CallHistoryItem(
     record: CallRecord, expanded: Boolean, first: Boolean, busy: Boolean,
     onExpand: () -> Unit, onMark: () -> Unit, onDelete: () -> Unit, onReuse: (() -> Unit)?,
+    onOpenRecording: suspend (String) -> File?, onCloseRecording: (File) -> Unit,
+    playbackEnabled: Boolean,
 ) {
     var showTask by rememberSaveable(record.id) { mutableStateOf(false) }
     var showTranscript by rememberSaveable(record.id) { mutableStateOf(false) }
@@ -211,6 +220,12 @@ private fun CallHistoryItem(
                 HorizontalDivider()
                 Text(stringResource(R.string.calls_history_period, start, end),
                     style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)
+                record.recording?.let { recording ->
+                    CallRecordingPlayer(recording, onOpenRecording, onCloseRecording, playbackEnabled)
+                } ?: Text(
+                    stringResource(R.string.calls_recording_missing),
+                    style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3,
+                )
                 record.task?.let { task ->
                     Text(stringResource(R.string.calls_record_result_unconfirmed),
                         style = MaterialTheme.typography.bodySmall, color = MikaTheme.colors.ink3)

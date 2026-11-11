@@ -22,6 +22,8 @@ import android.system.OsConstants
 import android.system.StructPollfd
 import java.io.FileDescriptor
 import java.lang.reflect.InvocationTargetException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.abs
 
 /** Cellular audio only. Control stays on the authenticated helper Binder; PCM uses anonymous pipes. */
@@ -110,6 +112,7 @@ internal class ShellCallAudio(private val context: Context) {
         var track: AudioTrack? = null
         var fromCall: Array<ParcelFileDescriptor>? = null
         var toCall: Array<ParcelFileDescriptor>? = null
+        var recordingPipe: Array<ParcelFileDescriptor>? = null
         var session: Session? = null
         try {
             if (backend == DIRECT) {
@@ -137,7 +140,9 @@ internal class ShellCallAudio(private val context: Context) {
             toCall = ParcelFileDescriptor.createPipe()
             nonBlocking(fromCall[1].fileDescriptor)
             nonBlocking(toCall[0].fileDescriptor)
-            val created = Session(owner, backend, record, track, fromCall[1], toCall[0])
+            // Recording is an optional, isolated observer. Failure must not change call setup.
+            recordingPipe = optionalRecordingPipe()
+            val created = Session(owner, backend, record, track, fromCall[1], toCall[0], recordingPipe?.get(1))
             session = created
             owner.linkToDeath(created.death, 0)
             check(inPstnCall() && owner.isBinderAlive) { "Cellular call or its owner ended." }
@@ -162,6 +167,11 @@ internal class ShellCallAudio(private val context: Context) {
                 putInt("playRate", PLAY_RATE)
                 putParcelable("downlink", fromCall[0])
                 putParcelable("uplink", toCall[1])
+                putString("recordingStatus", if (recordingPipe != null) "available" else "unavailable")
+                recordingPipe?.let {
+                    putInt("recordingProtocol", 1)
+                    putParcelable("recording", it[0])
+                }
             }
         } catch (e: Exception) {
             if (active === session) active = null
@@ -175,7 +185,20 @@ internal class ShellCallAudio(private val context: Context) {
             }
             fromCall?.forEach { runCatching { it.close() } }
             toCall?.forEach { runCatching { it.close() } }
+            recordingPipe?.forEach { runCatching { it.close() } }
             throw e
+        }
+    }
+
+    private fun optionalRecordingPipe(): Array<ParcelFileDescriptor>? {
+        var pipe: Array<ParcelFileDescriptor>? = null
+        return try {
+            pipe = ParcelFileDescriptor.createPipe()
+            nonBlocking(pipe[1].fileDescriptor)
+            pipe
+        } catch (_: Exception) {
+            pipe?.forEach { runCatching { it.close() } }
+            null
         }
     }
 
@@ -227,6 +250,61 @@ internal class ShellCallAudio(private val context: Context) {
         val deviceChannels: Int,
         val deviceEncoding: Int,
     )
+
+    /**
+     * Optional recording protocol v1 (no prologue): big-endian kind:Int, offsetMicros:Long,
+     * payloadBytes:Int, followed by little-endian PCM16 mono. Kind 1 is captured 16 kHz;
+     * kind 2 is model PCM accepted by the 24 kHz AudioTrack, excluding helper priming.
+     * Offsets are nondecreasing read/write observation times since Session creation,
+     * not proof of acoustic playback. A later flush can discard accepted track data.
+     * Kind 3 with zero payload terminates a complete monitor stream. EOF without it
+     * means truncation. Frames are <=976 bytes: one atomic non-blocking Linux pipe write,
+     * safely below PIPE_BUF (4096). Any backpressure or write failure ends only this observer.
+     */
+    internal class RecordingMonitor(
+        private val writeAtomic: (ByteArray, Int) -> Int,
+        private val closeWriter: () -> Unit,
+    ) {
+        private val frame = ByteArray(16 + 960)
+        private val header = ByteBuffer.wrap(frame).order(ByteOrder.BIG_ENDIAN)
+        private var lastOffsetMicros = 0L
+        private var closed = false
+
+        fun pcm(kind: Int, bytes: ByteArray, offset: Int, length: Int, atMicros: Long) {
+            if (closed || length == 0) return
+            if (kind !in 1..2 || length !in 2..960 || length % 2 != 0 ||
+                offset < 0 || offset > bytes.size - length) {
+                close()
+                return
+            }
+            emit(kind, bytes, offset, length, atMicros)
+        }
+
+        fun finish(atMicros: Long) {
+            if (closed) return
+            emit(3, frame, 0, 0, atMicros)
+            close()
+        }
+
+        private fun emit(kind: Int, bytes: ByteArray, offset: Int, length: Int, atMicros: Long) {
+            lastOffsetMicros = maxOf(lastOffsetMicros, atMicros)
+            header.putInt(0, kind)
+            header.putLong(4, lastOffsetMicros)
+            header.putInt(12, length)
+            if (length > 0) bytes.copyInto(frame, 16, offset, offset + length)
+            try {
+                if (writeAtomic(frame, 16 + length) != 16 + length) close()
+            } catch (_: Exception) {
+                close()
+            }
+        }
+
+        private fun close() {
+            if (closed) return
+            closed = true
+            runCatching { closeWriter() }
+        }
+    }
 
     /** Counts only intervals corroborated by fresh, consecutive framework observations. */
     internal class CaptureSilenceDiagnostics {
@@ -326,8 +404,13 @@ internal class ShellCallAudio(private val context: Context) {
         private val track: AudioTrack,
         private val down: ParcelFileDescriptor,
         private val up: ParcelFileDescriptor,
+        recording: ParcelFileDescriptor?,
     ) {
         private val io = Any()
+        private val recordingStartNanos = SystemClock.elapsedRealtimeNanos()
+        private val recordingMonitor = recording?.let { writer ->
+            RecordingMonitor({ bytes, count -> Os.write(writer.fileDescriptor, bytes, 0, count) }, { writer.close() })
+        }
         private val playbackDiagnostics = PlaybackDiagnostics()
         private val captureSilence = CaptureSilenceDiagnostics()
         private var closed = false
@@ -456,6 +539,7 @@ internal class ShellCallAudio(private val context: Context) {
                 val count = record.read(downBuffer, 0, downBuffer.size, AudioRecord.READ_NON_BLOCKING)
                 check(count >= 0) { "Downlink read failed ($count)." }
                 if (count > 0) {
+                    recordingMonitor?.pcm(1, downBuffer, 0, count, recordingOffsetMicros())
                     downPeak = maxOf(downPeak, pcmPeak(downBuffer, count))
                     downOffset = 0
                     downSize = count
@@ -499,6 +583,7 @@ internal class ShellCallAudio(private val context: Context) {
                 // A non-blocking write can keep returning zero while the capture path still
                 // progresses. Fail only with PCM waiting on this session's current route.
                 check(!playbackDiagnostics.pendingWriteStalled(writtenAt)) { "Uplink playback stopped accepting audio." }
+                if (count > 0) recordingMonitor?.pcm(2, upBuffer, upOffset, count, recordingOffsetMicros())
                 upOffset += count
                 upBytes += count
                 progressed = progressed || count > 0
@@ -592,6 +677,7 @@ internal class ShellCallAudio(private val context: Context) {
             playbackDiagnostics.stop(SystemClock.elapsedRealtime())
             samplePlaybackHead()
             closed = true
+            recordingMonitor?.finish(recordingOffsetMicros())
             runCatching { owner.unlinkToDeath(death, 0) }
             runCatching { down.close() }
             runCatching { up.close() }
@@ -602,6 +688,9 @@ internal class ShellCallAudio(private val context: Context) {
             runCatching { record.stop() }
             runCatching { record.release() }
         }
+
+        private fun recordingOffsetMicros(): Long =
+            ((SystemClock.elapsedRealtimeNanos() - recordingStartNanos) / 1_000L).coerceAtLeast(0L)
     }
 
     private fun telephonyDevice(direction: Int): AudioDeviceInfo? =

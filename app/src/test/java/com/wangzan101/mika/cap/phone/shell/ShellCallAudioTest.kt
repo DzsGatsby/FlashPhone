@@ -1,11 +1,92 @@
 package com.wangzan101.mika.cap.phone.shell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.DataInputStream
+import java.io.IOException
 
 class ShellCallAudioTest {
+    @Test
+    fun recordingFramesCarryExactChannelSamplesAndAnUnambiguousTerminal() {
+        val frames = ArrayList<ByteArray>()
+        var closes = 0
+        val monitor = ShellCallAudio.RecordingMonitor({ bytes, length ->
+            frames.add(bytes.copyOf(length))
+            length
+        }, { closes++ })
+        monitor.pcm(1, byteArrayOf(99, 99, 0, 0x80.toByte(), 1, 0, 99), 2, 4, 123_456L)
+        monitor.pcm(2, ByteArray(960), 0, 960, 123_450L) // Preserve real model silence; no synthetic prime calls here.
+        monitor.finish(200_000L)
+        monitor.finish(300_000L)
+        monitor.pcm(1, byteArrayOf(1, 0), 0, 2, 300_000L)
+        assertEquals(3, frames.size)
+        assertEquals(1, closes)
+        DataInputStream(ByteArrayInputStream(frames[0])).use {
+            assertEquals(1, it.readInt())
+            assertEquals(123_456L, it.readLong())
+            assertEquals(4, it.readInt())
+            assertArrayEquals(byteArrayOf(0, 0x80.toByte(), 1, 0), it.readBytes())
+        }
+        DataInputStream(ByteArrayInputStream(frames[1])).use {
+            assertEquals(2, it.readInt())
+            assertEquals(123_456L, it.readLong())
+            assertEquals(960, it.readInt())
+            assertArrayEquals(ByteArray(960), it.readBytes())
+        }
+        DataInputStream(ByteArrayInputStream(frames[2])).use {
+            assertEquals(3, it.readInt())
+            assertEquals(200_000L, it.readLong())
+            assertEquals(0, it.readInt())
+            assertEquals(-1, it.read())
+        }
+        assertEquals(976, frames[1].size)
+    }
+
+    @Test
+    fun recordingBackpressureShortWriteAndBrokenReaderOnlyCloseTheMonitor() {
+        val failures: List<(ByteArray, Int) -> Int> = listOf(
+            { _, _ -> 0 },
+            { _, length -> length - 1 },
+            { _, _ -> throw IOException("pipe unavailable") },
+        )
+        failures.forEach { failure ->
+            var writes = 0
+            var closes = 0
+            val monitor = ShellCallAudio.RecordingMonitor({ bytes, length ->
+                writes++
+                failure(bytes, length)
+            }, { closes++; throw IOException("already closed") })
+            monitor.pcm(1, byteArrayOf(1, 0), 0, 2, 0)
+            monitor.pcm(2, byteArrayOf(2, 0), 0, 2, 1)
+            monitor.finish(2)
+            assertEquals(1, writes)
+            assertEquals(1, closes)
+        }
+    }
+
+    @Test
+    fun invalidOrOversizedRecordingDataCannotEscapeTheAtomicFrameBoundary() {
+        val invalid: List<(ShellCallAudio.RecordingMonitor) -> Unit> = listOf(
+            { it.pcm(1, ByteArray(962), 0, 962, 0) },
+            { it.pcm(1, ByteArray(3), 0, 3, 0) },
+            { it.pcm(1, ByteArray(4), 3, 2, 0) },
+            { it.pcm(3, ByteArray(2), 0, 2, 0) },
+        )
+        invalid.forEach { send ->
+            var writes = 0
+            var closes = 0
+            val monitor = ShellCallAudio.RecordingMonitor({ _, length -> writes++; length }, { closes++ })
+            send(monitor)
+            monitor.finish(1)
+            assertEquals(0, writes)
+            assertEquals(1, closes)
+        }
+    }
+
     @Test
     fun explicitlySelectedBackendNeverFallsBackToAnotherRoute() {
         assertTrue(ShellCallAudio.candidates(ShellCallAudio.DIRECT, false, true).isEmpty())

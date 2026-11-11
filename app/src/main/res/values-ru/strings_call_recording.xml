@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">Запись звонка · хранится на этом телефоне</string>
+    <string name="calls_recording_partial">Неполная запись · часть аудио не удалось сохранить.</string>
+    <string name="calls_recording_channels">Слева: собеседник · справа: голос ИИ, отправленный в звонок</string>
+    <string name="calls_recording_output_note">Дорожка ИИ содержит звук, отправленный этим телефоном. Она не подтверждает, что именно услышал собеседник.</string>
+    <string name="calls_recording_seek">Позиция воспроизведения</string>
+    <string name="calls_recording_call_active">Во время звонка воспроизведение недоступно.</string>
+    <string name="calls_recording_failed">Не удалось воспроизвести эту запись. Повторите попытку.</string>
+    <string name="calls_recording_loading">Загрузка…</string>
+    <string name="calls_recording_pause">Пауза</string>
+    <string name="calls_recording_retry">Повторить</string>
+    <string name="calls_recording_play">Слушать</string>
+    <string name="calls_recording_stop">Остановить</string>
+    <string name="calls_recording_missing">Для этого звонка нет доступной записи.</string>
+</resources>

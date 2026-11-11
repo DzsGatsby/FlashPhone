@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">自动恢复</string>
+    <string name="calls_recovery_note">在系统允许的范围内，自动恢复音频助手和后台运行。</string>
+    <string name="calls_recovery_off">已关闭</string>
+    <string name="calls_recovery_applying">正在应用设置…</string>
+    <string name="calls_recovery_network_blocked">系统尚未允许在此 Wi-Fi 上使用无线调试，请打开设置处理。</string>
+    <string name="calls_recovery_wireless_refused">系统未允许自动打开无线调试。</string>
+    <string name="calls_recovery_wireless_failed">未能恢复无线调试，请打开设置或重试。</string>
+    <string name="calls_recovery_waiting_helper">等待音频助手连接，连接后可继续申请权限。</string>
+    <string name="calls_recovery_waiting_wifi">等待连接 Wi-Fi，以便恢复音频助手。</string>
+    <string name="calls_recovery_wireless_ready">已获得自动开启权限，可按需恢复。</string>
+    <string name="calls_recovery_background_restricted">尚未确认允许后台运行。</string>
+    <string name="calls_recovery_battery_managed">电池优化仍开启。</string>
+    <string name="calls_recovery_background_ready">已允许后台运行。</string>
+    <string name="calls_recovery_battery_refused">系统未批准电池优化豁免。</string>
+    <string name="calls_recovery_save_failed">未能保存设置，请重试。</string>
+    <string name="calls_recovery_wireless_status">无线恢复：%1$s</string>
+    <string name="calls_recovery_background_status">后台运行：%1$s</string>
+    <string name="calls_recovery_open_background">打开后台设置</string>
+    <string name="calls_recovery_retry">重试并检查</string>
+    <string name="calls_recovery_background_unknown">后台状态尚未确认。</string>
+</resources>

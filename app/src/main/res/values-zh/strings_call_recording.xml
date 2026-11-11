@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">通话录音 · 仅保存在本机</string>
+    <string name="calls_recording_partial">录音不完整，部分声音未能保存。</string>
+    <string name="calls_recording_channels">左声道：对方 · 右声道：AI 发出的声音</string>
+    <string name="calls_recording_output_note">AI 声音记录的是本机送入通话的音频，不能单凭录音确认对方实际听到。</string>
+    <string name="calls_recording_seek">录音播放进度</string>
+    <string name="calls_recording_call_active">通话期间无法播放录音。</string>
+    <string name="calls_recording_failed">无法播放这段录音，请重试。</string>
+    <string name="calls_recording_loading">正在加载…</string>
+    <string name="calls_recording_pause">暂停</string>
+    <string name="calls_recording_retry">重新播放</string>
+    <string name="calls_recording_play">播放</string>
+    <string name="calls_recording_stop">停止</string>
+    <string name="calls_recording_missing">这通电话没有可播放的录音。</string>
+</resources>

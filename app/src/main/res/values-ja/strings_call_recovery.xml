@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">自動復旧</string>
+    <string name="calls_recovery_note">Android が許可する範囲で、音声ヘルパーとバックグラウンド動作を復旧します。</string>
+    <string name="calls_recovery_off">オフ</string>
+    <string name="calls_recovery_applying">設定を適用中…</string>
+    <string name="calls_recovery_network_blocked">この Wi-Fi でのワイヤレス デバッグが許可されていません。設定を開いて許可してください。</string>
+    <string name="calls_recovery_wireless_refused">ワイヤレス デバッグの自動有効化を Android が許可しませんでした。</string>
+    <string name="calls_recovery_wireless_failed">ワイヤレス デバッグを復旧できませんでした。設定を開くか再試行してください。</string>
+    <string name="calls_recovery_waiting_helper">音声ヘルパーの接続待ちです。接続後に権限を適用できます。</string>
+    <string name="calls_recovery_waiting_wifi">ヘルパーを復旧するため Wi-Fi 接続を待っています。</string>
+    <string name="calls_recovery_wireless_ready">必要なときにワイヤレス デバッグをオンにする権限があります。</string>
+    <string name="calls_recovery_background_restricted">バックグラウンド動作の許可を確認できていません。</string>
+    <string name="calls_recovery_battery_managed">バッテリー最適化はまだ有効です。</string>
+    <string name="calls_recovery_background_ready">バックグラウンド動作は許可されています。</string>
+    <string name="calls_recovery_battery_refused">バッテリー最適化の対象外への設定が許可されませんでした。</string>
+    <string name="calls_recovery_save_failed">設定を保存できませんでした。もう一度お試しください。</string>
+    <string name="calls_recovery_wireless_status">ワイヤレス復旧：%1$s</string>
+    <string name="calls_recovery_background_status">バックグラウンド：%1$s</string>
+    <string name="calls_recovery_open_background">バックグラウンド設定を開く</string>
+    <string name="calls_recovery_retry">再試行して確認</string>
+    <string name="calls_recovery_background_unknown">バックグラウンドの状態は未確認です。</string>
+</resources>

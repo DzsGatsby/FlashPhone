@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CallSettingsStandbyTest {
-    @Test fun disablingAndReenablingAutoAnswerDoesNotRestoreAnOldBackgroundGrant() {
+    @Test fun automaticAnsweringIncludesStandbyAndTurningItOffRevokesIt() {
         val prefs = MemoryPrefs()
         prefs.edit().putBoolean("enabled", true).putBoolean("auto_answer", true)
             .putBoolean(CallSettings.BACKGROUND_AUTHORIZED, true).commit()
@@ -18,8 +18,11 @@ class CallSettingsStandbyTest {
             audioVerified = true, autoAnswer = true, backgroundStandbyAuthorized = true,
         ))
         assertTrue(reenabled.autoAnswer)
-        assertFalse(reenabled.backgroundStandbyAuthorized)
-        assertFalse(prefs.getBoolean(CallSettings.BACKGROUND_AUTHORIZED, true))
+        assertTrue(reenabled.backgroundStandbyAuthorized)
+        assertTrue(prefs.getBoolean(CallSettings.BACKGROUND_AUTHORIZED, false))
+
+        settings.save(settings.state.value.copy(enabled = false))
+        assertFalse(settings.state.value.backgroundStandbyAuthorized)
         assertFalse(CallSettings(prefs).state.value.backgroundStandbyAuthorized)
     }
 }

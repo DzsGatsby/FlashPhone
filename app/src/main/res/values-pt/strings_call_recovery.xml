@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">Recuperação automática</string>
+    <string name="calls_recovery_note">Recupere o assistente de áudio e a atividade em segundo plano quando o Android permitir.</string>
+    <string name="calls_recovery_off">Desativada</string>
+    <string name="calls_recovery_applying">Aplicando ajustes…</string>
+    <string name="calls_recovery_network_blocked">O Android não permitiu a depuração sem fio nesta rede Wi-Fi. Abra os ajustes para permitir.</string>
+    <string name="calls_recovery_wireless_refused">O Android recusou a permissão para ativar a depuração sem fio automaticamente.</string>
+    <string name="calls_recovery_wireless_failed">Não foi possível recuperar a depuração sem fio. Abra os ajustes ou tente novamente.</string>
+    <string name="calls_recovery_waiting_helper">Aguardando o assistente de áudio; as permissões podem ser aplicadas após a conexão.</string>
+    <string name="calls_recovery_waiting_wifi">Aguardando uma rede Wi-Fi para recuperar o assistente.</string>
+    <string name="calls_recovery_wireless_ready">Permissão concedida para ativar a depuração sem fio quando necessário.</string>
+    <string name="calls_recovery_background_restricted">A permissão para atividade em segundo plano ainda não foi confirmada.</string>
+    <string name="calls_recovery_battery_managed">A otimização de bateria continua ativada.</string>
+    <string name="calls_recovery_background_ready">A atividade em segundo plano é permitida.</string>
+    <string name="calls_recovery_battery_refused">O Android não concedeu a isenção da otimização de bateria.</string>
+    <string name="calls_recovery_save_failed">Não foi possível salvar o ajuste. Tente novamente.</string>
+    <string name="calls_recovery_wireless_status">Recuperação sem fio: %1$s</string>
+    <string name="calls_recovery_background_status">Segundo plano: %1$s</string>
+    <string name="calls_recovery_open_background">Abrir ajustes de segundo plano</string>
+    <string name="calls_recovery_retry">Tentar novamente e verificar</string>
+    <string name="calls_recovery_background_unknown">O estado em segundo plano ainda não foi verificado.</string>
+</resources>

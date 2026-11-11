@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">通話錄音 · 僅儲存在本機</string>
+    <string name="calls_recording_partial">錄音不完整，部分聲音未能儲存。</string>
+    <string name="calls_recording_channels">左聲道：對方 · 右聲道：AI 發出的聲音</string>
+    <string name="calls_recording_output_note">AI 聲音記錄的是本機送入通話的音訊，無法僅憑錄音確認對方實際聽到。</string>
+    <string name="calls_recording_seek">錄音播放進度</string>
+    <string name="calls_recording_call_active">通話期間無法播放錄音。</string>
+    <string name="calls_recording_failed">無法播放這段錄音，請重試。</string>
+    <string name="calls_recording_loading">正在載入…</string>
+    <string name="calls_recording_pause">暫停</string>
+    <string name="calls_recording_retry">重新播放</string>
+    <string name="calls_recording_play">播放</string>
+    <string name="calls_recording_stop">停止</string>
+    <string name="calls_recording_missing">這通電話沒有可播放的錄音。</string>
+</resources>

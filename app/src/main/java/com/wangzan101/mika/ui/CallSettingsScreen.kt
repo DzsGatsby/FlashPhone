@@ -283,6 +283,8 @@ private fun CallSettingsWorkspace(
                         )
                         CallWorkspaceTab.History -> CallHistorySection(
                             history, state.historyWriteFailed, onMark = runtime::setHistoryHandled, onDelete = runtime::deleteHistory,
+                            onOpenRecording = runtime::openRecording, onCloseRecording = runtime::closeRecording,
+                            playbackEnabled = state.historyPlaybackAllowed && idle && pendingLockedDial == null,
                             onReuseTask = if (pendingLockedDial != null || busy || controlBusy) null else { number, brief ->
                                 if (taskDraft.hasContent) pendingReuse = number to brief else reuse(number, brief)
                             },

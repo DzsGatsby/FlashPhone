@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">자동 복구</string>
+    <string name="calls_recovery_note">Android에서 허용하는 범위에서 오디오 도우미와 백그라운드 활동을 복구합니다.</string>
+    <string name="calls_recovery_off">꺼짐</string>
+    <string name="calls_recovery_applying">설정 적용 중…</string>
+    <string name="calls_recovery_network_blocked">Android에서 이 Wi-Fi의 무선 디버깅을 허용하지 않았습니다. 설정을 열어 허용하세요.</string>
+    <string name="calls_recovery_wireless_refused">Android에서 무선 디버깅 자동 활성화 권한을 거부했습니다.</string>
+    <string name="calls_recovery_wireless_failed">무선 디버깅을 복구할 수 없습니다. 설정을 열거나 다시 시도하세요.</string>
+    <string name="calls_recovery_waiting_helper">오디오 도우미 연결을 기다리는 중입니다. 연결되면 권한을 적용할 수 있습니다.</string>
+    <string name="calls_recovery_waiting_wifi">도우미를 복구하기 위해 Wi-Fi 연결을 기다리는 중입니다.</string>
+    <string name="calls_recovery_wireless_ready">필요할 때 무선 디버깅을 켤 수 있는 권한이 있습니다.</string>
+    <string name="calls_recovery_background_restricted">백그라운드 활동 허용을 확인하지 못했습니다.</string>
+    <string name="calls_recovery_battery_managed">배터리 최적화가 아직 켜져 있습니다.</string>
+    <string name="calls_recovery_background_ready">백그라운드 활동이 허용되었습니다.</string>
+    <string name="calls_recovery_battery_refused">Android에서 배터리 최적화 제외를 허용하지 않았습니다.</string>
+    <string name="calls_recovery_save_failed">설정을 저장하지 못했습니다. 다시 시도하세요.</string>
+    <string name="calls_recovery_wireless_status">무선 복구: %1$s</string>
+    <string name="calls_recovery_background_status">백그라운드: %1$s</string>
+    <string name="calls_recovery_open_background">백그라운드 설정 열기</string>
+    <string name="calls_recovery_retry">다시 시도하고 확인</string>
+    <string name="calls_recovery_background_unknown">백그라운드 상태를 아직 확인하지 못했습니다.</string>
+</resources>

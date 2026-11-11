@@ -93,7 +93,8 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
             wants = { consent().wants(RecoveryCapability.AutoWirelessDebugging) },
             canWrite = { app.checkSelfPermission(PermissionCommands.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED },
             read = platform::wirelessDebugging,
-            write = { DeveloperSettings.turnOnWirelessDebugging(app.contentResolver) },
+            write = { consent().wants(RecoveryCapability.AutoWirelessDebugging) &&
+                DeveloperSettings.turnOnWirelessDebugging(app.contentResolver) },
         )
     }
 
@@ -141,7 +142,11 @@ class BuiltinShellManager(context: Context, private val hub: HelperHub, private 
         app.contentResolver.registerContentObserver(
             DeveloperSettings.wirelessDebuggingUri, false,
             object : ContentObserver(Handler(Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean) = e.wirelessDebuggingChanged()
+                override fun onChange(selfChange: Boolean) {
+                    e.wirelessDebuggingChanged()
+                    // Need also runs without an Activity/helper, using the same bounded auto-on.
+                    if (consent().wants(RecoveryCapability.AutoWirelessDebugging)) e.need()
+                }
             },
         )
         // 卡在「没有 Wi-Fi」或无线调试关着时,一连上任意 Wi-Fi(不用能上网)就再试

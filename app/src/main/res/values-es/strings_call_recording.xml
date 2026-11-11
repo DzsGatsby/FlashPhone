@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">Grabación de llamada · guardada en este teléfono</string>
+    <string name="calls_recording_partial">Grabación parcial · no se pudo guardar parte del audio.</string>
+    <string name="calls_recording_channels">Izquierda: interlocutor · derecha: voz de la IA enviada a la llamada</string>
+    <string name="calls_recording_output_note">La pista de la IA contiene el audio enviado por este teléfono. No confirma lo que oyó la otra persona.</string>
+    <string name="calls_recording_seek">Posición de la grabación</string>
+    <string name="calls_recording_call_active">No se puede reproducir durante una llamada.</string>
+    <string name="calls_recording_failed">No se pudo reproducir esta grabación. Vuelve a intentarlo.</string>
+    <string name="calls_recording_loading">Cargando…</string>
+    <string name="calls_recording_pause">Pausar</string>
+    <string name="calls_recording_retry">Reintentar</string>
+    <string name="calls_recording_play">Reproducir</string>
+    <string name="calls_recording_stop">Detener</string>
+    <string name="calls_recording_missing">No hay ninguna grabación disponible para esta llamada.</string>
+</resources>

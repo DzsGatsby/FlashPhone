@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">自動恢復</string>
+    <string name="calls_recovery_note">在系統允許的範圍內，自動恢復音訊助手和背景執行。</string>
+    <string name="calls_recovery_off">已關閉</string>
+    <string name="calls_recovery_applying">正在套用設定…</string>
+    <string name="calls_recovery_network_blocked">系統尚未允許在此 Wi-Fi 使用無線偵錯，請開啟設定處理。</string>
+    <string name="calls_recovery_wireless_refused">系統未允許自動開啟無線偵錯。</string>
+    <string name="calls_recovery_wireless_failed">無法恢復無線偵錯，請開啟設定或重試。</string>
+    <string name="calls_recovery_waiting_helper">等待音訊助手連線，連線後可繼續申請權限。</string>
+    <string name="calls_recovery_waiting_wifi">等待連接 Wi-Fi，以便恢復音訊助手。</string>
+    <string name="calls_recovery_wireless_ready">已取得自動開啟權限，可按需恢復。</string>
+    <string name="calls_recovery_background_restricted">尚未確認允許背景執行。</string>
+    <string name="calls_recovery_battery_managed">電池最佳化仍開啟。</string>
+    <string name="calls_recovery_background_ready">已允許背景執行。</string>
+    <string name="calls_recovery_battery_refused">系統未批准電池最佳化豁免。</string>
+    <string name="calls_recovery_save_failed">無法儲存設定，請重試。</string>
+    <string name="calls_recovery_wireless_status">無線恢復：%1$s</string>
+    <string name="calls_recovery_background_status">背景執行：%1$s</string>
+    <string name="calls_recovery_open_background">開啟背景設定</string>
+    <string name="calls_recovery_retry">重試並檢查</string>
+    <string name="calls_recovery_background_unknown">背景狀態尚未確認。</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">통화 녹음 · 이 휴대전화에 저장됨</string>
+    <string name="calls_recording_partial">일부 녹음 · 저장하지 못한 오디오가 있습니다.</string>
+    <string name="calls_recording_channels">왼쪽: 상대방 · 오른쪽: 통화로 보낸 AI 음성</string>
+    <string name="calls_recording_output_note">AI 트랙은 이 휴대전화에서 통화로 보낸 오디오입니다. 상대방이 실제로 들은 내용을 확인하는 자료는 아닙니다.</string>
+    <string name="calls_recording_seek">녹음 재생 위치</string>
+    <string name="calls_recording_call_active">통화 중에는 녹음을 재생할 수 없습니다.</string>
+    <string name="calls_recording_failed">이 녹음을 재생할 수 없습니다. 다시 시도하세요.</string>
+    <string name="calls_recording_loading">불러오는 중…</string>
+    <string name="calls_recording_pause">일시정지</string>
+    <string name="calls_recording_retry">재시도</string>
+    <string name="calls_recording_play">재생</string>
+    <string name="calls_recording_stop">정지</string>
+    <string name="calls_recording_missing">이 통화에는 재생할 수 있는 녹음이 없습니다.</string>
+</resources>

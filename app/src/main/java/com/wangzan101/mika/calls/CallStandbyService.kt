@@ -94,7 +94,7 @@ class CallStandbyService : Service() {
             }
         }
         // A null Intent is only accepted when Android restarts this already opted-in service.
-        // Our other recovery path runs only with the unlocked app visible and an existing grant.
+        // Boot/unlock/update recovery also requires the saved, enabled incoming policy.
         return if (incoming) START_STICKY else START_NOT_STICKY
     }
 

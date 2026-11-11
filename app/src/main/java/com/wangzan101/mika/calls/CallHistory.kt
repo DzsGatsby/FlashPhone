@@ -30,6 +30,7 @@ data class CallRecord(
     val handled: Boolean = false,
     val task: CallTaskBrief? = null,
     val audioReport: CallAudioReport? = null,
+    val recording: CallRecordingInfo? = null,
 ) {
     override fun toString(): String = "CallRecord(direction=$direction, result=$result)"
 }
@@ -96,6 +97,9 @@ internal class CallHistory(private val storage: Storage) {
 
     suspend fun setHandled(id: String, handled: Boolean): Result =
         edit(id) { records -> records.map { if (it.id == id) it.copy(handled = handled) else it } }
+
+    suspend fun setRecording(id: String, recording: CallRecordingInfo): Result =
+        edit(id) { records -> records.map { if (it.id == id) it.copy(recording = recording) else it } }
 
     suspend fun delete(id: String): Result = edit(id) { records -> records.filterNot { it.id == id } }
 

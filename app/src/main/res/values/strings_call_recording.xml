@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">Call recording · stored on this phone</string>
+    <string name="calls_recording_partial">Partial recording · some audio could not be saved.</string>
+    <string name="calls_recording_channels">Left: caller · right: AI voice sent to the call</string>
+    <string name="calls_recording_output_note">The AI track contains audio submitted by this phone. It does not confirm what the other person heard.</string>
+    <string name="calls_recording_seek">Recording position</string>
+    <string name="calls_recording_call_active">Playback is unavailable during a call.</string>
+    <string name="calls_recording_failed">Could not play this recording. Try again.</string>
+    <string name="calls_recording_loading">Loading…</string>
+    <string name="calls_recording_pause">Pause</string>
+    <string name="calls_recording_retry">Retry playback</string>
+    <string name="calls_recording_play">Play</string>
+    <string name="calls_recording_stop">Stop</string>
+    <string name="calls_recording_missing">No playable recording is available for this call.</string>
+</resources>

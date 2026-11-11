@@ -5,6 +5,7 @@ import com.wangzan101.mika.cap.phone.setup.BuiltinShellManager
 import com.wangzan101.mika.cap.phone.setup.BuiltinShellRecovery
 import com.wangzan101.mika.cap.phone.setup.PairingCoordinator
 import com.wangzan101.mika.cap.phone.setup.PhoneSetupPrompt
+import com.wangzan101.mika.cap.phone.setup.PhoneCallRecovery
 import com.wangzan101.mika.cap.phone.shell.BuiltinShellConnection
 import com.wangzan101.mika.cap.phone.shell.HelperHub
 import com.wangzan101.mika.cap.phone.shell.SharedShell
@@ -30,6 +31,9 @@ class PhoneServices(context: Context) {
 
     /** 自动恢复与授权开关的设置。 */
     val recoverySettings: RecoverySettings by lazy { RecoverySettings(RecoverySettings.prefs(app)) }
+
+    /** Phone-only boot/background grants; never opens the general accessibility workflow. */
+    val callRecovery: PhoneCallRecovery by lazy { PhoneCallRecovery(app, hub, shellManager, recoverySettings) }
 
     /** 自动恢复与那几项授权开关。 */
     val recovery: BuiltinShellRecovery by lazy { BuiltinShellRecovery(app, shellManager.commandRunner, recoverySettings, shellControl) }

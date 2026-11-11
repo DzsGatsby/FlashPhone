@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">Автоматическое восстановление</string>
+    <string name="calls_recovery_note">Восстанавливать аудиопомощник и фоновую работу в пределах возможностей Android.</string>
+    <string name="calls_recovery_off">Выключено</string>
+    <string name="calls_recovery_applying">Применение настроек…</string>
+    <string name="calls_recovery_network_blocked">Android не разрешил отладку по Wi-Fi в этой сети. Откройте настройки и разрешите её.</string>
+    <string name="calls_recovery_wireless_refused">Android отказал в разрешении автоматически включать отладку по Wi-Fi.</string>
+    <string name="calls_recovery_wireless_failed">Не удалось восстановить отладку по Wi-Fi. Откройте настройки или повторите попытку.</string>
+    <string name="calls_recovery_waiting_helper">Ожидание аудиопомощника. Разрешения можно применить после подключения.</string>
+    <string name="calls_recovery_waiting_wifi">Ожидание Wi-Fi для восстановления помощника.</string>
+    <string name="calls_recovery_wireless_ready">Разрешено включать отладку по Wi-Fi при необходимости.</string>
+    <string name="calls_recovery_background_restricted">Разрешение фоновой активности пока не подтверждено.</string>
+    <string name="calls_recovery_battery_managed">Оптимизация батареи всё ещё включена.</string>
+    <string name="calls_recovery_background_ready">Фоновая активность разрешена.</string>
+    <string name="calls_recovery_battery_refused">Android не предоставил исключение из оптимизации батареи.</string>
+    <string name="calls_recovery_save_failed">Не удалось сохранить настройку. Повторите попытку.</string>
+    <string name="calls_recovery_wireless_status">Восстановление по Wi-Fi: %1$s</string>
+    <string name="calls_recovery_background_status">Фоновая работа: %1$s</string>
+    <string name="calls_recovery_open_background">Открыть фоновые настройки</string>
+    <string name="calls_recovery_retry">Повторить и проверить</string>
+    <string name="calls_recovery_background_unknown">Состояние фоновой работы ещё не проверено.</string>
+</resources>

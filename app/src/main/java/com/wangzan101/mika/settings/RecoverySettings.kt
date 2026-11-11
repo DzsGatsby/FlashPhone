@@ -48,16 +48,31 @@ class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentSt
     @Synchronized override fun save(consent: RecoveryConsent) {
         val restore = RecoveryCapability.RestoreAfterReboot
         val restoreChanged = consent.isApplied(restore) != _consent.value.isApplied(restore)
-        prefs.edit().apply {
+        val saved = prefs.edit().apply {
             for ((c, key) in KEYS) {
                 putBoolean(key, consent.isApplied(c))
                 putBoolean(key + DECLINED, !consent.wants(c))
             }
             if (restoreChanged) remove(LAST_RESTORE)
         }.commit()
+        check(saved) { "Recovery choices could not be saved." }
         _consent.value = consent
         // 重新打开或关掉后,旧的开机结果不再说明问题
         if (restoreChanged) _lastRestore.value = null
+    }
+
+    @Synchronized fun choosePhoneRecovery(on: Boolean) {
+        var next = _consent.value
+        for (capability in PHONE_RECOVERY) next = next.chose(capability, on)
+        save(next)
+    }
+
+    /** Check the latest choice atomically; a finished grant cannot undo a concurrent opt-out. */
+    @Synchronized fun recordVerifiedPhoneRecovery(capability: RecoveryCapability, verified: Boolean) {
+        require(capability in PHONE_RECOVERY)
+        val current = _consent.value
+        val next = current.withApplied(capability, verified && current.wants(capability))
+        if (next != current) save(next)
     }
 
     fun recordRestore(outcome: RestoreOutcome) {
@@ -74,6 +89,8 @@ class RecoverySettings(private val prefs: SharedPreferences) : RecoveryConsentSt
         prefs.getString(LAST_RESTORE, null)?.let { n -> RestoreOutcome.entries.firstOrNull { it.name == n } }
 
     companion object {
+        private val PHONE_RECOVERY = setOf(RecoveryCapability.AutoWirelessDebugging,
+            RecoveryCapability.RestoreAfterReboot, RecoveryCapability.BatteryWhitelist)
         private const val PREFS = "builtin_shell_recovery"
         private val KEYS = mapOf(
             RecoveryCapability.Accessibility to "accessibility",

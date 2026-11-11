@@ -46,7 +46,7 @@ class CallSettings(
             autoAnswerPausedUntilMs = config.autoAnswerPausedUntilMs?.takeIf { it > System.currentTimeMillis() },
             audioVerified = audioVerified,
             autoAnswer = config.enabled && audioVerified && config.autoAnswer,
-            backgroundStandbyAuthorized = previous.backgroundStandbyAuthorized && config.enabled && audioVerified && config.autoAnswer,
+            backgroundStandbyAuthorized = config.enabled && audioVerified && config.autoAnswer,
             autoAnswerDelaySeconds = config.autoAnswerDelaySeconds.coerceIn(
                 CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS,
             ),
@@ -79,7 +79,7 @@ class CallSettings(
         return next
     }
 
-    /** Called only by the foreground standby action. A live service is checked separately. */
+    /** Automatic answering includes background standby; its live service is checked separately. */
     @Synchronized
     internal fun authorizeBackgroundStandby(): Boolean {
         val config = mutable.value
@@ -145,8 +145,7 @@ class CallSettings(
         CallConfig(
             enabled = enabled,
             autoAnswer = enabled && verified && prefs.getBoolean("auto_answer", false),
-            backgroundStandbyAuthorized = enabled && verified && prefs.getBoolean("auto_answer", false) &&
-                prefs.getBoolean(BACKGROUND_AUTHORIZED, false),
+            backgroundStandbyAuthorized = enabled && verified && prefs.getBoolean("auto_answer", false),
             autoAnswerDelaySeconds = prefs.getInt("auto_answer_delay_seconds", defaults.autoAnswerDelaySeconds)
                 .coerceIn(CallConfig.MIN_AUTO_ANSWER_DELAY_SECONDS, CallConfig.MAX_AUTO_ANSWER_DELAY_SECONDS),
             defaultOutgoingSimId = prefs.getString("default_outgoing_sim_id", null),

@@ -8,7 +8,10 @@ import com.wangzan101.mika.about.DiagnosticsCollector
 import com.wangzan101.mika.about.setupInputs
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -49,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -58,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wangzan101.mika.core.shell.BuiltinShellFailure
+import com.wangzan101.mika.core.shell.AutoOnBlock
 import com.wangzan101.mika.core.shell.BuiltinShellFix
 import com.wangzan101.mika.core.shell.BuiltinShellStatus
 import com.wangzan101.mika.core.shell.HelperRestart
@@ -70,6 +76,8 @@ import com.wangzan101.mika.core.shell.SetupView
 import com.wangzan101.mika.core.shell.StepMark
 import com.wangzan101.mika.settings.SystemStatus
 import com.wangzan101.mika.cap.phone.PhoneServices
+import com.wangzan101.mika.cap.phone.setup.PhoneCallRecoveryFailure
+import com.wangzan101.mika.ui.components.MikaSwitch
 import com.wangzan101.mika.ui.components.PageBackground
 import com.wangzan101.mika.ui.components.GroupCard
 import com.wangzan101.mika.ui.components.TopBar
@@ -252,6 +260,7 @@ fun PhoneSetupScreen(status: SystemStatus, repair: Boolean, onFix: (Fix) -> Unit
             revisit = null
             pairing.startRepair()
         }) else null,
+        recoverySection = if (callOnly) ({ PhoneCallRecoverySection(status, onFix) }) else null,
     )
     // 卡在哪一步都能把诊断信息发给作者:用的是引导页此刻的输入,用户确认过的步骤也在里面
     if (diagnosticsOpen) {
@@ -295,6 +304,7 @@ fun PhoneSetupContent(
     onCopyUsbCommand: () -> Unit = {},
     callOnly: Boolean = false,
     onSetUpWireless: (() -> Unit)? = null,
+    recoverySection: (@Composable () -> Unit)? = null,
 ) {
     val canRevisit = view.phase == SetupPhase.Guide || view.phase == SetupPhase.Failed
     val steps = SetupStep.entries.filter { it in view.marks && (!callOnly || it != SetupStep.Accessibility) }
@@ -314,6 +324,7 @@ fun PhoneSetupContent(
             )
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                 if (view.phase == SetupPhase.Unavailable) {
+                    recoverySection?.invoke()
                     // 这个环境没有能起助手的路:只说明,不列走不通的步骤
                     GroupCard {
                         Column(Modifier.padding(16.dp).testTag("setup-unavailable")) {
@@ -345,6 +356,7 @@ fun PhoneSetupContent(
                             fontSize = 14.5.sp, lineHeight = 23.sp, color = c.ink2,
                         )
                     }
+                    recoverySection?.invoke()
                     GroupCard {
                         steps.forEachIndexed { index, step ->
                             StepRow(
@@ -405,6 +417,108 @@ fun PhoneSetupContent(
                         PhoneSetupCopy.DIAGNOSTICS, it, Modifier.fillMaxWidth().testTag("setup-diagnostics"),
                         kind = ButtonKind.Text, size = ButtonSize.Small,
                     )
+                }
+            }
+        }
+    }
+}
+
+/** Phone-only recovery grants and the system state read back after applying them. */
+@Composable
+private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit) {
+    val context = LocalContext.current
+    val phone = remember { PhoneServices.of(context) }
+    val recovery = phone.callRecovery
+    val state by recovery.state.collectAsState()
+    val blocked by phone.shellManager.wirelessAutoOn.blocked.collectAsState()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { recovery.refresh() }
+    val networkBlocked = blocked == AutoOnBlock.NotAllowedHere ||
+        (status.builtinShell as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.WifiNotAllowed
+    val wirelessText = when {
+        !state.enabled -> R.string.calls_recovery_off
+        state.applying -> R.string.calls_recovery_applying
+        networkBlocked -> R.string.calls_recovery_network_blocked
+        blocked == AutoOnBlock.Refused ||
+            (state.failure == PhoneCallRecoveryFailure.SECURE_SETTINGS_REFUSED && !state.writeSecureSettings) -> R.string.calls_recovery_wireless_refused
+        blocked == AutoOnBlock.GaveUp -> R.string.calls_recovery_wireless_failed
+        !state.writeSecureSettings -> R.string.calls_recovery_waiting_helper
+        (status.builtinShell as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.NoWifi -> R.string.calls_recovery_waiting_wifi
+        else -> R.string.calls_recovery_wireless_ready
+    }
+    val backgroundUnknown = state.failure == PhoneCallRecoveryFailure.HELPER_UNAVAILABLE || state.failure == PhoneCallRecoveryFailure.SAVE_FAILED
+    val backgroundNeedsAction = !state.batteryExempt || (!backgroundUnknown && !state.backgroundAllowed)
+    val backgroundText = when {
+        state.applying -> R.string.calls_recovery_applying
+        backgroundUnknown -> R.string.calls_recovery_background_unknown
+        !state.backgroundAllowed -> R.string.calls_recovery_background_restricted
+        !state.batteryExempt -> R.string.calls_recovery_battery_managed
+        else -> R.string.calls_recovery_background_ready
+    }
+    val failureText = when (state.failure) {
+        PhoneCallRecoveryFailure.HELPER_UNAVAILABLE -> R.string.calls_recovery_waiting_helper
+        PhoneCallRecoveryFailure.SECURE_SETTINGS_REFUSED -> R.string.calls_recovery_wireless_refused.takeUnless { state.writeSecureSettings }
+        PhoneCallRecoveryFailure.BATTERY_REFUSED -> R.string.calls_recovery_battery_refused.takeUnless { state.batteryExempt }
+        PhoneCallRecoveryFailure.BACKGROUND_REFUSED -> R.string.calls_recovery_background_restricted.takeUnless { state.backgroundAllowed }
+        PhoneCallRecoveryFailure.SAVE_FAILED -> R.string.calls_recovery_save_failed
+        null -> null
+    }
+    val title = stringResource(R.string.calls_recovery_title)
+    val openFailed = stringResource(R.string.calls_device_system_settings_failed)
+    fun openBackgroundSettings() {
+        val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        val intents = if (!backgroundUnknown && !state.backgroundAllowed) listOf(appInfo, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        else listOf(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.fromParts("package", context.packageName, null)),
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), appInfo,
+        )
+        if (intents.none { intent -> runCatching { context.startActivity(intent); true }.getOrDefault(false) }) {
+            Toast.makeText(context, openFailed, Toast.LENGTH_SHORT).show()
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("call-recovery-section")) {
+        GroupCard {
+            ListRow(
+                MikaIcons.Shield, title, stringResource(R.string.calls_recovery_note), first = true,
+            ) {
+                MikaSwitch(
+                    state.enabled,
+                    onCheckedChange = { enabled -> phone.pairing.scope.launch { recovery.setEnabled(enabled) } },
+                    enabled = !state.applying,
+                    modifier = Modifier.testTag("call-recovery-toggle").semantics { contentDescription = title },
+                )
+            }
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    stringResource(R.string.calls_recovery_wireless_status, stringResource(wirelessText)),
+                    style = MikaType.Caption, color = MikaTheme.colors.ink2,
+                    modifier = Modifier.testTag("call-recovery-wireless-status"),
+                )
+                Text(
+                    stringResource(R.string.calls_recovery_background_status, stringResource(backgroundText)),
+                    style = MikaType.Caption, color = MikaTheme.colors.ink2,
+                    modifier = Modifier.testTag("call-recovery-background-status"),
+                )
+                if (failureText != null && failureText != wirelessText && failureText != backgroundText) Text(
+                    stringResource(failureText), style = MikaType.Caption, color = MikaTheme.colors.warn,
+                    modifier = Modifier.testTag("call-recovery-failure"),
+                )
+                if (state.enabled && !state.applying) {
+                    if (networkBlocked || blocked == AutoOnBlock.Refused || blocked == AutoOnBlock.GaveUp) {
+                        TextButton(
+                            onClick = { onFix(Fix.OpenWirelessDebugging) },
+                            modifier = Modifier.fillMaxWidth().testTag("call-recovery-open-wireless"),
+                        ) { Text(stringResource(R.string.phone_open_wireless)) }
+                    }
+                    if (backgroundNeedsAction) {
+                        TextButton(onClick = ::openBackgroundSettings, modifier = Modifier.fillMaxWidth().testTag("call-recovery-open-background")) {
+                            Text(stringResource(R.string.calls_recovery_open_background))
+                        }
+                    }
+                    if (failureText != null || blocked != null || !state.writeSecureSettings || !state.batteryExempt || !state.backgroundAllowed) {
+                        TextButton(onClick = recovery::retry, modifier = Modifier.fillMaxWidth().testTag("call-recovery-retry")) {
+                            Text(stringResource(R.string.calls_recovery_retry))
+                        }
+                    }
                 }
             }
         }

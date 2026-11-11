@@ -374,6 +374,7 @@ class MikaApp : Application(), WebOwner, SandboxOwner, TaskEnvironment.Owner, Ph
         registerActivityLifecycleCallbacks(foreground)
         // A Telecom cold start needs only the audio helper, never the old assistant runtime.
         phone.shellManager.start()
+        phone.callRecovery.start()
         scope.launch(Dispatchers.IO) {
             runCatching { com.wangzan101.mika.about.ApkUpdater(this@MikaApp).dropInstalled() }
         }

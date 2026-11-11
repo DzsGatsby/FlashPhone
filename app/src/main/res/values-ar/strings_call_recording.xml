@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recording_title">تسجيل المكالمة · محفوظ على هذا الهاتف</string>
+    <string name="calls_recording_partial">تسجيل جزئي · تعذّر حفظ بعض الصوت.</string>
+    <string name="calls_recording_channels">اليسار: المتصل · اليمين: صوت الذكاء الاصطناعي المرسل إلى المكالمة</string>
+    <string name="calls_recording_output_note">يحتوي مسار الذكاء الاصطناعي على الصوت الذي أرسله هذا الهاتف. ولا يؤكد ما سمعه الطرف الآخر فعليًا.</string>
+    <string name="calls_recording_seek">موضع التسجيل</string>
+    <string name="calls_recording_call_active">لا يمكن تشغيل التسجيل أثناء المكالمة.</string>
+    <string name="calls_recording_failed">تعذّر تشغيل هذا التسجيل. حاول مرة أخرى.</string>
+    <string name="calls_recording_loading">جارٍ التحميل…</string>
+    <string name="calls_recording_pause">إيقاف مؤقت</string>
+    <string name="calls_recording_retry">إعادة المحاولة</string>
+    <string name="calls_recording_play">تشغيل</string>
+    <string name="calls_recording_stop">إيقاف</string>
+    <string name="calls_recording_missing">لا يوجد تسجيل قابل للتشغيل لهذه المكالمة.</string>
+</resources>

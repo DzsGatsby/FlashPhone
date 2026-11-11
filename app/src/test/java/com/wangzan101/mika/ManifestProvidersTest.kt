@@ -112,11 +112,12 @@ class ManifestProvidersTest {
         }
         assertEquals(setOf(".ui.MainActivity"), names("activity"))
         assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".about.UpdateJobService"), names("service"))
-        assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver"), names("receiver"))
+        assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver", ".cap.phone.setup.PhoneCallRestoreReceiver"), names("receiver"))
+        assertTrue("Phone recovery grant must be declared", "android.permission.WRITE_SECURE_SETTINGS" in names("uses-permission"))
         assertTrue("Unrelated permission is declared", names("uses-permission").intersect(setOf(
             "android.permission.CAMERA", "android.permission.SYSTEM_ALERT_WINDOW",
             "android.permission.READ_CALENDAR", "android.permission.READ_MEDIA_IMAGES",
-            "android.permission.ACCESS_FINE_LOCATION", "android.permission.WRITE_SECURE_SETTINGS",
+            "android.permission.ACCESS_FINE_LOCATION",
         )).isEmpty())
     }
 

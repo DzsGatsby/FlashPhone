@@ -1459,7 +1459,8 @@ class ShellService(
             if (result.getBoolean("ready")) {
                 val down = result.getParcelable<ParcelFileDescriptor>("downlink")
                 val up = result.getParcelable<ParcelFileDescriptor>("uplink")
-                returnedCallPipes.set(listOfNotNull(down, up))
+                val recording = result.getParcelable<ParcelFileDescriptor>("recording")
+                returnedCallPipes.set(listOfNotNull(down, up, recording))
             }
         }
     }

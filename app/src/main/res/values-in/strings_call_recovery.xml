@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">Pemulihan otomatis</string>
+    <string name="calls_recovery_note">Pulihkan asisten audio dan aktivitas latar belakang sejauh yang diizinkan Android.</string>
+    <string name="calls_recovery_off">Nonaktif</string>
+    <string name="calls_recovery_applying">Menerapkan pengaturan…</string>
+    <string name="calls_recovery_network_blocked">Android belum mengizinkan Debug nirkabel di Wi-Fi ini. Buka pengaturan untuk mengizinkannya.</string>
+    <string name="calls_recovery_wireless_refused">Android menolak izin untuk mengaktifkan Debug nirkabel secara otomatis.</string>
+    <string name="calls_recovery_wireless_failed">Debug nirkabel tidak dapat dipulihkan. Buka pengaturannya atau coba lagi.</string>
+    <string name="calls_recovery_waiting_helper">Menunggu asisten audio; izin dapat diterapkan setelah terhubung.</string>
+    <string name="calls_recovery_waiting_wifi">Menunggu Wi-Fi untuk memulihkan asisten.</string>
+    <string name="calls_recovery_wireless_ready">Izin untuk mengaktifkan Debug nirkabel saat diperlukan telah diberikan.</string>
+    <string name="calls_recovery_background_restricted">Aktivitas latar belakang belum dikonfirmasi diizinkan.</string>
+    <string name="calls_recovery_battery_managed">Pengoptimalan baterai masih aktif.</string>
+    <string name="calls_recovery_background_ready">Aktivitas latar belakang diizinkan.</string>
+    <string name="calls_recovery_battery_refused">Android tidak memberikan pengecualian pengoptimalan baterai.</string>
+    <string name="calls_recovery_save_failed">Pengaturan tidak dapat disimpan. Coba lagi.</string>
+    <string name="calls_recovery_wireless_status">Pemulihan nirkabel: %1$s</string>
+    <string name="calls_recovery_background_status">Latar belakang: %1$s</string>
+    <string name="calls_recovery_open_background">Buka pengaturan latar belakang</string>
+    <string name="calls_recovery_retry">Coba lagi dan periksa</string>
+    <string name="calls_recovery_background_unknown">Status latar belakang belum diperiksa.</string>
+</resources>

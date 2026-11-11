@@ -6,6 +6,8 @@ import com.wangzan101.mika.core.shell.RecoveryConsent
 import com.wangzan101.mika.core.shell.RestoreOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,9 +55,30 @@ class RecoverySettingsTest {
         assertNull(RecoverySettings(prefs).lastRestore.value)
     }
 
+    @Test fun phoneRecoveryChoicesExcludeAccessibilityAndLateVerificationCannotUndoOptOut() {
+        val settings = RecoverySettings(MemoryPrefs())
+        settings.choosePhoneRecovery(false)
+        assertTrue(settings.consent.value.wants(a11y))
+        settings.recordVerifiedPhoneRecovery(RecoveryCapability.AutoWirelessDebugging, true)
+        assertFalse(settings.consent.value.wants(RecoveryCapability.AutoWirelessDebugging))
+        assertFalse(settings.consent.value.isApplied(RecoveryCapability.AutoWirelessDebugging))
+        settings.choosePhoneRecovery(true)
+        assertTrue(settings.consent.value.wants(RecoveryCapability.AutoWirelessDebugging))
+        assertFalse(settings.consent.value.isApplied(RecoveryCapability.AutoWirelessDebugging))
+    }
+
+    @Test fun unsuccessfulPreferenceCommitDoesNotClaimNewRecoveryChoice() {
+        val prefs = MemoryPrefs()
+        val settings = RecoverySettings(prefs)
+        prefs.commitSuccess = false
+        assertThrows(IllegalStateException::class.java) { settings.choosePhoneRecovery(false) }
+        assertEquals(RecoveryConsent(), settings.consent.value)
+    }
+
     /** 内存里的设置,只够这几项读写。 */
     private class MemoryPrefs : SharedPreferences {
         private val values = HashMap<String, Any?>()
+        var commitSuccess = true
 
         override fun getAll(): Map<String, *> = values.toMap()
         override fun getString(key: String, defValue: String?) = values[key] as? String ?: defValue
@@ -82,6 +105,7 @@ class RecoverySettingsTest {
             override fun remove(key: String) = apply { removed += key }
             override fun clear() = apply { clear = true }
             override fun commit(): Boolean {
+                if (!commitSuccess) return false
                 if (clear) values.clear()
                 removed.forEach(values::remove)
                 values.putAll(pending)

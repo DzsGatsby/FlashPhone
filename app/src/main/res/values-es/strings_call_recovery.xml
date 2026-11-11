@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_recovery_title">Recuperación automática</string>
+    <string name="calls_recovery_note">Recupera el asistente de audio y la actividad en segundo plano cuando Android lo permita.</string>
+    <string name="calls_recovery_off">Desactivada</string>
+    <string name="calls_recovery_applying">Aplicando ajustes…</string>
+    <string name="calls_recovery_network_blocked">Android no ha permitido la depuración inalámbrica en esta red Wi-Fi. Abre los ajustes para permitirla.</string>
+    <string name="calls_recovery_wireless_refused">Android ha rechazado el permiso para activar la depuración inalámbrica automáticamente.</string>
+    <string name="calls_recovery_wireless_failed">No se pudo recuperar la depuración inalámbrica. Abre sus ajustes o reinténtalo.</string>
+    <string name="calls_recovery_waiting_helper">Esperando al asistente de audio; los permisos se pueden aplicar cuando se conecte.</string>
+    <string name="calls_recovery_waiting_wifi">Esperando una red Wi-Fi para recuperar el asistente.</string>
+    <string name="calls_recovery_wireless_ready">Permiso concedido para activar la depuración inalámbrica cuando sea necesario.</string>
+    <string name="calls_recovery_background_restricted">No se ha confirmado el permiso de actividad en segundo plano.</string>
+    <string name="calls_recovery_battery_managed">La optimización de batería sigue activada.</string>
+    <string name="calls_recovery_background_ready">Se permite la actividad en segundo plano.</string>
+    <string name="calls_recovery_battery_refused">Android no ha concedido la exención de optimización de batería.</string>
+    <string name="calls_recovery_save_failed">No se pudo guardar el ajuste. Vuelve a intentarlo.</string>
+    <string name="calls_recovery_wireless_status">Recuperación inalámbrica: %1$s</string>
+    <string name="calls_recovery_background_status">Segundo plano: %1$s</string>
+    <string name="calls_recovery_open_background">Abrir ajustes de segundo plano</string>
+    <string name="calls_recovery_retry">Reintentar y comprobar</string>
+    <string name="calls_recovery_background_unknown">No se ha comprobado el estado en segundo plano.</string>
+</resources>

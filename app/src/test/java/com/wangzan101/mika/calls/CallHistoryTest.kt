@@ -23,6 +23,25 @@ class CallHistoryTest {
         }
     }
 
+
+    @Test fun recordingMetadataSurvivesHistoryEditsAndSerialization() = runBlocking {
+        val info = CallRecordingInfo("89f1f858-043a-4677-889d-647195c5a74d", 8_000L, false, 512_044L)
+        val original = record(1).copy(recording = info)
+        val decoded = Json.decodeFromString<CallRecord>(Json.encodeToString(original))
+        assertEquals(info, decoded.recording)
+        val storage = MemoryStorage(listOf(decoded))
+        val history = CallHistory(storage)
+        history.setHandled(original.id, true)
+        assertEquals(info, storage.records.single().recording)
+        history.setHandled(original.id, false)
+        assertEquals(CallHistory.Result.SAVED, history.setRecording(original.id, info.copy(partial = true)))
+        assertFalse(history.state.value.single().handled)
+        assertTrue(history.state.value.single().recording!!.partial)
+        history.delete(original.id)
+        assertEquals(CallHistory.Result.NOT_FOUND, history.setRecording(original.id, info))
+        assertTrue(history.state.value.isEmpty())
+    }
+
     private fun record(id: Int) = CallRecord(
         id = id.toString(), number = null, direction = CallDirection.INCOMING,
         startedAtMs = id.toLong(), endedAtMs = id + 1L, result = "通话已结束",
@@ -93,6 +112,7 @@ class CallHistoryTest {
         assertFalse(legacy.handled)
         assertNull(legacy.task)
         assertNull(legacy.audioReport)
+        assertNull(legacy.recording)
     }
 
     @Test fun outgoingTaskRoundTripsWithoutClaimingCompletionOrReusingItOnTheNextCall() = runBlocking {
