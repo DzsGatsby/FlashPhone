@@ -23,12 +23,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Keeps an explicitly enabled phone standby visible. Telecom still owns the actual call. */
+/** Holds visible incoming standby or an explicitly requested outgoing-call lease. Telecom owns the call. */
 class CallStandbyService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var runtime: CallRuntime? = null
     private var statusJob: Job? = null
     private var promoted = false
+    private var stopping = false
+    internal val leaseAvailable: Boolean get() = promoted && !stopping
     internal var stickyAutoAnswer = false
         private set
 
@@ -53,20 +55,21 @@ class CallStandbyService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         }.isSuccess
-        if (!promoted) {
+        if (!promoted || stopping) {
             if (explicit || intent == null) calls?.onStandbyStartFailed("Android 未允许启动后台待命，请在应用中重试")
-            stopSelf(startId)
+            requestStop(startId)
             return START_NOT_STICKY
         }
         if (calls == null || (intent != null && !explicit)) {
             if (calls != null && stickyAutoAnswer && calls.hasAuthorizedIncomingStandby()) return START_STICKY
-            if (calls?.hasLockedDialForegroundWork() != true || statusJob == null) stopSelf(startId)
+            if (calls?.hasOutgoingForegroundWork() != true || statusJob == null) requestStop(startId)
             return START_NOT_STICKY
         }
         val incoming = calls.hasAuthorizedIncomingStandby() && (intent == null || calls.isIncomingStandbyStartRequested() || stickyAutoAnswer)
-        if (!notificationAllowed || (!incoming && (intent == null || !calls.hasLockedDialForegroundWork()))) {
+        if (!notificationAllowed || !CallStandbyPolicy.acceptsStart(
+                incomingAuthorized = incoming, explicitRequest = explicit, outgoingWork = calls.hasOutgoingForegroundWork())) {
             calls.onStandbyStartFailed(if (notificationAllowed) "后台待命尚未开启，或手机重启后尚未解锁" else "请允许后台待命通知")
-            stopSelf(startId)
+            requestStop(startId)
             return START_NOT_STICKY
         }
 
@@ -74,23 +77,24 @@ class CallStandbyService : Service() {
         calls.onStandbyStarted(this)
         if (statusJob == null) statusJob = scope.launch {
             calls.state.map { state ->
-                val lockedDial = calls.hasLockedDialForegroundWork()
+                val outgoing = calls.hasOutgoingForegroundWork()
                 val receive = stickyAutoAnswer && calls.hasAuthorizedIncomingStandby()
-                if ((!receive && !lockedDial) || !notificationsAvailable(this@CallStandbyService)) return@map null
+                if ((!receive && !outgoing) || !notificationsAvailable(this@CallStandbyService)) return@map null
                 Notice(when {
                     state.lockedDialPreparing -> "正在准备锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒"
                     state.lockedDialRequestId != null -> "等待锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒"
-                    lockedDial -> "正在处理锁屏拨出"
+                    outgoing && state.aiActive -> "AI 外呼已接通，正在通话"
+                    outgoing -> "正在准备 AI 外呼"
                     state.autoAnswerStage == CallAutoAnswerStage.PAUSED -> "自动接听已暂停"
                     state.backgroundStandbyBlockedReason != null -> "后台待命暂不可用，打开查看"
                     state.aiActive -> "后台待命已开启，AI 正在通话"
                     else -> "后台待命已开启，可在电话设置中关闭"
                 }, state.lockedDialRequestId)
             }.distinctUntilChanged().collect { notice ->
-                if (notice == null) stopSelf()
+                if (notice == null) requestStop()
                 else if (runCatching {
                     checkNotNull(getSystemService(NotificationManager::class.java)).notify(NOTIFICATION_ID, notification(notice))
-                }.isFailure) stopSelf()
+                }.isFailure) requestStop()
             }
         }
         // A null Intent is only accepted when Android restarts this already opted-in service.
@@ -98,7 +102,14 @@ class CallStandbyService : Service() {
         return if (incoming) START_STICKY else START_NOT_STICKY
     }
 
+    private fun requestStop(startId: Int? = null) {
+        // A queued stop cannot be revoked by reusing this instance for a new outgoing lease.
+        stopping = true
+        if (startId == null) stopSelf() else stopSelf(startId)
+    }
+
     override fun onDestroy() {
+        stopping = true
         scope.cancel()
         runtime?.onStandbyStopped(this)
         runtime = null
@@ -154,30 +165,5 @@ class CallStandbyService : Service() {
             manager.areNotificationsEnabled() &&
                 manager.getNotificationChannel(CHANNEL)?.let { it.importance != NotificationManager.IMPORTANCE_NONE } == true
         }.getOrDefault(false)
-    }
-}
-
-internal object CallStandbyPolicy {
-    fun optedIn(config: CallConfig, userUnlocked: Boolean): Boolean =
-        userUnlocked && config.enabled && config.autoAnswer && config.audioVerified && config.credentialsConfigured
-
-    fun interactiveForeground(visible: Boolean, interactive: Boolean, keyguardShowing: Boolean): Boolean =
-        visible && interactive && !keyguardShowing
-
-    fun allowsAutomaticAnswer(userUnlocked: Boolean, interactiveForeground: Boolean, serviceRunning: Boolean, notificationsAllowed: Boolean): Boolean =
-        userUnlocked && (interactiveForeground || serviceRunning && notificationsAllowed)
-
-    fun activeWakeBudgetMs(maxCallSeconds: Int): Long = maxCallSeconds.coerceIn(15, CallPolicy.MAX_SECONDS) * 1_000L + 10_000L
-}
-
-/** A failed automatic restore must not spin; user retry is always available. */
-internal class CallStandbyResumeGate {
-    private var attemptedWhileVisible = false
-
-    fun take(visible: Boolean, eligible: Boolean): Boolean {
-        if (!visible) attemptedWhileVisible = false
-        if (!visible || !eligible || attemptedWhileVisible) return false
-        attemptedWhileVisible = true
-        return true
     }
 }
