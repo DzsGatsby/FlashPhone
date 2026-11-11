@@ -21,7 +21,6 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wangzan101.mika.ChineseUi
@@ -72,7 +71,7 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithText(workspaceText(R.string.calls_helper_setup_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
             captureWorkspaceScreenshot("helper-recovery.png")
-            pressBack()
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithText(workspaceText(R.string.flash_system_center_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-open-system").assertIsDisplayed().performClick()
 
