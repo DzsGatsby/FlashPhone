@@ -64,18 +64,18 @@ class CallWorkspaceVisualTest {
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
+            screenshot("operator-deck.png")
             assertWorkspaceLabelsFullyVisible()
-            captureWorkspaceScreenshot("operator-deck.png")
 
             // Follow a real setup concern into the system center and the phone-local recovery screen.
             compose.onNodeWithTag("call-open-system").performClick()
             compose.onNodeWithText(workspaceText(R.string.flash_system_center_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
-            captureWorkspaceScreenshot("system-recovery.png")
+            screenshot("system-recovery.png")
             compose.onNodeWithText(workspaceText(R.string.calls_helper_name)).performScrollTo().performClick()
             compose.onNodeWithText(workspaceText(R.string.calls_helper_setup_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
-            captureWorkspaceScreenshot("helper-recovery.png")
+            screenshot("helper-recovery.png")
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithText(workspaceText(R.string.flash_system_center_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-open-system").assertIsDisplayed().performClick()
@@ -87,15 +87,15 @@ class CallWorkspaceVisualTest {
             compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
             compose.onNodeWithTag("call-task-goal").performTextReplacement(GOAL)
             compose.onNodeWithTag("call-task-goal").assertIsDisplayed().assertIsFocused()
-            captureWorkspaceScreenshot("task-keyboard.png")
+            screenshot("task-keyboard.png")
             compose.onNodeWithTag("call-task-questions").performScrollTo().performTextReplacement(QUESTION)
             hideWorkspaceKeyboard(scenario)
             compose.onNodeWithTag("call-number").performScrollTo().assertTextContains(NUMBER)
-            captureWorkspaceScreenshot("task-draft.png")
+            screenshot("task-draft.png")
 
             selectWorkspace(R.string.flash_hub_audit)
             compose.onNodeWithText(workspaceText(R.string.calls_history_empty)).assertIsDisplayed()
-            captureWorkspaceScreenshot("recording-audit-route.png")
+            screenshot("recording-audit-route.png")
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
             selectWorkspace(R.string.flash_hub_dial)
             compose.onNodeWithTag("call-task-goal").performScrollTo().assertTextContains(GOAL)
@@ -106,7 +106,7 @@ class CallWorkspaceVisualTest {
             val instructionsBefore = app.calls.instructions.items.value
             compose.onNodeWithTag("call-instruction-add").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
-            captureWorkspaceScreenshot("inline-playbook.png")
+            screenshot("inline-playbook.png")
             compose.onNodeWithTag("call-instruction-add").performClick()
             compose.waitUntil(5_000) {
                 compose.onNodeWithTag("call-instruction-title-input").fetchSemanticsNode()
@@ -115,7 +115,8 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithTag("call-instruction-title-input").assertIsDisplayed().assertIsFocused()
             compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
             compose.onNodeWithTag("call-instruction-title-input").performTextReplacement("仅用于界面验收，取消不保存")
-            captureWorkspaceScreenshot("instruction-editor-keyboard.png")
+            compose.onNodeWithTag("call-instruction-title-input").assertTextContains("仅用于界面验收，取消不保存")
+            screenshot("instruction-editor-keyboard.png")
             compose.onNodeWithText(workspaceText(R.string.call_instructions_cancel)).performClick()
             compose.onNodeWithTag("call-instruction-title-input").assertDoesNotExist()
             hideWorkspaceKeyboard(scenario)
@@ -130,8 +131,13 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithTag("call-page-receive").performTouchInput { swipeUp(durationMillis = 300) }
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
             assertWorkspaceLabelsFullyVisible()
-            captureWorkspaceScreenshot("operator-deck-scrolled.png")
+            screenshot("operator-deck-scrolled.png")
         }
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        captureWorkspaceScreenshot(name)
     }
 
     private fun selectWorkspace(@StringRes label: Int) {
@@ -150,7 +156,11 @@ class CallWorkspaceVisualTest {
             ).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertTrue("The full navigation label must have a measured text layout: $label", layouts.isNotEmpty())
             for (layout in layouts) {
-                assertTrue("Navigation label must fit without overflow: $label", !layout.hasVisualOverflow)
+                assertTrue("Navigation label must fit without overflow: $label; " +
+                    "widthOverflow=${layout.didOverflowWidth}, heightOverflow=${layout.didOverflowHeight}, " +
+                    "size=${layout.size}, lines=${layout.lineCount}, " +
+                    "ellipsized=${(0 until layout.lineCount).map { layout.isLineEllipsized(it) }}",
+                    !layout.hasVisualOverflow)
                 assertTrue("Navigation label must not be ellipsized: $label",
                     (0 until layout.lineCount).none { layout.isLineEllipsized(it) })
             }
@@ -191,6 +201,9 @@ internal fun hideWorkspaceKeyboard(scenario: ActivityScenario<MainActivity>) {
 internal fun captureWorkspaceScreenshot(name: String) {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     instrumentation.waitForIdleSync()
+    // Main-thread idleness can precede the rendered Surface/IME frame and launch fade completion.
+    // This bounded capture-only wait does not drive focus, keyboard visibility or test assertions.
+    android.os.SystemClock.sleep(300)
     val directory = File(instrumentation.targetContext.cacheDir, "call-workspace-ui-screenshots").apply { mkdirs() }
     val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "Native screenshot capture failed" }
     try {

@@ -678,6 +678,7 @@ private fun FlashWorkspaceSwitcher(
                     )
                     Text(
                         text = stringResource(tab.label),
+                        modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontSize = 13.5.sp,

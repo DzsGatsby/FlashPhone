@@ -24,7 +24,7 @@ English · [简体中文](docs/readme/README.zh-CN.md) · [繁體中文](docs/re
 2. Set up the in-app call audio helper via wireless pairing and add credentials for Volcengine's real-time voice service. Audio support varies by device and Android build.
 3. Test that both sides can hear and that you can take over before enabling automatic answering. Once verified and enabled, background standby starts automatically; turning automatic answering off revokes it. See the [setup and compatibility guide](docs/README.en.md).
 
-Already installed? Use **Settings → About → Check for updates**, or install the signed APK over the existing app to keep your settings and call records. See the [release and migration guide (简体中文)](docs/app-updates.md).
+Already installed? Use **About → Check for updates** (the top-right info icon; older versions use Settings → About), or install the signed APK over the existing app to keep your settings and call records. See the [release and migration guide (简体中文)](docs/app-updates.md).
 
 ## Service and data
 
