@@ -103,6 +103,10 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
             captureWorkspaceScreenshot("inline-playbook.png")
             compose.onNodeWithTag("call-instruction-add").performClick()
+            compose.waitUntil(5_000) {
+                compose.onNodeWithTag("call-instruction-title-input").fetchSemanticsNode()
+                    .config[SemanticsProperties.Focused]
+            }
             compose.onNodeWithTag("call-instruction-title-input").assertIsDisplayed().assertIsFocused()
             compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
             compose.onNodeWithTag("call-instruction-title-input").performTextReplacement("仅用于界面验收，取消不保存")
