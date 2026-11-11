@@ -1131,38 +1131,53 @@ class CallRuntime(private val app: MikaApp) {
         }
         w.mediaStage = MediaStage.SHELL_OPEN
         w.audioHelper = helper
-        val channel = withContext(NonCancellable + Dispatchers.IO) {
-            val result = helper.openCallAudio(w.config.audioMode.wire, w.audioOwner)
-            if (result?.getBoolean("ready") != true) {
-                throw CallProblem(result?.getString("reason")?.take(160)?.takeIf { it.isNotBlank() } ?: "此设备未建立双向电话音频")
-            }
-            val down = result.fd("downlink")
-            val up = result.fd("uplink")
-            val monitor = result.fd("recording")
-            if (down == null || up == null ||
-                result.getInt("captureRate") != VolcRealtimeClient.INPUT_SAMPLE_RATE ||
-                result.getInt("playRate") != VolcRealtimeClient.OUTPUT_SAMPLE_RATE) {
-                runCatching { down?.close() }
-                runCatching { up?.close() }
-                runCatching { monitor?.close() }
-                throw CallProblem("内置助手的电话音频格式不兼容")
-            }
-            val capture = ParcelFileDescriptor.AutoCloseInputStream(down)
-            val playback = ParcelFileDescriptor.AutoCloseOutputStream(up)
-            w.capture = capture
-            w.playback = playback
-            if (monitor != null) {
-                if (result.getInt("recordingProtocol") == 1) {
-                    val input = ParcelFileDescriptor.AutoCloseInputStream(monitor)
-                    // Optional recording must never stop an otherwise usable carrier call.
-                    w.recording = runCatching { recordings.start(w.id, input) }.getOrElse {
-                        runCatching { input.close() }
-                        null
-                    }
-                } else runCatching { monitor.close() }
-            }
-            CallPcmBridge(capture, playback) {
-                withContext(Dispatchers.IO) { runCatching { helper.flushCallAudio(w.audioOwner) }.getOrDefault(false) }
+        val audioAccount = target.call.details?.accountHandle
+        val channel = awaitCallAudioOpen(
+            isCurrent = {
+                sameActiveMuteTarget(w, target) && !target.suppressed && shell === helper &&
+                    target.call.details?.accountHandle == audioAccount &&
+                    (w.direction != CallDirection.OUTGOING || (audioAccount != null && audioAccount == w.sim?.handle)) &&
+                    settings.state.value.enabled && w.config.audioMode == settings.state.value.audioMode &&
+                    mute.isConfirmed(target.service.telecomMuted, microphoneMuted())
+            },
+            nowMs = SystemClock::elapsedRealtime,
+        ) {
+            // A successful attempt transfers every descriptor to Work before cancellation can run cleanup.
+            // Only the helper's resource-free readiness rejection can request another attempt.
+            withContext(NonCancellable + Dispatchers.IO) {
+                val result = helper.openCallAudio(w.config.audioMode.wire, w.audioOwner)
+                if (result?.getBoolean("ready") != true) {
+                    if (result?.getString("errorCode") == "cellular_audio_not_ready") return@withContext null
+                    throw CallProblem(result?.getString("reason")?.take(160)?.takeIf { it.isNotBlank() } ?: "此设备未建立双向电话音频")
+                }
+                val down = result.fd("downlink")
+                val up = result.fd("uplink")
+                val monitor = result.fd("recording")
+                if (down == null || up == null ||
+                    result.getInt("captureRate") != VolcRealtimeClient.INPUT_SAMPLE_RATE ||
+                    result.getInt("playRate") != VolcRealtimeClient.OUTPUT_SAMPLE_RATE) {
+                    runCatching { down?.close() }
+                    runCatching { up?.close() }
+                    runCatching { monitor?.close() }
+                    throw CallProblem("内置助手的电话音频格式不兼容")
+                }
+                val capture = ParcelFileDescriptor.AutoCloseInputStream(down)
+                val playback = ParcelFileDescriptor.AutoCloseOutputStream(up)
+                w.capture = capture
+                w.playback = playback
+                if (monitor != null) {
+                    if (result.getInt("recordingProtocol") == 1) {
+                        val input = ParcelFileDescriptor.AutoCloseInputStream(monitor)
+                        // Optional recording must never stop an otherwise usable carrier call.
+                        w.recording = runCatching { recordings.start(w.id, input) }.getOrElse {
+                            runCatching { input.close() }
+                            null
+                        }
+                    } else runCatching { monitor.close() }
+                }
+                CallPcmBridge(capture, playback) {
+                    withContext(Dispatchers.IO) { runCatching { helper.flushCallAudio(w.audioOwner) }.getOrDefault(false) }
+                }
             }
         }
         if (!sameActiveMuteTarget(w, target) || target.suppressed || shell !== helper ||

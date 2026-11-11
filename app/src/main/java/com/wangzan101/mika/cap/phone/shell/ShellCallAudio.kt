@@ -85,7 +85,11 @@ internal class ShellCallAudio(private val context: Context) {
         if (!owner.isBinderAlive) return failure("Call audio owner is gone.")
         val capability = probe(mode)
         if (!capability.getBoolean("ready")) return rejected(owner, capability)
-        if (!inPstnCall()) return rejected(owner, failure("Cellular call audio is not active."))
+        if (!inPstnCall()) return rejected(owner, failure("Cellular call audio is not active.").apply {
+            // This is the only retryable rejection: no AudioRecord, AudioTrack or pipe exists yet.
+            // Telecom ACTIVE can arrive before AudioManager has entered its cellular mode.
+            putString("errorCode", "cellular_audio_not_ready")
+        })
         val modes = candidates(mode, capability.getBoolean("direct"), capability.getBoolean("redirect"))
         val errors = ArrayList<String>(modes.size)
         for (backend in modes) {
