@@ -6,17 +6,21 @@ import android.os.ParcelFileDescriptor
 import android.view.WindowInsets
 import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -60,6 +64,7 @@ class CallWorkspaceVisualTest {
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
+            assertWorkspaceLabelsFullyVisible()
             captureWorkspaceScreenshot("operator-deck.png")
 
             // Follow a real setup concern into the system center and the phone-local recovery screen.
@@ -124,6 +129,7 @@ class CallWorkspaceVisualTest {
             // Real native scrolling must leave the global route back to readiness reachable.
             compose.onNodeWithTag("call-page-receive").performTouchInput { swipeUp(durationMillis = 300) }
             compose.onNodeWithTag("call-open-system").assertIsDisplayed()
+            assertWorkspaceLabelsFullyVisible()
             captureWorkspaceScreenshot("operator-deck-scrolled.png")
         }
     }
@@ -132,6 +138,23 @@ class CallWorkspaceVisualTest {
         compose.onNode(
             hasText(workspaceText(label)) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab),
         ).assertIsDisplayed().performClick()
+    }
+
+    private fun assertWorkspaceLabelsFullyVisible() {
+        for (id in listOf(R.string.flash_hub_guard, R.string.flash_hub_dial, R.string.flash_hub_audit)) {
+            val label = workspaceText(id)
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNode(
+                hasText(label) and hasAnyAncestor(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)),
+                useUnmergedTree = true,
+            ).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertTrue("The full navigation label must have a measured text layout: $label", layouts.isNotEmpty())
+            for (layout in layouts) {
+                assertTrue("Navigation label must fit without overflow: $label", !layout.hasVisualOverflow)
+                assertTrue("Navigation label must not be ellipsized: $label",
+                    (0 until layout.lineCount).none { layout.isLineEllipsized(it) })
+            }
+        }
     }
 
     private companion object {

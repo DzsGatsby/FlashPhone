@@ -666,9 +666,9 @@ private fun FlashWorkspaceSwitcher(
                     .padding(horizontal = 6.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
                         imageVector = tab.icon,
@@ -685,9 +685,11 @@ private fun FlashWorkspaceSwitcher(
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         ),
                         color = if (isSelected) c.accent else c.ink2,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                }
+                Box(Modifier.align(Alignment.TopEnd)) {
                     if (tab == CallWorkspaceTab.History && openHistoryCount > 0) {
                         Box(
                             Modifier
