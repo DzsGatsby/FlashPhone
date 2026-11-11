@@ -13,4 +13,5 @@
     <string name="calls_recording_play">Слушать</string>
     <string name="calls_recording_stop">Остановить</string>
     <string name="calls_recording_missing">Для этого звонка нет доступной записи.</string>
+    <string name="calls_recording_saving">Сохранение записи…</string>
 </resources>

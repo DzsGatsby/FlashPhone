@@ -469,7 +469,7 @@ class CallRuntime(private val app: MikaApp) {
                 // Publish the actual end time promptly. Audio archiving never delays handoff or cleanup.
                 runCatching { records.append(record) }
                 val info = runCatching { session?.finish() }.getOrNull()
-                if (info != null && records.setRecording(record.id, info) == CallHistory.Result.NOT_FOUND) {
+                if (records.setRecording(record.id, info) == CallHistory.Result.NOT_FOUND && info != null) {
                     // A record deleted while archiving must not be recreated by a late completion.
                     runCatching { recordings.delete(info.id) }
                 }
@@ -1045,7 +1045,7 @@ class CallRuntime(private val app: MikaApp) {
                     if (w.telecomActionIssued) {
                         val record = CallRecord(w.id, it.number, w.direction, w.activeAt ?: it.createdAt,
                             endedAt, reason, w.transcript.toList(), task = w.task,
-                            audioReport = w.mediaCounters.recordReport())
+                            audioReport = w.mediaCounters.recordReport(), recordingPending = recordingSession != null)
                         saveFinishedRecord(record, recordingSession)
                     }
                 }

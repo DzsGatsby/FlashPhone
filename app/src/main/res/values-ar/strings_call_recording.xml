@@ -13,4 +13,5 @@
     <string name="calls_recording_play">تشغيل</string>
     <string name="calls_recording_stop">إيقاف</string>
     <string name="calls_recording_missing">لا يوجد تسجيل قابل للتشغيل لهذه المكالمة.</string>
+    <string name="calls_recording_saving">جارٍ حفظ التسجيل…</string>
 </resources>

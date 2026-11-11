@@ -31,6 +31,7 @@ data class CallRecord(
     val task: CallTaskBrief? = null,
     val audioReport: CallAudioReport? = null,
     val recording: CallRecordingInfo? = null,
+    val recordingPending: Boolean = false,
 ) {
     override fun toString(): String = "CallRecord(direction=$direction, result=$result)"
 }
@@ -98,8 +99,17 @@ internal class CallHistory(private val storage: Storage) {
     suspend fun setHandled(id: String, handled: Boolean): Result =
         edit(id) { records -> records.map { if (it.id == id) it.copy(handled = handled) else it } }
 
-    suspend fun setRecording(id: String, recording: CallRecordingInfo): Result =
-        edit(id) { records -> records.map { if (it.id == id) it.copy(recording = recording) else it } }
+    suspend fun setRecording(id: String, recording: CallRecordingInfo?): Result = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val canWrite = readOnce()
+            if (mutable.value.none { it.id == id }) return@withLock Result.NOT_FOUND
+            val next = mutable.value.map { if (it.id == id) it.copy(recording = recording, recordingPending = false) else it }
+            val result = if (canWrite) persist(next) else Result.WRITE_FAILED
+            // A durable-history failure must not leave the current call stuck on "saving recording".
+            if (result == Result.WRITE_FAILED) mutable.value = next
+            result
+        }
+    }
 
     suspend fun delete(id: String): Result = edit(id) { records -> records.filterNot { it.id == id } }
 
@@ -128,7 +138,7 @@ internal class CallHistory(private val storage: Storage) {
 
     private fun readOnce(): Boolean {
         if (loaded) return true
-        val records = runCatching { storage.read() }.getOrElse {
+        val records = runCatching { storage.read().map { it.copy(recordingPending = false) } }.getOrElse {
             failed.value = true
             return false
         }

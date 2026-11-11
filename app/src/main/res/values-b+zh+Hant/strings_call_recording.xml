@@ -13,4 +13,5 @@
     <string name="calls_recording_play">播放</string>
     <string name="calls_recording_stop">停止</string>
     <string name="calls_recording_missing">這通電話沒有可播放的錄音。</string>
+    <string name="calls_recording_saving">正在儲存錄音…</string>
 </resources>

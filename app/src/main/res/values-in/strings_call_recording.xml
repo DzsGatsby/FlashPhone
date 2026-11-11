@@ -13,4 +13,5 @@
     <string name="calls_recording_play">Putar</string>
     <string name="calls_recording_stop">Hentikan</string>
     <string name="calls_recording_missing">Tidak ada rekaman yang dapat diputar untuk panggilan ini.</string>
+    <string name="calls_recording_saving">Menyimpan rekaman…</string>
 </resources>

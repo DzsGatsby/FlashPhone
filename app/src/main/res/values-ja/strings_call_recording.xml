@@ -13,4 +13,5 @@
     <string name="calls_recording_play">再生</string>
     <string name="calls_recording_stop">停止</string>
     <string name="calls_recording_missing">この通話には再生できる録音がありません。</string>
+    <string name="calls_recording_saving">録音を保存中…</string>
 </resources>

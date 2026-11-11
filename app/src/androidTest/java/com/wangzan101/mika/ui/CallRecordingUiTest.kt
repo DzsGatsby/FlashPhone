@@ -19,6 +19,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -149,7 +151,7 @@ class CallRecordingUiTest {
         assertEquals("Returning to foreground must not reopen the recording", 1, opened.get())
 
         play()
-        compose.onNodeWithText(number("1"), substring = true).performScrollTo().performClick()
+        historyRow("1").performScrollTo().performClick()
         compose.waitUntil(3_000) { closed.size == 2 && !audioManager.isMusicActive }
         compose.onNodeWithTag("call-recording-player").assertDoesNotExist()
         expand("1")
@@ -195,10 +197,31 @@ class CallRecordingUiTest {
         compose.onNodeWithTag("call-history-delete-confirm").assertIsDisplayed().performClick()
         compose.waitUntil(3_000) { deleted.toList() == listOf("record-2") }
         compose.onNodeWithTag("call-history-search").performScrollTo().performTextClearance()
-        compose.onNodeWithText(number("1"), substring = true).performScrollTo().assertIsDisplayed()
+        historyRow("1").performScrollTo().assertIsDisplayed()
         assertEquals(listOf("record-1"), records.value.map { it.id })
         assertEquals("History actions must not autoplay a recording", 0, opened.get())
         screenshot("recording-history-actions.png")
+    }
+
+    @Test fun savingRecordingBecomesPlayableWithoutShowingMissingOrAutoplaying() {
+        val completed = record("1")
+        records.value = listOf(completed.copy(recording = null, recordingPending = true))
+        showHistory()
+        historyRow("1").performScrollTo().performClick()
+        compose.onNodeWithText(text(R.string.calls_recording_saving)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.calls_recording_missing)).assertDoesNotExist()
+        compose.onNodeWithTag("call-recording-player").assertDoesNotExist()
+        assertEquals(0, opened.get())
+        screenshot("recording-saving.png")
+
+        compose.runOnIdle { records.value = listOf(completed.copy(recordingPending = false)) }
+        compose.onNodeWithTag("call-recording-player").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.calls_recording_saving)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.calls_recording_missing)).assertDoesNotExist()
+        SystemClock.sleep(250)
+        assertEquals("Saving completion must not autoplay the new recording", 0, opened.get())
+        assertFalse(audioManager.isMusicActive)
+        screenshot("recording-ready.png")
     }
 
     private fun showHistory() {
@@ -239,7 +262,7 @@ class CallRecordingUiTest {
     }
 
     private fun expand(index: String) {
-        compose.onNodeWithText(number(index), substring = true).performScrollTo().performClick()
+        historyRow(index).performScrollTo().performClick()
         compose.onNodeWithTag("call-recording-player").performScrollTo().assertIsDisplayed()
     }
 
@@ -273,6 +296,10 @@ class CallRecordingUiTest {
     )
 
     private fun number(index: String) = "555010$index"
+
+    private fun historyRow(index: String) = compose.onNode(
+        hasText(number(index), substring = true) and !hasTestTag("call-history-search"),
+    )
 
     private fun writeStereoWav(file: File) {
         val rate = 16_000

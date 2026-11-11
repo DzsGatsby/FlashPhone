@@ -42,6 +42,25 @@ class CallHistoryTest {
         assertTrue(history.state.value.isEmpty())
     }
 
+    @Test fun pendingArchiveFinishesWithoutReportingAFalseMissingRecording() = runBlocking {
+        val history = CallHistory(MemoryStorage())
+        val pending = record(1).copy(recordingPending = true)
+        history.append(pending)
+        assertTrue(history.state.value.single().recordingPending)
+        history.setRecording(pending.id, null)
+        assertFalse(history.state.value.single().recordingPending)
+        assertNull(history.state.value.single().recording)
+        val reopened = CallHistory(MemoryStorage(listOf(pending)))
+        reopened.load()
+        assertFalse("An interrupted old save cannot spin forever after restart", reopened.state.value.single().recordingPending)
+        val failedStorage = MemoryStorage().apply { failRead = true }
+        val failedHistory = CallHistory(failedStorage)
+        failedHistory.append(pending)
+        assertEquals(CallHistory.Result.WRITE_FAILED, failedHistory.setRecording(pending.id, null))
+        assertFalse(failedHistory.state.value.single().recordingPending)
+        assertTrue(failedHistory.writeFailed.value)
+    }
+
     private fun record(id: Int) = CallRecord(
         id = id.toString(), number = null, direction = CallDirection.INCOMING,
         startedAtMs = id.toLong(), endedAtMs = id + 1L, result = "通话已结束",

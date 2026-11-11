@@ -13,4 +13,5 @@
     <string name="calls_recording_play">재생</string>
     <string name="calls_recording_stop">정지</string>
     <string name="calls_recording_missing">이 통화에는 재생할 수 있는 녹음이 없습니다.</string>
+    <string name="calls_recording_saving">녹음 저장 중…</string>
 </resources>

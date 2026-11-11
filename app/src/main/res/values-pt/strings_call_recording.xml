@@ -13,4 +13,5 @@
     <string name="calls_recording_play">Reproduzir</string>
     <string name="calls_recording_stop">Parar</string>
     <string name="calls_recording_missing">Não há gravação disponível para esta chamada.</string>
+    <string name="calls_recording_saving">Salvando gravação…</string>
 </resources>
