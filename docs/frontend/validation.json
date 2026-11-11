@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-12",
+  "kind": "local-html-frontend",
+  "source_attachment_sha256": "21d82288629ef207b58fb7ca1d663f9819c8e4289ca0b69de6ad7d0aa372cc7c",
+  "artifact_sha256": "e156fac1f357d004b1e49789807bb2ff8345ed5d6aa580c641c61890c4b55214",
+  "artifact_bytes": 185609,
+  "viewports": [
+    {
+      "width": 375,
+      "height": 812
+    },
+    {
+      "width": 834,
+      "height": 1112
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 812,
+      "height": 375
+    }
+  ],
+  "interaction_checks": {
+    "passed": 108,
+    "total": 108
+  },
+  "additional_checks": [
+    {
+      "name": "detail deep link",
+      "passed": true
+    },
+    {
+      "name": "clipboard contains actual transcript",
+      "passed": true
+    },
+    {
+      "name": "real local WAV decoded and seeked",
+      "passed": true
+    },
+    {
+      "name": "audio source preserved during detail changes",
+      "passed": true
+    },
+    {
+      "name": "native audio playback progresses with isolated test output",
+      "passed": true
+    },
+    {
+      "name": "JSON export contains records",
+      "passed": true
+    },
+    {
+      "name": "playbook persists after reload",
+      "passed": true
+    },
+    {
+      "name": "WCAG axe audits pass",
+      "passed": true
+    },
+    {
+      "name": "200 percent text no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "no JS errors",
+      "passed": true
+    }
+  ],
+  "screenshots": "outputs/frontend",
+  "actual_call_or_cloud_deployment": false,
+  "audio_validation": "Real local WAV decoded, sought, playback progressed with isolated headless output (--disable-audio-output); playhead retained across detail changes. No actual phone audio or human listening test."
+}
