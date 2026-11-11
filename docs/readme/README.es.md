@@ -1,4 +1,4 @@
-<!-- translated-from: README.md @ bd8976dbee3c -->
+<!-- translated-from: README.md @ a3fd9ab07c06 -->
 
 <div align="center">
   <img src="../../app/src/main/res/drawable-nodpi/flash_phone_launcher.png" width="104" alt="Icono de Flash phone" />
@@ -26,7 +26,7 @@
 2. Empareja de forma inalámbrica el asistente de audio en el propio teléfono y añade las credenciales del servicio de voz en tiempo real de Volcengine. La compatibilidad de audio depende del teléfono y de la versión de Android.
 3. Comprueba que ambas partes se oigan y que puedas retomar la llamada antes de activar la respuesta automática. Tras verificar el audio y activarla, la espera en segundo plano se inicia automáticamente; desactivarla también revoca esa espera. Consulta la [guía de configuración y compatibilidad (inglés)](../README.en.md).
 
-Si ya tienes la aplicación, usa **Ajustes → Acerca de → Buscar actualizaciones** o instala el APK firmado encima de la versión existente para conservar la configuración y el historial. Consulta la [guía de actualización y migración (chino simplificado)](../app-updates.md).
+Si ya tienes la aplicación, usa **Acerca de → Buscar actualizaciones** (icono de información arriba a la derecha; en versiones anteriores, Ajustes → Acerca de) o instala el APK firmado encima de la versión existente para conservar la configuración y el historial. Consulta la [guía de actualización y migración (chino simplificado)](../app-updates.md).
 
 ## Servicio y datos
 

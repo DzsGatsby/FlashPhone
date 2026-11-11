@@ -1,4 +1,4 @@
-<!-- translated-from: README.md @ bd8976dbee3c -->
+<!-- translated-from: README.md @ a3fd9ab07c06 -->
 
 <div align="center">
   <img src="../../app/src/main/res/drawable-nodpi/flash_phone_launcher.png" width="104" alt="Flash phone 图标" />

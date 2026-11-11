@@ -1,4 +1,4 @@
-<!-- translated-from: README.md @ bd8976dbee3c -->
+<!-- translated-from: README.md @ a3fd9ab07c06 -->
 
 <div align="center">
   <img src="../../app/src/main/res/drawable-nodpi/flash_phone_launcher.png" width="104" alt="Flash phone 圖示" />
@@ -26,7 +26,7 @@
 2. 在手機上以無線配對啟動通話音訊助手，設定火山即時語音服務憑證。音訊支援因裝置與 Android 版本而異。
 3. 先確認雙方都聽得見、人工接手正常，再開啟自動接聽。確認音訊並啟用後，背景待命會自動啟動；關閉自動接聽也會撤銷待命。詳見[設定與相容性（簡體中文）](../ai-phone-calls.md)。
 
-已安裝時，在 **設定 → 關於 → 檢查更新** 更新，或直接覆蓋安裝已簽署的 APK，保留設定與紀錄。見[更新與遷移指南（簡體中文）](../app-updates.md)。
+已安裝時，在 **關於 → 檢查更新** 更新（主畫面右上角資訊按鈕；舊版從設定進入關於），或直接覆蓋安裝已簽署的 APK，保留設定與紀錄。見[更新與遷移指南（簡體中文）](../app-updates.md)。
 
 ## 服務與資料
 
