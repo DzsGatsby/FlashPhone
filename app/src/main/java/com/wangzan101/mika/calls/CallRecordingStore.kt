@@ -6,6 +6,7 @@ import com.wangzan101.mika.settings.KeystoreKeyCipher
 import java.io.DataInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -141,6 +142,19 @@ class CallRecordingStore internal constructor(
             clearPlayback()
             val file = recording(id)
             !file.exists() || file.delete()
+        }
+    }
+
+    /** File-presence snapshot only; callers serialize it with attaching recording history metadata.
+     * Listing failure is not an empty archive: let the caller preserve existing metadata and retry.
+     */
+    suspend fun availableIds(): Set<String> = withContext(Dispatchers.IO) {
+        lock.withLock {
+            initialize()
+            val files = directory.listFiles() ?: throw IOException("Recording directory is unavailable")
+            files.asSequence().filter { it.isFile && it.name.endsWith(EXTENSION) && !protected(it) }
+                .map { it.name.removeSuffix(EXTENSION) }
+                .filter { CallRecordingLimits.validId(it) && it !in tombstones }.toSet()
         }
     }
 

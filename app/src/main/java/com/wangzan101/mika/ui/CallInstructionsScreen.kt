@@ -44,9 +44,31 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
+    KeyboardDismissArea {
+        PageScaffold(
+            title = stringResource(R.string.call_instructions_title),
+            onBack = onBack,
+            modifier = Modifier.testTag("call-instructions").imePadding(),
+        ) {
+            CallPlaybookSection(
+                runtime = runtime,
+                standalone = true,
+                onBack = onBack,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CallPlaybookSection(
+    runtime: CallRuntime,
+    modifier: Modifier = Modifier,
+    standalone: Boolean = false,
+    onBack: (() -> Unit)? = null,
+) {
     val c = MikaTheme.colors
     val context = LocalContext.current
     val store = runtime.instructions
@@ -91,440 +113,459 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
         }
     }
     LaunchedEffect(store) { withContext(Dispatchers.IO) { store.load() } }
-    LaunchedEffect(owner) { owner.resume() }
+    LaunchedEffect(owner, standalone, tab) {
+        if (standalone || tab == 1) owner.resume()
+    }
     LaunchedEffect(engine.model) { if (model.isBlank()) model = engine.model.orEmpty() }
     DisposableEffect(owner) { onDispose { owner.dispose() } }
-    BackHandler { if (draft != null) draft = null else onBack() }
+    if (standalone && onBack != null) {
+        BackHandler { if (draft != null) draft = null else onBack() }
+    } else if (draft != null) {
+        BackHandler { draft = null }
+    }
 
-    KeyboardDismissArea {
-        PageScaffold(
-            title = stringResource(R.string.call_instructions_title),
-            onBack = onBack,
-            modifier = Modifier.testTag("call-instructions").imePadding(),
-        ) {
-            SegmentedControl(
-                options = listOf(
-                    stringResource(R.string.call_instructions_rules),
-                    stringResource(R.string.call_instructions_chat),
-                ),
-                selected = tab,
-                onSelect = { tab = it },
-                modifier = Modifier.padding(bottom = 12.dp),
+    val activeCount = remember(rules) {
+        val now = System.currentTimeMillis()
+        rules.count { it.enabled && (it.expiresAtMs == null || it.expiresAtMs > now) }
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth().then(if (!standalone) Modifier.testTag("call-instructions") else Modifier),
+    ) {
+        if (!standalone) {
+            CallSectionHeader(
+                title = stringResource(R.string.flash_guard_playbook_header),
+                badge = if (rules.isNotEmpty()) stringResource(R.string.flash_guard_playbook_active_count, activeCount, rules.size)
+                else null,
+                badgeTone = if (activeCount > 0) TileTone.Ok else TileTone.Neutral,
             )
+        }
 
-            (storageError ?: feedback)?.let { msg ->
-                CallFeedback(CallActionResult(ok = storageError == null && msg == savedLabel, message = msg))
-            }
+        SegmentedControl(
+            options = listOf(
+                if (rules.isEmpty()) stringResource(R.string.call_instructions_rules)
+                else "${stringResource(R.string.call_instructions_rules)} (${rules.size})",
+                stringResource(R.string.call_instructions_chat),
+            ),
+            selected = tab,
+            onSelect = { tab = it },
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
 
-            if (tab == 0) {
-                CallSurfaceCard(
-                    modifier = Modifier.padding(bottom = 12.dp),
-                    tone = TileTone.Accent,
+        (storageError ?: feedback)?.let { msg ->
+            CallFeedback(CallActionResult(ok = storageError == null && msg == savedLabel, message = msg))
+        }
+
+        if (tab == 0) {
+            CallSurfaceCard(
+                modifier = Modifier.padding(bottom = 12.dp),
+                tone = if (activeCount > 0) TileTone.Ok else TileTone.Accent,
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            IconTile(MikaIcons.Doc, TileTone.Accent)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(stringResource(R.string.call_instructions_rules), style = MikaType.BodyStrong)
-                                Text(
-                                    text = stringResource(R.string.call_instructions_intro),
-                                    style = MikaType.Caption,
-                                    color = c.ink2,
-                                )
-                            }
+                        IconTile(MikaIcons.Doc, if (activeCount > 0) TileTone.Ok else TileTone.Accent)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(stringResource(R.string.call_instructions_rules), style = MikaType.BodyStrong)
+                            Text(
+                                text = stringResource(R.string.call_instructions_intro),
+                                style = MikaType.Caption,
+                                color = c.ink2,
+                            )
                         }
-                        MikaButton(
-                            text = stringResource(R.string.call_instructions_add),
-                            onClick = { draft = CallInstruction("", "", "", "") },
-                            modifier = Modifier.fillMaxWidth().testTag("call-instruction-add"),
+                    }
+                    MikaButton(
+                        text = stringResource(R.string.call_instructions_add),
+                        onClick = { draft = CallInstruction("", "", "", "") },
+                        modifier = Modifier.fillMaxWidth().testTag("call-instruction-add"),
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = stringResource(R.string.call_instructions_presets),
+                            style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold),
+                            color = c.ink3,
+                        )
+                        PresetRuleRow(
+                            title = deliveryTitle,
+                            subtitle = deliveryWhen,
+                            onClick = { draft = CallInstruction("", deliveryTitle, deliveryWhen, deliveryReply) },
+                        )
+                        PresetRuleRow(
+                            title = businessTitle,
+                            subtitle = businessWhen,
+                            onClick = { draft = CallInstruction("", businessTitle, businessWhen, businessReply) },
                         )
                     }
                 }
+            }
 
-                if (rules.isEmpty()) {
-                    CallSurfaceCard(Modifier.padding(bottom = 12.dp)) {
+            if (rules.isEmpty()) {
+                CallSurfaceCard(Modifier.padding(bottom = 12.dp)) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.call_instructions_empty),
+                            style = MikaType.Body,
+                            color = c.ink2,
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                rules.forEach { rule ->
+                    val expired = rule.expiresAtMs?.let { it <= System.currentTimeMillis() } == true
+                    val cardTone = when {
+                        expired -> TileTone.Warn
+                        rule.enabled -> TileTone.Ok
+                        else -> TileTone.Neutral
+                    }
+                    CallSurfaceCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tone = cardTone,
+                    ) {
                         Column(
                             Modifier.fillMaxWidth().padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Text(
-                                text = stringResource(R.string.call_instructions_empty),
-                                style = MikaType.Body,
-                                color = c.ink2,
-                            )
-                            Text(
-                                text = stringResource(R.string.call_instructions_presets),
-                                style = MikaType.Label.copy(fontWeight = FontWeight.SemiBold),
-                                color = c.ink3,
-                            )
-                            PresetRuleRow(
-                                title = deliveryTitle,
-                                subtitle = deliveryWhen,
-                                onClick = { draft = CallInstruction("", deliveryTitle, deliveryWhen, deliveryReply) },
-                            )
-                            PresetRuleRow(
-                                title = businessTitle,
-                                subtitle = businessWhen,
-                                onClick = { draft = CallInstruction("", businessTitle, businessWhen, businessReply) },
-                            )
-                        }
-                    }
-                }
-
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    rules.forEach { rule ->
-                        val expired = rule.expiresAtMs?.let { it <= System.currentTimeMillis() } == true
-                        val cardTone = when {
-                            expired -> TileTone.Warn
-                            rule.enabled -> TileTone.Ok
-                            else -> TileTone.Neutral
-                        }
-                        CallSurfaceCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            tone = cardTone,
-                        ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(rule.title, style = MaterialTheme.typography.titleMedium, color = c.ink)
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            if (expired) {
-                                                Text(
-                                                    text = stringResource(R.string.call_instructions_expired),
-                                                    style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.error,
-                                                )
-                                            } else if (rule.expiresAtMs != null) {
-                                                val formatted = remember(rule.expiresAtMs) {
-                                                    java.text.DateFormat.getDateTimeInstance(
-                                                        java.text.DateFormat.SHORT,
-                                                        java.text.DateFormat.SHORT,
-                                                    ).format(java.util.Date(rule.expiresAtMs))
-                                                }
-                                                CallMetaChip(text = formatted, icon = MikaIcons.Clock)
-                                            } else {
-                                                CallMetaChip(text = stringResource(R.string.call_instructions_forever))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(rule.title, style = MaterialTheme.typography.titleMedium, color = c.ink)
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        if (expired) {
+                                            Text(
+                                                text = stringResource(R.string.call_instructions_expired),
+                                                style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        } else if (rule.expiresAtMs != null) {
+                                            val formatted = remember(rule.expiresAtMs) {
+                                                java.text.DateFormat.getDateTimeInstance(
+                                                    java.text.DateFormat.SHORT,
+                                                    java.text.DateFormat.SHORT,
+                                                ).format(java.util.Date(rule.expiresAtMs))
                                             }
+                                            CallMetaChip(text = formatted, icon = MikaIcons.Clock)
+                                        } else {
+                                            CallMetaChip(text = stringResource(R.string.call_instructions_forever))
                                         }
                                     }
-                                    Switch(
-                                        checked = rule.enabled,
-                                        onCheckedChange = { value -> mutate { store.setEnabled(rule.id, value) } },
-                                    )
                                 }
+                                Switch(
+                                    checked = rule.enabled,
+                                    onCheckedChange = { value -> mutate { store.setEnabled(rule.id, value) } },
+                                )
+                            }
 
-                                Column(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .background(c.fill, RoundedCornerShape(12.dp))
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(c.fill, RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.call_instructions_situation),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = c.ink3,
+                                )
+                                Text(
+                                    text = rule.situation,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = c.ink,
+                                )
+                                CallCardDivider()
+                                Text(
+                                    text = stringResource(R.string.call_instructions_response),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = c.ink3,
+                                )
+                                SelectionContainer {
                                     Text(
-                                        text = stringResource(R.string.call_instructions_situation),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = c.ink3,
-                                    )
-                                    Text(
-                                        text = rule.situation,
-                                        style = MaterialTheme.typography.labelLarge,
+                                        text = rule.response,
+                                        style = MikaType.Body,
                                         color = c.ink,
                                     )
-                                    CallCardDivider()
-                                    Text(
-                                        text = stringResource(R.string.call_instructions_response),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = c.ink3,
-                                    )
-                                    SelectionContainer {
-                                        Text(
-                                            text = rule.response,
-                                            style = MikaType.Body,
-                                            color = c.ink,
-                                        )
-                                    }
                                 }
+                            }
 
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                            ) {
+                                OutlinedButton(
+                                    onClick = { draft = rule },
+                                    shape = MikaShapes.Button,
                                 ) {
-                                    OutlinedButton(
-                                        onClick = { draft = rule },
-                                        shape = MikaShapes.Button,
-                                    ) {
-                                        Text(stringResource(R.string.call_instructions_edit))
-                                    }
-                                    TextButton(
-                                        onClick = { deleting = rule },
-                                        shape = MikaShapes.Button,
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.call_instructions_delete),
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    }
+                                    Text(stringResource(R.string.call_instructions_edit))
+                                }
+                                TextButton(
+                                    onClick = { deleting = rule },
+                                    shape = MikaShapes.Button,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.call_instructions_delete),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
                                 }
                             }
                         }
                     }
                 }
-            } else {
-                // Tab 1: Discuss with Codex
+            }
+        } else {
+            // Tab 1: Discuss with Codex
+            CallSurfaceCard(
+                modifier = Modifier.padding(bottom = 12.dp),
+                tone = if (engine.phase == CodexOwnerPhase.UNAVAILABLE) TileTone.Warn else TileTone.Accent,
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconTile(MikaIcons.Spark, TileTone.Accent)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(stringResource(R.string.call_instructions_chat), style = MikaType.BodyStrong)
+                            Text(
+                                text = stringResource(R.string.call_instructions_codex_intro),
+                                style = MikaType.Caption,
+                                color = c.ink2,
+                            )
+                        }
+                    }
+                    if (engine.phase == CodexOwnerPhase.UNAVAILABLE) {
+                        Text(
+                            text = stringResource(R.string.call_instructions_unavailable),
+                            style = MikaType.Caption,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    engine.error?.let {
+                        Text(it, style = MikaType.Caption, color = MaterialTheme.colorScheme.error)
+                    }
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { showConnection = !showConnection },
+                            shape = MikaShapes.Button,
+                        ) {
+                            Text(stringResource(R.string.call_instructions_provider))
+                        }
+                        TextButton(
+                            onClick = { scope.launch { owner.resume() } },
+                            enabled = !busy,
+                        ) {
+                            Text(stringResource(R.string.call_instructions_continue))
+                        }
+                        TextButton(
+                            onClick = { showNewChat = true },
+                            enabled = !busy,
+                        ) {
+                            Text(stringResource(R.string.call_instructions_new_chat))
+                        }
+                    }
+                }
+            }
+
+            if (showConnection || engine.phase == CodexOwnerPhase.NEEDS_PROVIDER) {
                 CallSurfaceCard(
                     modifier = Modifier.padding(bottom = 12.dp),
-                    tone = if (engine.phase == CodexOwnerPhase.UNAVAILABLE) TileTone.Warn else TileTone.Accent,
+                    tone = TileTone.Warn,
                 ) {
                     Column(
                         Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            IconTile(MikaIcons.Spark, TileTone.Accent)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(stringResource(R.string.call_instructions_chat), style = MikaType.BodyStrong)
-                                Text(
-                                    text = stringResource(R.string.call_instructions_codex_intro),
-                                    style = MikaType.Caption,
-                                    color = c.ink2,
-                                )
-                            }
+                        val existing = configuredProviders.filter {
+                            CodexOwnerRuntime.isOfficialProvider(it)
                         }
-                        if (engine.phase == CodexOwnerPhase.UNAVAILABLE) {
-                            Text(
-                                text = stringResource(R.string.call_instructions_unavailable),
-                                style = MikaType.Caption,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                        engine.error?.let {
-                            Text(it, style = MikaType.Caption, color = MaterialTheme.colorScheme.error)
-                        }
-                        FlowRow(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
+                        OutlinedTextField(
+                            value = model,
+                            onValueChange = { model = it.take(160) },
+                            label = { Text(stringResource(R.string.call_instructions_model)) },
+                            supportingText = { Text(stringResource(R.string.call_instructions_model_hint)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().keepsKeyboard(),
+                            enabled = !busy,
+                        )
+                        existing.forEach { provider ->
                             OutlinedButton(
-                                onClick = { showConnection = !showConnection },
+                                onClick = { scope.launch { owner.configureProvider(provider.id, model) } },
+                                enabled = !busy && model.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = MikaShapes.Button,
                             ) {
-                                Text(stringResource(R.string.call_instructions_provider))
-                            }
-                            TextButton(
-                                onClick = { scope.launch { owner.resume() } },
-                                enabled = !busy,
-                            ) {
-                                Text(stringResource(R.string.call_instructions_continue))
-                            }
-                            TextButton(
-                                onClick = { showNewChat = true },
-                                enabled = !busy,
-                            ) {
-                                Text(stringResource(R.string.call_instructions_new_chat))
+                                Text(stringResource(R.string.call_instructions_use_existing) + " · " + provider.name)
                             }
                         }
-                    }
-                }
-
-                if (showConnection || engine.phase == CodexOwnerPhase.NEEDS_PROVIDER) {
-                    CallSurfaceCard(
-                        modifier = Modifier.padding(bottom = 12.dp),
-                        tone = TileTone.Warn,
-                    ) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            val existing = configuredProviders.filter {
-                                CodexOwnerRuntime.isOfficialProvider(it)
-                            }
-                            OutlinedTextField(
-                                value = model,
-                                onValueChange = { model = it.take(160) },
-                                label = { Text(stringResource(R.string.call_instructions_model)) },
-                                supportingText = { Text(stringResource(R.string.call_instructions_model_hint)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth().keepsKeyboard(),
-                                enabled = !busy,
-                            )
-                            existing.forEach { provider ->
-                                OutlinedButton(
-                                    onClick = { scope.launch { owner.configureProvider(provider.id, model) } },
-                                    enabled = !busy && model.isNotBlank(),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = MikaShapes.Button,
+                        OutlinedTextField(
+                            value = key,
+                            onValueChange = { key = it },
+                            label = { Text(stringResource(R.string.call_instructions_api_key)) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().keepsKeyboard(),
+                            enabled = !busy,
+                        )
+                        MikaButton(
+                            text = stringResource(R.string.call_instructions_connect),
+                            onClick = {
+                                val entered = key.trim()
+                                val requestedModel = model.trim()
+                                if (engine.threadId == null && CodexOwnerRuntime.modelName.matches(requestedModel) &&
+                                    entered.length in 1..2_048 && entered.all { it.code in 33..126 }
                                 ) {
-                                    Text(stringResource(R.string.call_instructions_use_existing) + " · " + provider.name)
-                                                                }
-                            }
-                            OutlinedTextField(
-                                value = key,
-                                onValueChange = { key = it },
-                                label = { Text(stringResource(R.string.call_instructions_api_key)) },
-                                visualTransformation = PasswordVisualTransformation(),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth().keepsKeyboard(),
-                                enabled = !busy,
-                            )
-                            MikaButton(
-                                text = stringResource(R.string.call_instructions_connect),
-                                onClick = {
-                                    val entered = key.trim()
-                                    val requestedModel = model.trim()
-                                    if (engine.threadId == null && CodexOwnerRuntime.modelName.matches(requestedModel) &&
-                                        entered.length in 1..2_048 && entered.all { it.code in 33..126 }
-                                    ) {
-                                        savingConnection = true
-                                        scope.launch {
-                                            try {
-                                                val provider = withContext(Dispatchers.IO) {
-                                                    // Dedicated identity: never replace another Mika connection or credential.
-                                                    runCatching {
-                                                        providers.connect(
-                                                            "Codex · " + java.util.UUID.randomUUID().toString(),
-                                                            ProviderConfig.Kind.OpenAiResponses,
-                                                            "https://api.openai.com/v1",
-                                                            entered,
-                                                            emptyList(),
-                                                            untested = true,
-                                                        )
-                                                    }.getOrNull()
-                                                }
-                                                key = ""
-                                                if (provider == null || !owner.configureProvider(provider.id, requestedModel)) {
-                                                    feedback = failedLabel
-                                                } else {
-                                                    showConnection = false
-                                                }
-                                            } finally {
-                                                savingConnection = false
+                                    savingConnection = true
+                                    scope.launch {
+                                        try {
+                                            val provider = withContext(Dispatchers.IO) {
+                                                // Dedicated identity: never replace another Mika connection or credential.
+                                                runCatching {
+                                                    providers.connect(
+                                                        "Codex · " + java.util.UUID.randomUUID().toString(),
+                                                        ProviderConfig.Kind.OpenAiResponses,
+                                                        "https://api.openai.com/v1",
+                                                        entered,
+                                                        emptyList(),
+                                                        untested = true,
+                                                    )
+                                                }.getOrNull()
                                             }
+                                            key = ""
+                                            if (provider == null || !owner.configureProvider(provider.id, requestedModel)) {
+                                                feedback = failedLabel
+                                            } else {
+                                                showConnection = false
+                                            }
+                                        } finally {
+                                            savingConnection = false
                                         }
-                                    } else {
-                                        feedback = failedLabel
                                     }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !busy && key.isNotBlank() &&
-                                    CodexOwnerRuntime.modelName.matches(model.trim()) && engine.threadId == null,
-                            )
-                            if (engine.threadId != null) {
-                                Text(
-                                    text = stringResource(R.string.call_instructions_new_chat_confirm),
-                                    style = MikaType.Hint,
-                                    color = c.ink3,
-                                )
-                            }
+                                } else {
+                                    feedback = failedLabel
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !busy && key.isNotBlank() &&
+                                CodexOwnerRuntime.modelName.matches(model.trim()) && engine.threadId == null,
+                        )
+                        if (engine.threadId != null) {
                             Text(
-                                text = stringResource(R.string.call_instructions_api_note),
+                                text = stringResource(R.string.call_instructions_new_chat_confirm),
                                 style = MikaType.Hint,
                                 color = c.ink3,
                             )
                         }
+                        Text(
+                            text = stringResource(R.string.call_instructions_api_note),
+                            style = MikaType.Hint,
+                            color = c.ink3,
+                        )
                     }
                 }
+            }
 
+            Column(
+                Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                messages.forEach { message ->
+                    val isUser = message.role == CodexOwnerRole.USER
+                    CallSurfaceCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tone = if (isUser) TileTone.Accent else TileTone.Neutral,
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CallStatusBadge(
+                                text = stringResource(
+                                    if (isUser) R.string.call_instructions_owner else R.string.call_instructions_assistant,
+                                ),
+                                tone = if (isUser) TileTone.Accent else TileTone.Neutral,
+                            )
+                            SelectionContainer {
+                                Text(message.text, style = MikaType.Body, color = c.ink)
+                            }
+                            if (message.role == CodexOwnerRole.ASSISTANT && message.complete && message.text.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = { draft = CallInstruction("", "", "", message.text) },
+                                    shape = MikaShapes.Button,
+                                ) {
+                                    Text(stringResource(R.string.call_instructions_save_reply))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            CallSurfaceCard(Modifier.fillMaxWidth()) {
                 Column(
-                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    Modifier.fillMaxWidth().padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    messages.forEach { message ->
-                        val isUser = message.role == CodexOwnerRole.USER
-                        CallSurfaceCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            tone = if (isUser) TileTone.Accent else TileTone.Neutral,
+                    if (busy) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                CallStatusBadge(
-                                    text = stringResource(
-                                        if (isUser) R.string.call_instructions_owner else R.string.call_instructions_assistant,
-                                    ),
-                                    tone = if (isUser) TileTone.Accent else TileTone.Neutral,
-                                )
-                                SelectionContainer {
-                                    Text(message.text, style = MikaType.Body, color = c.ink)
-                                }
-                                if (message.role == CodexOwnerRole.ASSISTANT && message.complete && message.text.isNotBlank()) {
-                                    OutlinedButton(
-                                        onClick = { draft = CallInstruction("", "", "", message.text) },
-                                        shape = MikaShapes.Button,
-                                    ) {
-                                        Text(stringResource(R.string.call_instructions_save_reply))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                CallSurfaceCard(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        if (busy) {
                             Row(
-                                Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text(stringResource(R.string.call_instructions_busy), style = MikaType.Body)
-                                }
-                                TextButton(onClick = { scope.launch { owner.cancel() } }) {
-                                    Text(stringResource(R.string.call_instructions_stop))
-                                }
+                                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Text(stringResource(R.string.call_instructions_busy), style = MikaType.Body)
                             }
-                        } else {
-                            OutlinedTextField(
-                                value = input,
-                                onValueChange = { input = it.take(CodexOwnerRuntime.MAX_INPUT_CHARS) },
-                                label = { Text(stringResource(R.string.call_instructions_message)) },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-owner-input"),
-                                minLines = 2,
-                                maxLines = 8,
-                            )
-                            MikaButton(
-                                text = stringResource(R.string.call_instructions_send),
-                                onClick = {
-                                    val text = input
-                                    scope.launch { if (owner.send(text)) input = "" }
-                                },
-                                enabled = input.isNotBlank() && engine.providerId != null &&
-                                    engine.phase != CodexOwnerPhase.UNAVAILABLE,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            TextButton(onClick = { scope.launch { owner.cancel() } }) {
+                                Text(stringResource(R.string.call_instructions_stop))
+                            }
                         }
+                    } else {
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { input = it.take(CodexOwnerRuntime.MAX_INPUT_CHARS) },
+                            label = { Text(stringResource(R.string.call_instructions_message)) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-owner-input"),
+                            minLines = 2,
+                            maxLines = 8,
+                        )
+                        MikaButton(
+                            text = stringResource(R.string.call_instructions_send),
+                            onClick = {
+                                val text = input
+                                scope.launch { if (owner.send(text)) input = "" }
+                            },
+                            enabled = input.isNotBlank() && engine.providerId != null &&
+                                engine.phase != CodexOwnerPhase.UNAVAILABLE,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }

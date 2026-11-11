@@ -60,6 +60,15 @@ internal class CallTaskDraft {
         simOverride = null
     }
 
+    fun clear() {
+        number = ""
+        goal = ""
+        questions = ""
+        context = ""
+        constraints = ""
+        simOverride = null
+    }
+
     companion object {
         val Saver = listSaver<CallTaskDraft, String>(
             save = { draft ->
@@ -97,6 +106,7 @@ internal data class CallTaskSubmission(
     override fun toString(): String = "CallTaskSubmission(redacted)"
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CallTaskScreen(
     draft: CallTaskDraft,
@@ -109,12 +119,19 @@ internal fun CallTaskScreen(
     onSetup: () -> Unit,
     onConfirm: (CallTaskSubmission) -> Unit,
     onConfirmLocked: (CallTaskSubmission) -> Unit,
+    onDefaultSim: ((String?) -> Unit)? = null,
 ) {
     val c = MikaTheme.colors
-    var contextOpen by rememberSaveable { mutableStateOf(false) }
-    var constraintsOpen by rememberSaveable { mutableStateOf(false) }
+    var contextOpen by rememberSaveable { mutableStateOf(draft.context.isNotBlank()) }
+    var constraintsOpen by rememberSaveable { mutableStateOf(draft.constraints.isNotBlank()) }
     var showSims by rememberSaveable { mutableStateOf(false) }
     var review by remember { mutableStateOf<CallTaskSubmission?>(null) }
+    LaunchedEffect(draft.context) {
+        if (draft.context.isNotBlank()) contextOpen = true
+    }
+    LaunchedEffect(draft.constraints) {
+        if (draft.constraints.isNotBlank()) constraintsOpen = true
+    }
     val number = CallPolicy.outgoingNumber(draft.number)
     val goalLength = draft.goal.trim().length
     val maxGoal = CallTaskBrief.MAX_GOAL_CHARS
@@ -131,6 +148,10 @@ internal fun CallTaskScreen(
     val brief = remember(draft.goal, questions, draft.context, draft.constraints) {
         runCatching { CallTaskBrief(draft.goal, questions, draft.context, draft.constraints).validatedSnapshot() }.getOrNull()
     }
+    val tplInquiryGoal = stringResource(R.string.flash_dial_tpl_inquiry_goal)
+    val tplInquiryQuestions = stringResource(R.string.flash_dial_tpl_inquiry_q)
+    val tplDeliveryGoal = stringResource(R.string.flash_dial_tpl_delivery_goal)
+    val tplDeliveryQuestions = stringResource(R.string.flash_dial_tpl_delivery_q)
 
     feedback?.let { CallFeedback(it) }
 
@@ -186,9 +207,19 @@ internal fun CallTaskScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         IconTile(MikaIcons.Phone, if (number != null) TileTone.Ok else TileTone.Accent)
-                        Text(stringResource(R.string.calls_outgoing_title), style = MikaType.BodyStrong)
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(stringResource(R.string.flash_dial_header), style = MikaType.BodyStrong)
+                            Text(stringResource(R.string.flash_dial_sub), style = MikaType.Hint, color = c.ink3)
+                        }
                     }
-                    if (number != null) {
+                    if (draft.hasContent && editable) {
+                        TextButton(
+                            onClick = { draft.clear() },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(stringResource(R.string.flash_dial_clear_draft), style = MikaType.Caption, color = c.ink3)
+                        }
+                    } else if (number != null) {
                         CallStatusBadge(text = "\u2066$number\u2069", tone = TileTone.Ok)
                     }
                 }
@@ -233,7 +264,7 @@ internal fun CallTaskScreen(
             ) { RowChevron() }
         }
 
-        // Card 2: Core Mission Brief (Goal & Questions)
+        // Card 2: Core Mission Brief (Goal & Questions + Quick Templates)
         CallSurfaceCard(
             tone = if (brief != null) TileTone.Ok else TileTone.Neutral,
         ) {
@@ -257,6 +288,31 @@ internal fun CallTaskScreen(
                         text = stringResource(R.string.calls_task_limit, goalLength, maxGoal),
                         tone = if (goalLength > maxGoal) TileTone.Bad else if (goalLength > 0) TileTone.Accent else TileTone.Neutral,
                     )
+                }
+
+                if (editable && draft.goal.isBlank() && draft.questions.isBlank()) {
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        AssistChip(
+                            onClick = {
+                                draft.goal = tplInquiryGoal
+                                draft.questions = tplInquiryQuestions
+                            },
+                            label = { Text(stringResource(R.string.flash_dial_tpl_inquiry)) },
+                            leadingIcon = { Icon(MikaIcons.Spark, null, Modifier.size(14.dp)) },
+                        )
+                        AssistChip(
+                            onClick = {
+                                draft.goal = tplDeliveryGoal
+                                draft.questions = tplDeliveryQuestions
+                            },
+                            label = { Text(stringResource(R.string.flash_dial_tpl_delivery)) },
+                            leadingIcon = { Icon(MikaIcons.Spark, null, Modifier.size(14.dp)) },
+                        )
+                    }
                 }
 
                 OutlinedTextField(
@@ -373,6 +429,7 @@ internal fun CallTaskScreen(
             preferred = config.defaultOutgoingSimId,
             selectedOverride = draft.simOverride,
             onChoose = { draft.simOverride = it; showSims = false },
+            onDefaultSim = onDefaultSim,
             onDismiss = { showSims = false },
         )
     }
@@ -429,6 +486,7 @@ private fun CallTaskSimDialog(
     preferred: String?,
     selectedOverride: String?,
     onChoose: (String?) -> Unit,
+    onDefaultSim: ((String?) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val remembered = options.firstOrNull { it.id == preferred }
@@ -437,7 +495,7 @@ private fun CallTaskSimDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.calls_sim)) },
         text = {
-            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 if (remembered != null) {
                     RadioRow(
                         title = stringResource(R.string.calls_sim_preferred, remembered.label),
@@ -462,6 +520,31 @@ private fun CallTaskSimDialog(
                         onClick = { onChoose(option.id) },
                         first = index == 0 && remembered == null && platformDefault == null,
                     )
+                }
+                if (onDefaultSim != null && options.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    CallCardDivider()
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.calls_default_sim_settings),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MikaTheme.colors.ink3,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    )
+                    RadioRow(
+                        title = stringResource(R.string.calls_sim_ask_each_time),
+                        selected = preferred == null,
+                        onClick = { onDefaultSim(null) },
+                        first = true,
+                    )
+                    options.forEach { sim ->
+                        RadioRow(
+                            title = sim.label,
+                            selected = preferred == sim.id,
+                            onClick = { onDefaultSim(sim.id) },
+                            subtitle = if (sim.isDefault) stringResource(R.string.calls_default) else null,
+                        )
+                    }
                 }
                 if (options.isEmpty()) Text(stringResource(R.string.calls_task_pick_sim))
             }

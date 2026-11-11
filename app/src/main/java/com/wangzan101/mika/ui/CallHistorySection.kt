@@ -39,7 +39,10 @@ import java.text.DateFormat
 import java.util.Date
 
 private enum class HistoryFilter(@StringRes val label: Int) {
-    ALL(R.string.calls_history_all), OPEN(R.string.calls_history_open), DONE(R.string.calls_history_done),
+    ALL(R.string.calls_history_all),
+    OPEN(R.string.calls_history_open),
+    DONE(R.string.calls_history_done),
+    RECORDED(R.string.flash_audit_filter_recorded),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -53,17 +56,19 @@ internal fun CallHistorySection(
     onOpenRecording: suspend (String) -> File? = { null },
     onCloseRecording: (File) -> Unit = {},
     playbackEnabled: Boolean = true,
+    onClearAll: (suspend () -> CallActionResult)? = null,
 ) {
     var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
-    var showAll by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingClearAll by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<CallActionResult?>(null) }
     val scope = rememberCoroutineScope()
     val failure = stringResource(R.string.calls_action_failed)
     val deleted = stringResource(R.string.calls_history_deleted)
+    val cleared = stringResource(R.string.flash_audit_cleared)
     val handled = stringResource(R.string.calls_history_done)
     val unhandled = stringResource(R.string.calls_history_open)
     val incoming = directionLabel(CallDirection.INCOMING)
@@ -78,6 +83,7 @@ internal fun CallHistorySection(
                 HistoryFilter.ALL -> true
                 HistoryFilter.OPEN -> !record.handled
                 HistoryFilter.DONE -> record.handled
+                HistoryFilter.RECORDED -> record.recording != null || record.recordingPending
             }
             val direction = if (record.direction == CallDirection.INCOMING) incoming else outgoing
             matchesFilter && (text.isEmpty() || record.number.orEmpty().contains(text, ignoreCase = true) ||
@@ -111,8 +117,9 @@ internal fun CallHistorySection(
     }
 
     val openCount = remember(history) { history.count { !it.handled } }
+    val recordedCount = remember(history) { history.count { it.recording != null || it.recordingPending } }
     CallSectionHeader(
-        title = stringResource(R.string.calls_tab_history),
+        title = stringResource(R.string.flash_hub_audit),
         badge = if (history.isNotEmpty()) "${results.size} / ${history.size}" else null,
         badgeTone = if (openCount > 0) TileTone.Warn else TileTone.Neutral,
     )
@@ -124,17 +131,61 @@ internal fun CallHistorySection(
     }
     if (history.isEmpty()) {
         CallSurfaceCard(Modifier.padding(bottom = 12.dp)) {
-            ListRow(MikaIcons.Clock, stringResource(R.string.calls_history_empty), first = true)
+            ListRow(
+                icon = MikaIcons.Sound,
+                title = stringResource(R.string.calls_history_empty),
+                subtitle = stringResource(R.string.flash_privacy_recording_note),
+                first = true,
+            )
         }
     } else {
         CallSurfaceCard(Modifier.padding(bottom = 12.dp)) {
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    FlowRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        CallMetaChip(
+                            text = stringResource(R.string.flash_audit_summary_total, history.size),
+                            icon = MikaIcons.Phone,
+                        )
+                        CallMetaChip(
+                            text = stringResource(R.string.flash_audit_summary_open, openCount),
+                            tone = if (openCount > 0) TileTone.Warn else TileTone.Ok,
+                        )
+                        CallMetaChip(
+                            text = stringResource(R.string.flash_audit_summary_recorded, recordedCount),
+                            icon = MikaIcons.Sound,
+                            tone = if (recordedCount > 0) TileTone.Accent else TileTone.Neutral,
+                        )
+                    }
+                    if (onClearAll != null) {
+                        TextButton(
+                            onClick = { pendingClearAll = true },
+                            enabled = !busy && playbackEnabled,
+                            modifier = Modifier.testTag("call-history-clear"),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.flash_audit_clear_all),
+                                style = MikaType.Caption,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it; showAll = false },
+                    onValueChange = { query = it },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     label = { Text(stringResource(R.string.calls_history_search)) },
@@ -144,11 +195,12 @@ internal fun CallHistorySection(
                 FlowRow(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     HistoryFilter.entries.forEach { choice ->
                         FilterChip(
                             selected = filter == choice,
-                            onClick = { filter = choice; showAll = false },
+                            onClick = { filter = choice },
                             label = { Text(stringResource(choice.label)) },
                             modifier = Modifier.testTag("call-history-filter-${choice.name.lowercase()}"),
                         )
@@ -161,9 +213,8 @@ internal fun CallHistorySection(
                 ListRow(MikaIcons.Search, stringResource(R.string.calls_history_no_match), first = true)
             }
         } else {
-            val visible = if (showAll) results else results.take(3)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                visible.forEachIndexed { index, record ->
+                results.forEachIndexed { index, record ->
                     key(record.id) {
                         CallHistoryItem(
                             record = record,
@@ -181,24 +232,36 @@ internal fun CallHistorySection(
                             } else null,
                             onOpenRecording = onOpenRecording,
                             onCloseRecording = onCloseRecording,
-                            playbackEnabled = playbackEnabled && pendingDelete != record.id,
-                        )
-                    }
-                }
-                if (results.size > 3) {
-                    OutlinedButton(
-                        onClick = { showAll = !showAll },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
-                        shape = MikaShapes.Button,
-                    ) {
-                        Text(
-                            if (showAll) stringResource(R.string.calls_history_less)
-                            else stringResource(R.string.calls_history_more, results.size),
+                            playbackEnabled = playbackEnabled && pendingDelete != record.id && !pendingClearAll,
                         )
                     }
                 }
             }
         }
+    }
+
+    if (pendingClearAll && onClearAll != null) {
+        AlertDialog(
+            onDismissRequest = { pendingClearAll = false },
+            title = { Text(stringResource(R.string.flash_audit_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.flash_audit_clear_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingClearAll = false
+                        expanded = null
+                        change(cleared) { onClearAll() }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.testTag("call-history-clear-confirm"),
+                ) {
+                    Text(stringResource(R.string.flash_audit_clear_all), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingClearAll = false }) { Text(stringResource(R.string.calls_cancel)) }
+            },
+        )
     }
 
     val toDelete = history.firstOrNull { it.id == pendingDelete }
@@ -250,8 +313,9 @@ private fun CallHistoryItem(
     playbackEnabled: Boolean,
 ) {
     val c = MikaTheme.colors
-    var showTask by rememberSaveable(record.id) { mutableStateOf(false) }
-    var showTranscript by rememberSaveable(record.id) { mutableStateOf(false) }
+    // Default expanded sections to true so the owner sees Recording + Task Brief + Transcript in 1 tap!
+    var showTask by rememberSaveable(record.id) { mutableStateOf(true) }
+    var showTranscript by rememberSaveable(record.id) { mutableStateOf(true) }
     val context = LocalContext.current
     val locale = context.resources.configuration.locales[0]
     val formatter = remember(locale) { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale) }
@@ -468,7 +532,9 @@ private fun CallHistoryItem(
                                     Modifier.fillMaxWidth().padding(bottom = 6.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    record.transcript.forEach { CallTranscriptText(it) }
+                                    record.transcript.forEachIndexed { idx, line ->
+                                        CallTranscriptText(line, turnNumber = idx + 1)
+                                    }
                                 }
                             }
                         }

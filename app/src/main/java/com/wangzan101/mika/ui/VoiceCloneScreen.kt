@@ -93,11 +93,18 @@ internal fun VoiceCloneScreen(runtime: CallRuntime, onBack: () -> Unit) {
     BackHandler { back() }
 
     PageScaffold(stringResource(R.string.voice_clone_title), { back() }, Modifier.testTag("voice-clone-screen")) {
-        GroupLabel(stringResource(R.string.voice_clone_step, step.ordinal + 1, CloneStep.entries.size, stringResource(step.title)))
+        CallSectionHeader(
+            title = stringResource(R.string.voice_clone_step, step.ordinal + 1, CloneStep.entries.size, stringResource(step.title)),
+            badge = "${step.ordinal + 1} / ${CloneStep.entries.size}",
+            badgeTone = TileTone.Accent,
+        )
         if (state.callBusy) {
-            GroupCard {
+            CallSurfaceCard(
+                modifier = Modifier.padding(bottom = 12.dp),
+                tone = TileTone.Warn,
+            ) {
                 ListRow(MikaIcons.Phone, stringResource(R.string.voice_clone_call_busy), first = true,
-                    onClick = onBack) { RowChevron() }
+                    tone = TileTone.Warn, onClick = onBack) { RowChevron() }
             }
         }
         when (step) {
@@ -184,7 +191,9 @@ private fun VoiceCloneSlot(
     onId: (String) -> Unit, onQuery: () -> Unit, onRecord: () -> Unit, onResult: () -> Unit, onReset: () -> Unit,
 ) {
     val idle = state.activity == VoiceCloneActivity.IDLE && !state.callBusy
-    GroupCard {
+    CallSurfaceCard(
+        tone = if (state.selectedForCalls) TileTone.Ok else TileTone.Accent,
+    ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.voice_clone_slot_help), style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(
@@ -214,7 +223,7 @@ private fun VoiceCloneSlot(
             }
         }
     }
-    FooterNote(stringResource(R.string.voice_clone_cost))
+    FooterNote(stringResource(R.string.flash_voice_clone_cost))
 }
 
 @Composable
@@ -228,7 +237,9 @@ private fun VoiceCloneRecording(
     val idle = state.activity == VoiceCloneActivity.IDLE && !state.callBusy
     val length = state.durationMillis
     val validLength = length in 14_000L..30_000L
-    GroupCard {
+    CallSurfaceCard(
+        tone = if (recording) TileTone.Warn else if (state.hasRecording && validLength) TileTone.Ok else TileTone.Accent,
+    ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.voice_clone_sample_help), style = MaterialTheme.typography.bodyMedium)
             Surface(color = MikaTheme.colors.fill, shape = MikaShapes.Button) {
@@ -287,7 +298,9 @@ private fun VoiceCloneFinish(
     onApply: () -> Unit, onReset: () -> Unit, onRecordAgain: () -> Unit,
 ) {
     val idle = state.activity == VoiceCloneActivity.IDLE && !state.callBusy
-    GroupCard {
+    CallSurfaceCard(
+        tone = if (state.selectedForCalls || state.status.isUsable) TileTone.Ok else TileTone.Accent,
+    ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             CloneStatus(state)
             if (state.hasRecording) {
@@ -323,7 +336,7 @@ private fun VoiceCloneFinish(
             ) { Text(stringResource(R.string.voice_clone_step_record)) }
         }
     }
-    FooterNote(stringResource(R.string.voice_clone_cost))
+    FooterNote(stringResource(R.string.flash_voice_clone_cost))
 }
 
 @Composable

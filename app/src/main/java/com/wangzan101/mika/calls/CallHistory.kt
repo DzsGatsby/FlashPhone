@@ -111,6 +111,21 @@ internal class CallHistory(private val storage: Storage) {
         }
     }
 
+    /** Retention can evict audio before its text history. Never change the transcript or pending saves. */
+    suspend fun reconcileRecordings(availableIds: Set<String>): Result = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val canWrite = readOnce()
+            val next = mutable.value.map { record ->
+                if (record.recording?.id?.let { it !in availableIds } == true) record.copy(recording = null) else record
+            }
+            if (canWrite && next == mutable.value && !failed.value) return@withLock Result.SAVED
+            val result = if (canWrite) persist(next) else Result.WRITE_FAILED
+            // The UI must stop promising playback even when persistence is temporarily unavailable.
+            if (result == Result.WRITE_FAILED) mutable.value = next
+            result
+        }
+    }
+
     suspend fun delete(id: String): Result = edit(id) { records -> records.filterNot { it.id == id } }
 
     // Explicit clearing can also remove an unreadable encrypted history.

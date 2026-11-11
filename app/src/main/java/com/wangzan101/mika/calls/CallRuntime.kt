@@ -99,6 +99,7 @@ class CallRuntime(private val app: MikaApp) {
     private val records = CallHistory(app)
     private val recordings = CallRecordingStore(app)
     private val pendingRecordingIds = mutableSetOf<String>()
+    private val recordingMetadataLock = Mutex()
     val history = records.state
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val accessLock = Mutex()
@@ -454,12 +455,17 @@ class CallRuntime(private val app: MikaApp) {
 
     fun closeRecording(file: File) { scope.launch { runCatching { recordings.closePlayback(file) } } }
 
-    private suspend fun pruneRecordings() {
-        // Keep a recording finalized just before its history append; active capture owns its files.
+    private suspend fun pruneRecordings() = recordingMetadataLock.withLock {
+        // Keep finalized archives until their history attachment; active capture owns its files.
         val ids = history.value.mapNotNull { it.recording?.id }.toMutableSet()
         work?.id?.let(ids::add)
         ids.addAll(pendingRecordingIds)
-        runCatching { recordings.prune(ids) }
+        runCatching {
+            recordings.prune(ids)
+            // Capacity eviction must not leave a playable-looking record or false audio filter count.
+            records.reconcileRecordings(recordings.availableIds())
+        }
+        Unit
     }
 
     private fun saveFinishedRecord(record: CallRecord, session: CallRecordingSession?) {
@@ -469,7 +475,8 @@ class CallRuntime(private val app: MikaApp) {
                 // Publish the actual end time promptly. Audio archiving never delays handoff or cleanup.
                 runCatching { records.append(record) }
                 val info = runCatching { session?.finish() }.getOrNull()
-                if (records.setRecording(record.id, info) == CallHistory.Result.NOT_FOUND && info != null) {
+                val attached = recordingMetadataLock.withLock { records.setRecording(record.id, info) }
+                if (attached == CallHistory.Result.NOT_FOUND && info != null) {
                     // A record deleted while archiving must not be recreated by a late completion.
                     runCatching { recordings.delete(info.id) }
                 }

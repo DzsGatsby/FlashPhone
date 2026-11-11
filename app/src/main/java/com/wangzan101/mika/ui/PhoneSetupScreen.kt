@@ -76,6 +76,7 @@ import com.wangzan101.mika.core.shell.SetupView
 import com.wangzan101.mika.core.shell.StepMark
 import com.wangzan101.mika.settings.SystemStatus
 import com.wangzan101.mika.cap.phone.PhoneServices
+import com.wangzan101.mika.cap.phone.setup.DeveloperSettings
 import com.wangzan101.mika.cap.phone.setup.PhoneCallRecoveryFailure
 import com.wangzan101.mika.ui.components.MikaSwitch
 import com.wangzan101.mika.ui.components.PageBackground
@@ -425,15 +426,21 @@ fun PhoneSetupContent(
 
 /** Phone-only recovery grants and the system state read back after applying them. */
 @Composable
-private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit) {
+internal fun PhoneCallRecoverySection(
+    status: SystemStatus? = null,
+    onFix: ((Fix) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val phone = remember { PhoneServices.of(context) }
     val recovery = phone.callRecovery
     val state by recovery.state.collectAsState()
     val blocked by phone.shellManager.wirelessAutoOn.blocked.collectAsState()
+    val liveShellStatus by phone.shellControl.status.collectAsState()
+    val shellStatus = status?.builtinShell ?: liveShellStatus
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { recovery.refresh() }
     val networkBlocked = blocked == AutoOnBlock.NotAllowedHere ||
-        (status.builtinShell as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.WifiNotAllowed
+        (shellStatus as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.WifiNotAllowed
     val wirelessText = when {
         !state.enabled -> R.string.calls_recovery_off
         state.applying -> R.string.calls_recovery_applying
@@ -442,7 +449,7 @@ private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit)
             (state.failure == PhoneCallRecoveryFailure.SECURE_SETTINGS_REFUSED && !state.writeSecureSettings) -> R.string.calls_recovery_wireless_refused
         blocked == AutoOnBlock.GaveUp -> R.string.calls_recovery_wireless_failed
         !state.writeSecureSettings -> R.string.calls_recovery_waiting_helper
-        (status.builtinShell as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.NoWifi -> R.string.calls_recovery_waiting_wifi
+        (shellStatus as? BuiltinShellStatus.Failed)?.reason == BuiltinShellFailure.NoWifi -> R.string.calls_recovery_waiting_wifi
         else -> R.string.calls_recovery_wireless_ready
     }
     val backgroundUnknown = state.failure == PhoneCallRecoveryFailure.HELPER_UNAVAILABLE || state.failure == PhoneCallRecoveryFailure.SAVE_FAILED
@@ -464,6 +471,16 @@ private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit)
     }
     val title = stringResource(R.string.calls_recovery_title)
     val openFailed = stringResource(R.string.calls_device_system_settings_failed)
+    fun openWirelessSettings() {
+        if (onFix != null) {
+            onFix(Fix.OpenWirelessDebugging)
+        } else {
+            val intents = DeveloperSettings.wirelessDebuggingPage()
+            if (intents.none { intent -> runCatching { context.startActivity(intent); true }.getOrDefault(false) }) {
+                Toast.makeText(context, openFailed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     fun openBackgroundSettings() {
         val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
         val intents = if (!backgroundUnknown && !state.backgroundAllowed) listOf(appInfo, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
@@ -475,10 +492,18 @@ private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit)
             Toast.makeText(context, openFailed, Toast.LENGTH_SHORT).show()
         }
     }
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("call-recovery-section")) {
-        GroupCard {
+    val readyAll = state.enabled && !state.applying && state.writeSecureSettings && state.batteryExempt && state.backgroundAllowed &&
+        blocked == null && !networkBlocked && failureText == null
+    val cardTone = when {
+        !state.enabled -> TileTone.Neutral
+        readyAll -> TileTone.Ok
+        else -> TileTone.Warn
+    }
+    Column(modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("call-recovery-section")) {
+        CallSurfaceCard(tone = cardTone) {
             ListRow(
                 MikaIcons.Shield, title, stringResource(R.string.calls_recovery_note), first = true,
+                tone = cardTone,
             ) {
                 MikaSwitch(
                     state.enabled,
@@ -505,7 +530,7 @@ private fun PhoneCallRecoverySection(status: SystemStatus, onFix: (Fix) -> Unit)
                 if (state.enabled && !state.applying) {
                     if (networkBlocked || blocked == AutoOnBlock.Refused || blocked == AutoOnBlock.GaveUp) {
                         TextButton(
-                            onClick = { onFix(Fix.OpenWirelessDebugging) },
+                            onClick = ::openWirelessSettings,
                             modifier = Modifier.fillMaxWidth().testTag("call-recovery-open-wireless"),
                         ) { Text(stringResource(R.string.phone_open_wireless)) }
                     }

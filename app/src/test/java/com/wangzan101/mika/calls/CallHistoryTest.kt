@@ -67,6 +67,53 @@ class CallHistoryTest {
         transcript = listOf(CallTranscriptLine("caller", "留言。\n请于明日联系。"), CallTranscriptLine("assistant", "我会转告。")),
     )
 
+    @Test fun recordingEvictionClearsOnlyMissingAudioMetadataWithoutReorderingOrChangingPending() = runBlocking {
+        val missing = CallRecordingInfo("89f1f858-043a-4677-889d-647195c5a74d", 8000L, false, 512L)
+        val kept = missing.copy(id = "248b74d0-adce-417e-a15d-7d682e711760")
+        val task = CallTaskBrief("问清服务时间", listOf("周末开门吗？"), "门店", "不预约")
+        val original = listOf(record(4).copy(recording = missing, handled = true, task = task),
+            record(3).copy(recording = kept), record(2))
+        val storage = MemoryStorage(original)
+        val history = CallHistory(storage)
+        history.load()
+        val pending = record(5).copy(recordingPending = true)
+        history.append(pending)
+        assertEquals(CallHistory.Result.SAVED, history.reconcileRecordings(setOf(kept.id)))
+        val expected = listOf(pending, original[0].copy(recording = null), original[1], original[2])
+        assertEquals(expected, history.state.value)
+        assertEquals(expected, storage.records)
+        assertEquals(CallHistory.Result.SAVED, history.reconcileRecordings(setOf(kept.id)))
+        assertEquals(expected, history.state.value)
+    }
+
+    @Test fun recordingReconciliationShowsEvictionOnWriteFailureThenRetriesDurably() = runBlocking {
+        val info = CallRecordingInfo("89f1f858-043a-4677-889d-647195c5a74d", 8000L, false, 512L)
+        val original = record(1).copy(recording = info, handled = true)
+        val storage = MemoryStorage(listOf(original)).apply { failWrite = true }
+        val history = CallHistory(storage)
+        assertEquals(CallHistory.Result.WRITE_FAILED, history.reconcileRecordings(emptySet()))
+        assertEquals(listOf(original.copy(recording = null)), history.state.value)
+        assertEquals(listOf(original), storage.records)
+        assertTrue(history.writeFailed.value)
+        storage.failWrite = false
+        assertEquals(CallHistory.Result.SAVED, history.reconcileRecordings(emptySet()))
+        assertEquals(history.state.value, storage.records)
+        assertFalse(history.writeFailed.value)
+    }
+
+    @Test fun recordingReconciliationDoesNotReplaceUnreadableHistoryButCorrectsVisibleMetadata() = runBlocking {
+        val info = CallRecordingInfo("89f1f858-043a-4677-889d-647195c5a74d", 8000L, false, 512L)
+        val diskOnly = record(1)
+        val storage = MemoryStorage(listOf(diskOnly)).apply { failRead = true }
+        val history = CallHistory(storage)
+        val visible = record(2).copy(recording = info, recordingPending = true)
+        assertEquals(CallHistory.Result.WRITE_FAILED, history.append(visible))
+        assertEquals(CallHistory.Result.WRITE_FAILED, history.reconcileRecordings(emptySet()))
+        assertEquals(listOf(visible.copy(recording = null)), history.state.value)
+        assertEquals(listOf(diskOnly), storage.records)
+        assertTrue(history.writeFailed.value)
+    }
+
     @Test fun handledChangesAndRemovalPersistWithoutRewritingTranscript() = runBlocking {
         val initial = record(1)
         val other = record(2)

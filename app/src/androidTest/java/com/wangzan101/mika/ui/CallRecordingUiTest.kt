@@ -83,6 +83,7 @@ class CallRecordingUiTest {
     private val leases = CopyOnWriteArrayList<File>()
     private val marked = CopyOnWriteArrayList<String>()
     private val deleted = CopyOnWriteArrayList<String>()
+    private val cleared = AtomicInteger()
     private val records = mutableStateOf<List<CallRecord>>(emptyList())
     private val visible = mutableStateOf(true)
     private val playbackEnabled = mutableStateOf(true)
@@ -186,6 +187,13 @@ class CallRecordingUiTest {
 
     @Test fun recordingKeepsHistoryMarkSearchFilterAndDeleteActionsAvailable() {
         showHistory()
+        compose.onNodeWithTag("call-history-filter-recorded").performScrollTo().performClick()
+        historyRow("1").assertIsDisplayed()
+        compose.onNodeWithTag("call-history-clear").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("call-history-clear-confirm").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.calls_cancel)).performClick()
+        assertEquals("Cancelling clear-all must preserve every synthetic record", 2, records.value.size)
+        assertEquals(0, cleared.get())
         expand("1")
         compose.onNodeWithTag("call-history-mark").performScrollTo().performClick()
         compose.waitUntil(3_000) { marked.toList() == listOf("record-1:true") }
@@ -255,6 +263,11 @@ class CallRecordingUiTest {
                             check(lease.delete()) { "Synthetic recording lease was not deleted" }
                         },
                         playbackEnabled = playbackEnabled.value,
+                        onClearAll = {
+                            cleared.incrementAndGet()
+                            records.value = emptyList()
+                            CallActionResult(true, "Cleared synthetic records")
+                        },
                     )
                 }
             }

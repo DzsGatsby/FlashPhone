@@ -15,6 +15,7 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.crypto.KeyGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -107,6 +108,33 @@ class CallRecordingStoreTest {
         assertNotNull(store.start(id(), ByteArrayInputStream(simple())).finish())
     }
 
+    @Test fun `available IDs list committed archives only and reflect pruning or deletion`() = runBlocking {
+        val store = store()
+        assertTrue(store.availableIds().isEmpty())
+        val first = id()
+        store.start(first, ByteArrayInputStream(simple())).finish()
+        val activeId = id()
+        val active = store.start(activeId, ByteArrayInputStream(simple()))
+        assertEquals(setOf(first), store.availableIds())
+        assertNotNull(active.finish())
+        assertEquals(setOf(first, activeId), store.availableIds())
+        File(records, "not-a-uuid.fpc").writeText("not an archive")
+        File(records, "${id()}.fpc.tmp").writeText("uncommitted")
+        assertEquals(setOf(first, activeId), store.availableIds())
+        store.prune(setOf(activeId))
+        assertEquals(setOf(activeId), store.availableIds())
+        store.delete(activeId)
+        assertTrue(store.availableIds().isEmpty())
+    }
+
+    @Test fun `unreadable archive listing is not mistaken for an empty retained set`() = runBlocking {
+        val store = store()
+        store.availableIds()
+        assertTrue(records.renameTo(File(temporary.root, "old-records")))
+        records.writeText("not a directory")
+        assertTrue(runCatching { store.availableIds() }.isFailure)
+    }
+
     @Test fun `finish allows the stopped helper terminal to arrive before closing the reader`() = runBlocking {
         val store = store()
         val input = PipedInputStream(4096)
@@ -195,8 +223,9 @@ class CallRecordingStoreTest {
         try {
             assertTrue(withContext(Dispatchers.IO) { decrypting.await(5, TimeUnit.SECONDS) })
             val next = withTimeout(1_000L) { store.start(id(), ByteArrayInputStream(simple())) }
-            assertNotNull(next.finish())
             opening.cancel()
+            release.countDown()
+            assertNotNull(next.finish())
         } finally {
             release.countDown()
             opening.cancelAndJoin()
@@ -224,12 +253,13 @@ class CallRecordingStoreTest {
         val committing = async(Dispatchers.Default) { first.finish() }
         try {
             assertTrue(withContext(Dispatchers.IO) { encrypting.await(5, TimeUnit.SECONDS) })
+            assertFalse(store.availableIds().contains(firstId))
             val nextId = id()
             val next = withTimeout(1_000L) { store.start(nextId, ByteArrayInputStream(simple())) }
-            assertNotNull(next.finish())
             store.prune(setOf(nextId))
             assertTrue(store.delete(firstId))
             release.countDown()
+            assertNotNull(next.finish())
             assertNull(committing.await())
             assertFalse(File(records, "$firstId.fpc").exists())
             assertNotNull(store.playbackFile(nextId))
@@ -237,6 +267,67 @@ class CallRecordingStoreTest {
         } finally {
             release.countDown()
             committing.cancelAndJoin()
+        }
+    }
+
+    @Test fun `concurrent first use serializes cipher initialization without delaying next capture`() = runBlocking {
+        val initializing = CountDownLatch(1)
+        val releaseInitialization = CountDownLatch(1)
+        val invocations = AtomicInteger()
+        val maxConcurrent = AtomicInteger()
+        val initializations = AtomicInteger()
+        val decryptions = AtomicInteger()
+        var initialized: KeyCipher? = null
+        val store = store(object : KeyCipher {
+            private fun access(block: (KeyCipher) -> ByteArray): ByteArray {
+                val concurrent = invocations.incrementAndGet()
+                maxConcurrent.updateAndGet { maxOf(it, concurrent) }
+                try {
+                    var key = initialized
+                    if (key == null) {
+                        initializations.incrementAndGet()
+                        initializing.countDown()
+                        check(releaseInitialization.await(5, TimeUnit.SECONDS))
+                        key = cipher()
+                        initialized = key
+                    }
+                    return block(key)
+                } finally {
+                    invocations.decrementAndGet()
+                }
+            }
+            override fun encrypt(plain: ByteArray) = access { it.encrypt(plain) }
+            override fun decrypt(data: ByteArray) = access { decryptions.incrementAndGet(); it.decrypt(data) }
+        })
+        val firstId = id()
+        val first = store.start(firstId, ByteArrayInputStream(simple()))
+        val firstCommit = async(Dispatchers.Default) { first.finish() }
+        var secondCommit: kotlinx.coroutines.Deferred<CallRecordingInfo?>? = null
+        try {
+            assertTrue(withContext(Dispatchers.IO) { initializing.await(5, TimeUnit.SECONDS) })
+            val secondId = id()
+            val second = withTimeout(1_000L) { store.start(secondId, ByteArrayInputStream(simple())) }
+            val secondStarted = CountDownLatch(1)
+            secondCommit = async(Dispatchers.Default) { secondStarted.countDown(); second.finish() }
+            assertTrue(withContext(Dispatchers.IO) { secondStarted.await(5, TimeUnit.SECONDS) })
+            delay(150)
+            assertEquals("The alias is initialized once while the second archive waits", 1, initializations.get())
+            assertEquals("Cipher calls may not overlap", 1, maxConcurrent.get())
+            assertFalse(secondCommit.isCompleted)
+            releaseInitialization.countDown()
+            assertNotNull(firstCommit.await())
+            assertNotNull(secondCommit.await())
+            // Both files remain decryptable using the single initialized alias.
+            assertNotNull(store.playbackFile(firstId))
+            assertNotNull(store.playbackFile(secondId))
+            assertTrue(decryptions.get() > 0)
+            assertEquals(1, initializations.get())
+            assertEquals(1, maxConcurrent.get())
+            store.closePlayback()
+        } finally {
+            releaseInitialization.countDown()
+            firstCommit.cancelAndJoin()
+            secondCommit?.cancelAndJoin()
         }
     }
 

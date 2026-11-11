@@ -18,6 +18,9 @@ import java.util.UUID
  * Each block is bound to this recording/sequence; an authenticated trailer detects truncation.
  */
 internal class CallRecordingArchive(private val cipher: KeyCipher) {
+    // The Keystore factory lazily creates the alias on first use. Serializing each bounded
+    // cipher operation prevents concurrent first-use key replacement without locking file I/O.
+    private val cryptoLock = Any()
     fun encrypt(id: String, wav: File, destination: File) {
         require(CallRecordingLimits.validId(id) && wav.length() in 44..CallRecordingLimits.MAX_WAV_BYTES)
         validateWav(wav)
@@ -71,7 +74,7 @@ internal class CallRecordingArchive(private val cipher: KeyCipher) {
                         check(encryptedSize in 1..MAX_ENCRYPTED_CHUNK)
                         val encrypted = ByteArray(encryptedSize)
                         input.readFully(encrypted)
-                        val plain = cipher.decrypt(encrypted)
+                        val plain = synchronized(cryptoLock) { cipher.decrypt(encrypted) }
                         try {
                             check(plain.size in BLOCK_HEADER..(BLOCK_HEADER + CHUNK_BYTES))
                             val block = DataInputStream(ByteArrayInputStream(plain))
@@ -114,7 +117,7 @@ internal class CallRecordingArchive(private val cipher: KeyCipher) {
             DataOutputStream(this).apply { writeByte(type); writeLong(id.mostSignificantBits); writeLong(id.leastSignificantBits); writeInt(sequence); write(bytes, 0, count) }
         }.toByteArray()
         try {
-            val encrypted = cipher.encrypt(plain)
+            val encrypted = synchronized(cryptoLock) { cipher.encrypt(plain) }
             check(encrypted.size in 1..MAX_ENCRYPTED_CHUNK)
             output.writeInt(encrypted.size)
             output.write(encrypted)

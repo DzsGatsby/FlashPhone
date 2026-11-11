@@ -286,7 +286,7 @@ internal fun CallExpandIcon(expanded: Boolean) {
  * Structured conversation turn bubble for both live transcripts and history review.
  */
 @Composable
-internal fun CallTranscriptText(line: CallTranscriptLine) {
+internal fun CallTranscriptText(line: CallTranscriptLine, turnNumber: Int? = null) {
     val c = MikaTheme.colors
     val isAssistant = line.role == "assistant"
     val speakerLabel = stringResource(if (isAssistant) R.string.app_name else R.string.calls_caller)
@@ -306,19 +306,32 @@ internal fun CallTranscriptText(line: CallTranscriptLine) {
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Row(
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Box(
-                Modifier
-                    .size(6.dp)
-                    .background(if (isAssistant) c.accent else c.ink3, CircleShape),
-            )
-            Text(
-                text = speakerLabel,
-                style = TextStyleLabel,
-                color = speakerColor,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .background(if (isAssistant) c.accent else c.ink3, CircleShape),
+                )
+                Text(
+                    text = speakerLabel,
+                    style = TextStyleLabel,
+                    color = speakerColor,
+                )
+            }
+            if (turnNumber != null) {
+                Text(
+                    text = "#$turnNumber",
+                    style = MikaType.Hint,
+                    color = c.ink3,
+                )
+            }
         }
         Text(
             text = line.text,
