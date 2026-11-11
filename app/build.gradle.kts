@@ -37,8 +37,8 @@ android {
         applicationId = "com.wangzan101.mika"
         minSdk = 30
         targetSdk = 35
-        versionCode = 55
-        versionName = "1.1.0"
+        versionCode = 56
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GIT_HASH", "\"$gitHash\"")
         // 关于页版本号后的 Beta 标记;出正式版时改成 false
