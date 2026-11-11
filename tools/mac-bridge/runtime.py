@@ -39,11 +39,12 @@ class NativeController:
 class MacExecutor:
     def __init__(self,config,voice_runner=None):
         self.config=config;self.native=NativeController(config['native_helper'])
-        self.active=None;self.stop=asyncio.Event()
+        self.active=None;self.stop=asyncio.Event();self._preparing_task_id=None;self._pre_canceled_task_id=None
         if voice_runner is None:
             from voice import run_voice
             voice_runner=run_voice
         self.voice_runner=voice_runner
+    def set_recording_exporter(self,callback):self.recording_exporter=callback
     async def readiness(self):
         if getattr(self,'config',{}).get('setup_reason')=='iphone_account_requirement':
             from agent import Readiness
@@ -53,6 +54,8 @@ class MacExecutor:
             'hangup_selector_verified','route_lease_verified','accessibility_trusted'))
         if not verified:
             return {'ready':False,'reason':'requires_setup','real_call_verified':False,
+                    'message':'Mac 桥接已连接，AI 通话接管尚未就绪。',
+                    'remediation':'正在等待本机通话状态绑定及双向声音验证；普通电话拨通不会自动启动 AI。',
                     'control_handler':bool(control.get('control_handler')),'control_verified':False,
                     'phone_rx_verified':False,'phone_tx_verified':False}
         from agent import read_private
@@ -102,21 +105,26 @@ class MacExecutor:
             await emit('failed',reason='call_lease_expired');return
         carrier_deadline=time.monotonic()+remaining
         self.stop=asyncio.Event();issued=False
+        self._preparing_task_id=command['task_id']
+        if getattr(self,'_pre_canceled_task_id',None)==command['task_id']:self.stop.set()
         try:
+            if self.stop.is_set():
+                await emit('canceled',reason='pre_dial_canceled');return
             await emit('preparing')
             prepared=await self.native.request(dict(action='prepare',task_id=command['task_id'],
                 number=command['payload']['number'],expires_at=command['expires_at']))
             if not prepared.get('ok') or not isinstance(prepared.get('call_id'),str):
                 await emit('failed',reason='native_preparation_failed');return
-            self.active={'task_id':command['task_id'],'call_id':prepared['call_id']}
-            await emit('preparing',call_id=self.active['call_id'])
+            self.active={'task_id':command['task_id'],'call_id':prepared['call_id'],'issued':False}
+            await emit('preparing')
             if self.stop.is_set() or time.monotonic()>=carrier_deadline:
-                await self._control('cancel');await emit('canceled',call_id=self.active['call_id'],reason='pre_dial_canceled');return
+                await self._control('cancel');await emit('canceled',reason='pre_dial_canceled');return
             # An exception after dispatch is unknown: never claim no call was issued or retry it.
             response=await self._control('dial')
             issued=response.get('call_issued') is True
             if not issued:
-                await emit('failed',call_id=self.active['call_id'],reason='native_dial_not_issued');return
+                await emit('failed',reason='native_dial_not_issued');return
+            self.active['issued']=True
             await emit('dialing',call_id=self.active['call_id'])
             while True:
                 if self.stop.is_set():
@@ -140,27 +148,38 @@ class MacExecutor:
                 credential_file=self.config.get('voice_credential_file'),max_seconds=max(1,min(600,int(self.config.get('max_call_seconds',600)))))
             # Local absolute paths never become broker output. Recording upload is a separate device-auth flow.
             path=result.pop('recording_path',None)
-            if path:result['recording']={'status':'local_only','source':'captured_caller_and_tx_pipe','uploaded':False}
             await self._control('restore_route')
             await emit('handed_off',call_id=self.active['call_id'],result=result)
+            exporter=getattr(self,'recording_exporter',None)
+            if path and exporter:
+                # A private internal callback, never a task event, receives the generated file path.
+                await exporter(path,self.active['task_id'],self.active['call_id'])
             await self._wait_end(emit,time.monotonic()+600)
         except asyncio.CancelledError:
             self.stop.set();raise
         except Exception:
             self.stop.set()
-            await emit('interrupted',call_id=self.active['call_id'] if self.active else None,reason='native_control_or_media_failed_no_replay')
+            await emit('interrupted',call_id=self.active['call_id'] if self.active and self.active.get('issued') else None,reason='native_control_or_media_failed_no_replay')
         finally:
             # Route restoration is scoped to this exact lease; it can never hang up a call.
             if self.active:
                 with contextlib.suppress(Exception):await self._control('release')
-            self.active=None
+            self.active=None;self._preparing_task_id=None
+            if getattr(self,'_pre_canceled_task_id',None)==command['task_id']:self._pre_canceled_task_id=None
     async def cancel(self,command,emit):
-        if self.active is None:return
-        if command['task_id']!=self.active['task_id'] or command.get('expected_call_id')!=self.active.get('call_id'):
-            raise ValueError('wrong_active_call')
-        self.stop.set()  # Never an implicit hangup, including during ringing.
+        task=command['task_id'];expected=command.get('expected_call_id')
+        if self.active is None:
+            pending=getattr(self,'_preparing_task_id',None)
+            if expected is not None or (pending is not None and pending!=task):raise ValueError('wrong_pending_task')
+            # Also covers an accepted task canceled before its async dial worker gets CPU time.
+            self._pre_canceled_task_id=task;self.stop.set();return
+        if task!=self.active['task_id']:raise ValueError('wrong_active_task')
+        if self.active.get('issued'):
+            if expected!=self.active['call_id']:raise ValueError('wrong_active_call')
+        elif expected is not None:raise ValueError('pre_dial_has_no_published_call')
+        self._pre_canceled_task_id=task;self.stop.set()  # No implicit carrier hangup.
     async def hangup(self,command,emit):
-        if self.active is None or command['task_id']!=self.active['task_id'] or command.get('expected_call_id')!=self.active.get('call_id'):
+        if self.active is None or not self.active.get('issued') or command['task_id']!=self.active['task_id'] or command.get('expected_call_id')!=self.active.get('call_id'):
             raise ValueError('no_matching_carrier_call')
         self.stop.set();await self._control('hangup')
         # status watcher, not the button press, proves carrier end.

@@ -279,6 +279,7 @@ do {
             json(["tap_created": true, "capture_started": false, "audio_content_read": false, "permission_verified": false])
         } else { throw BridgeError(message: "macOS_14_2_required") }
     case "selftest":
+        try PhoneAudioRouteLease.selftest()
         let ring = FloatRing(); ring.append([0.5, -0.5, .nan, 2, -2])
         ring.lock.lock()
         let actual = (0..<6).map { _ in ring.nextLocked() }

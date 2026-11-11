@@ -196,4 +196,57 @@ class ArchiveTest(unittest.TestCase):
         saved=json.loads(self.store.db.execute('SELECT result FROM tasks WHERE id=?',(c['task_id'],)).fetchone()[0])
         self.assertEqual(saved['summary'],'test-only outcome')
 
+
+
+
+class WorkWireTest(unittest.TestCase):
+    setUp=StoreTest.setUp
+    tearDown=StoreTest.tearDown
+    def test_work_stable_and_recording_ready_does_not_reassert_end(self):
+        c=command(self.device);self.store.accept(c);call=uid()
+        with self.store.db:
+            self.store.event(c['task_id'],'dialing',call_id=call)
+            self.store.event(c['task_id'],'active')
+            self.store.event(c['task_id'],'handed_off',result={'transcript':[{'role':'assistant','text':'synthetic'}]})
+            self.store.event(c['task_id'],'ended',carrier_ended=True)
+            self.store.event(c['task_id'],'recording_ready',carrier_ended=True,result={'recording':{'bytes':44}})
+        wire=self.store.pending();work=wire[0]['work_id']
+        self.assertIsNotNone(work);self.assertEqual(len({e['work_id'] for e in wire}),1)
+        self.assertTrue(wire[-2]['carrier_ended']);self.assertFalse(wire[-1]['carrier_ended'])
+        self.assertEqual(wire[-1]['call_id'],call)
+        row=self.store.db.execute('SELECT phase,result FROM tasks WHERE id=?',(c['task_id'],)).fetchone()
+        self.assertEqual(row[0],'ended');self.assertIn('transcript',json.loads(row[1]))
+    def test_reopen_recover_keeps_original_call_and_work_binding(self):
+        c=command(self.device);self.store.accept(c);call=uid()
+        with self.store.db:self.store.event(c['task_id'],'active',call_id=call)
+        work=self.store.pending()[-1]['work_id']
+        self.store.close();self.store=agent.Store(self.temp.name);self.store.recover()
+        event=self.store.pending()[-1]
+        self.assertEqual((event['phase'],event['call_id'],event['work_id']),('interrupted',call,work))
+        self.assertFalse(event['carrier_ended'])
+    def test_changed_work_binding_is_rejected(self):
+        c=command(self.device);self.store.accept(c)
+        original=self.store.pending()[0]['work_id']
+        with self.assertRaisesRegex(ValueError,'work_ownership'):
+            with self.store.db:self.store.event(c['task_id'],'preparing',work_id=uid())
+        self.assertEqual(self.store.pending()[0]['work_id'],original)
+    def test_legacy_spool_backfills_one_work_and_sanitizes_recording_end(self):
+        c=command(self.device);self.store.accept(c);call=uid()
+        with self.store.db:
+            self.store.event(c['task_id'],'ended',call_id=call,carrier_ended=True)
+            event=self.store.event(c['task_id'],'recording_ready')
+            event['work_id']=None;event['call_id']=None;event['carrier_ended']=True
+            self.store.db.execute('UPDATE tasks SET work_id=NULL WHERE id=?',(c['task_id'],))
+            for seq,body in self.store.db.execute('SELECT seq,body FROM events WHERE task=?',(c['task_id'],)).fetchall():
+                body=json.loads(body);body['work_id']=None
+                if body['phase']=='recording_ready':body=event
+                self.store.db.execute('UPDATE events SET body=? WHERE task=? AND seq=?',(json.dumps(body),c['task_id'],seq))
+            self.store.db.execute('ALTER TABLE tasks DROP COLUMN work_id')
+        self.store.close();self.store=agent.Store(self.temp.name)
+        wire=self.store.pending();work=wire[0]['work_id']
+        self.assertTrue(work);self.assertEqual({e['work_id'] for e in wire},{work})
+        self.assertEqual(wire[-1]['call_id'],call);self.assertFalse(wire[-1]['carrier_ended'])
+        self.store.close();self.store=agent.Store(self.temp.name)
+        self.assertEqual(self.store.pending()[-1]['work_id'],work)
+
 if __name__ == '__main__': unittest.main()

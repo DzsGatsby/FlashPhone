@@ -4,6 +4,8 @@ This directory is independent of the Android build. It contains an outbound WSS 
 private persistent command/event spool, and a compiled Core Audio / scoped Phone AX helper.
 **The current build deliberately reports `requires_setup` and does not advertise `calls.dial`.**
 The observed keypad can be prepared safely, but carrier ACTIVE/end ownership is not yet verified.
+A candidate ownership state machine and route adapter are present; their production selector profile
+is intentionally absent until the same live call's identity, ACTIVE and end state are observed.
 A virtual loopback passing is not proof of a real telephone conversation.
 
 ## Build and offline verification
@@ -105,7 +107,7 @@ value includes bounded final transcript, RX/pipe counters, reason and optional p
 The local stereo16kPCM16 WAV preserves observation-time gaps, channel0 captured Phone audio and
 channel1 AI data successfully written to the TX pipe. **It is not AudioTrack acceptance or proof that
 the remote party heard the speech.** It is stored in a0700 local directory with0600 files, max50 files/
-1GiB and600s per call, with no automatic upload. This Mac prototype is not claiming application-level
+1GiB and600s per call, with device-authenticated private upload for the bound task after a new export. This Mac prototype is not claiming application-level
 recording encryption. Local FakeWS tests use a synthetic native process and test-only credential file,
 never the real local credential or a paid provider.
 
@@ -117,7 +119,7 @@ its in-memory single preparation lease. All paths are fixed executable arguments
 - `{"action":"capabilities"}`: read-only status, currently `control_verified=false`.
 - `prepare`: requires `task_id` UUID, strict ASCII `number` and unix-ms `expires_at`<=120s ahead.
   It requires Phone already running and AX trusted. It uses only the observed main window identifier
-  `windowSceneWindow` → toolbar button Description`Keypad` → uniqueAXPopover → unique settableAXTextField.
+  `SceneWindow` → toolbar button Description`Keypad` → uniqueAXPopover → unique settableAXTextField.
   It enters the immutable number, compares normalized digits, and checks only that popover's button
   Identifier`Accept`/Description`Call`. It does **not press Call**. It returns a fresh `call_id` and
   `call_issued=false`. Locale/UI/tree mismatches fail closed, without using Recents or coordinates.
@@ -205,7 +207,7 @@ route restoration, fresh audio setup evidence and local model credentials, no ca
 advertised. A requested SIM is rejected until real line selection is implemented; it is never silently
 mapped to the default iPhone line.
 
-## Observed Apple setup block (2026-11-11)
+## Carrier relay and remaining AI setup
 
 Root's explicitly bounded CUA test did not connect: Phone displayed “iPhone Calls Not Available”
 with the account-requirement alert. ACTIVE was never confirmed and **zero real model sessions**
@@ -213,10 +215,50 @@ were created. A second click produced a second failed Recents entry; root stoppe
 attempts and restored Phone Microphone to Use System Setting. No ACTIVE/end selectors were
 obtained. These facts do not verify real Phone RX, remote TX or automated call control.
 
-Private device config `setup_reason: "iphone_account_requirement"` makes both daemon hello and
-local executor report blocked before any native/control/model attempt, while the WSS device
-remains online with no telephone capabilities. The owner must personally check iPhone iCloud/
-FaceTime and Mac Apple Account sign-in. The software does not read account identities, sign out,
-switch accounts, silently clear this block or retry a call. A new explicit authorization is required
-for any later real call test. Removing the block alone does not bypass the remaining control/audio
-readiness checks. All localhost FakeWS/synthetic tests are independent of this external setup block.
+The owner subsequently confirmed a manually placed Mac call reached and was auto-answered by the
+owned Android. The stale private `iphone_account_requirement` block was therefore removed, keeping
+the device identity. The updated daemon reports the actual remaining AI-control setup requirement.
+No Mac remote task or model session existed for that manual call: manual Phone calls do not yet
+start this executor. This does not determine why the Android endpoint did not speak.
+
+One later CUA Call action returned to the keypad without positive dialing/ACTIVE/end evidence. It
+was not repeated; only that test draft was cleared. No model or audio route change was performed.
+This is an uncertain UI action, not a successful telephone acceptance test.
+
+`PhoneCallOwnership` only permits a one-shot dial and a one-shot bound end action. A same-container,
+complete-number and direction match plus positive state evidence is required; a missing window or
+End-button press is never an ended result. `diagnose-call` accepts a private `expected_number` and
+returns role/path, safe control identifiers, match booleans and timer candidates, without returning
+number/contact/text values or mutating UI. The Phone audio route lease changes only the Microphone
+section of the observed Video menu, records/readbacks the selection and uses compare-and-set
+restoration so a manual route change wins. Global defaults, Output and BlackHole remain untouched.
+
+The native layout/profile and route proof remain unverified and `ready=false`. Removing the old
+account block cannot bypass these checks. The local ownership tests make41 assertions without AX,
+audio or calls. The Python suite has55 tests, including an opt-in native read-only check. Actual
+Python uploads through the local Worker/R2 are also tested with synthetic WAVs and a lost response;
+these checks do not prove Phone RX, remote TX or iPhone AI operation.
+
+## Bound private recording upload
+
+The runtime sends the **newly generated** WAV path only through an internal callback to the device
+agent. Local paths never enter progress/results. The agent never scans or imports an old recordings
+directory. Only registered pending exports may resume after reconnect/restart. Source files must be
+direct `call-<uuidhex>.wav` children of the dedicated generated directory: user-owned0700 directory,
+regular0600 owner-only single-link files, no symlink/FIFO, stereo16kPCM16, at most600s and40MiB.
+600s is38,400,044bytes including the canonical44-byte WAV header. One file cannot bind to another task.
+
+SQLite persists task/call/work bindings, file identity, fixed SHA256/length and a budget of at most
+3 upload attempts. Each attempt spends its budget before network access; retry never creates or
+replays a telephone call. The request uses only device auth at the configured HTTPS origin, preserves
+system proxy/PF/TLS settings, refuses redirects, and posts the declared length and X-Recording-SHA256.
+A lost response retries the **same** digest; the server owns same-SHA idempotence. Metadata response
+must match task, bytes and digest before a `recording_ready` event is emitted. That event preserves
+call/work bindings and sends carrier_ended=false even when the carrier already ended; the server
+retains the true terminal carrier state. Recording failure updates a visible result without a local path.
+
+Uploads are serial and independent of the carrier observer. Each request has a125s wall deadline
+and20s socket timeout; retries wait2s/4s. Disconnect closes the active HTTP socket and pauses the
+registered queue; revocation cancels it. Reconnect can spend only remaining persisted attempts. WAV
+bytes and API model credentials never pass through task events. Only synthetic temporary WAVs and
+localhost HTTP were uploaded in implementation tests; no real recording or paid model was invoked.
