@@ -122,7 +122,7 @@ internal class PhoneRecoveryGrants(
 
         internal fun parseMode(op: String, output: String): String? {
             if (op !in BACKGROUND_OPS) return null
-            val modes = Regex("(?:^|\\s)${Regex.escape(op)}:\\s*(allow|ignore|deny|default|foreground)(?=;|\\s|$)")
+            val modes = Regex("(?:^|\\s)" + Regex.escape(op) + ":\\s*(allow|ignore|deny|default|foreground)(?=;|\\s|$)")
                 .findAll(output).map { it.groupValues[1] }.toList()
             if (modes.isNotEmpty()) return modes.singleOrNull()
             return if (output.lineSequence().any { it.trim() == "No operations." }) "default" else null
