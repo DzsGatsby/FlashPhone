@@ -46,6 +46,35 @@ internal class CallTaskDraft {
     var context by mutableStateOf("")
     var constraints by mutableStateOf("")
     var simOverride by mutableStateOf<String?>(null)
+    var persistenceLoaded by mutableStateOf(true)
+    var persistenceFailed by mutableStateOf(false)
+    var persistedFields by mutableStateOf<List<String>?>(null)
+    var persistenceGeneration = 0L
+    var blockedInitialFields: List<String>? = null
+
+    fun needsPersistence(fields: List<String> = snapshotFields()): Boolean =
+        fields != persistedFields && fields != blockedInitialFields
+
+    fun beginPersistenceWrite(revision: Long) {
+        persistenceGeneration = revision
+        // A cancelled IO write may still commit. Until its completion is acknowledged,
+        // no in-memory baseline can prove what is currently on disk.
+        persistedFields = null
+        blockedInitialFields = null
+    }
+
+    fun completePersistenceWrite(fields: List<String>, revision: Long, success: Boolean) {
+        if (persistenceGeneration != revision) return
+        persistenceFailed = !success
+        if (success) persistedFields = fields
+    }
+
+    fun snapshotFields(): List<String> = listOf(number, goal, questions, context, constraints, simOverride.orEmpty())
+    fun restoreFields(fields: List<String>) {
+        require(fields.size == 6)
+        number = fields[0]; goal = fields[1]; questions = fields[2]
+        context = fields[3]; constraints = fields[4]; simOverride = fields[5].takeIf(String::isNotEmpty)
+    }
 
     val hasContent: Boolean
         get() = number.isNotBlank() || goal.isNotBlank() || questions.isNotBlank() ||
@@ -72,24 +101,21 @@ internal class CallTaskDraft {
     companion object {
         val Saver = listSaver<CallTaskDraft, String>(
             save = { draft ->
-                listOf(
-                    draft.number,
-                    draft.goal,
-                    draft.questions,
-                    draft.context,
-                    draft.constraints,
-                    draft.simOverride.orEmpty(),
-                )
+                draft.snapshotFields() + listOf(
+                    draft.persistenceLoaded.toString(),
+                    draft.persistenceFailed.toString(),
+                    if (draft.blockedInitialFields == null) "unblocked" else "blocked",
+                ) + draft.blockedInitialFields.orEmpty()
             },
-            restore = { fields ->
-                fields.takeIf { it.size == 6 }?.let {
+            restore = { saved ->
+                saved.takeIf { it.size == 6 || it.size == 9 || it.size == 15 }?.let {
                     CallTaskDraft().apply {
-                        number = it[0]
-                        goal = it[1]
-                        questions = it[2]
-                        context = it[3]
-                        constraints = it[4]
-                        simOverride = it[5].takeIf(String::isNotEmpty)
+                        restoreFields(it.take(6))
+                        // Six-field state predates durable drafts; those are real editor
+                        // fields. New state explicitly distinguishes loading placeholders.
+                        persistenceLoaded = it.getOrNull(6)?.toBooleanStrictOrNull() ?: true
+                        persistenceFailed = it.getOrNull(7)?.toBooleanStrictOrNull() ?: false
+                        blockedInitialFields = if (it.size == 15 && it[8] == "blocked") it.drop(9) else null
                     }
                 }
             },
@@ -122,8 +148,8 @@ internal fun CallTaskScreen(
     onDefaultSim: ((String?) -> Unit)? = null,
 ) {
     val c = MikaTheme.colors
-    var contextOpen by rememberSaveable { mutableStateOf(draft.context.isNotBlank()) }
-    var constraintsOpen by rememberSaveable { mutableStateOf(draft.constraints.isNotBlank()) }
+    var contextOpen by rememberSaveable { mutableStateOf(true) }
+    var constraintsOpen by rememberSaveable { mutableStateOf(true) }
     var showSims by rememberSaveable { mutableStateOf(false) }
     var review by remember { mutableStateOf<CallTaskSubmission?>(null) }
     LaunchedEffect(draft.context) {
@@ -152,6 +178,23 @@ internal fun CallTaskScreen(
     val tplInquiryQuestions = stringResource(R.string.flash_dial_tpl_inquiry_q)
     val tplDeliveryGoal = stringResource(R.string.flash_dial_tpl_delivery_goal)
     val tplDeliveryQuestions = stringResource(R.string.flash_dial_tpl_delivery_q)
+
+    if (!draft.persistenceLoaded) {
+        LinearProgressIndicator(Modifier.fillMaxWidth().testTag("call-draft-loading"))
+        return
+    }
+    Text(stringResource(R.string.flash_workspace_new_call), style = MikaType.LargeTitle, color = c.ink,
+        modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
+    Text(
+        stringResource(when {
+            draft.persistenceFailed -> R.string.flash_draft_save_failed
+            draft.snapshotFields() == draft.persistedFields -> R.string.flash_draft_saved
+            else -> R.string.flash_draft_saving
+        }),
+        style = MikaType.Caption,
+        color = if (draft.persistenceFailed) c.bad else c.ink3,
+        modifier = Modifier.padding(bottom = 16.dp).testTag("call-draft-save-state"),
+    )
 
     feedback?.let { CallFeedback(it) }
 
@@ -191,7 +234,7 @@ internal fun CallTaskScreen(
     ) {
         // Card 1: Dial Target & Outgoing SIM
         CallSurfaceCard(
-            tone = if (number != null && sim != null) TileTone.Accent else TileTone.Neutral,
+            tone = TileTone.Neutral,
         ) {
             Column(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
@@ -207,7 +250,7 @@ internal fun CallTaskScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        IconTile(MikaIcons.Phone, if (number != null) TileTone.Ok else TileTone.Accent)
+                        Icon(MikaIcons.Phone, null, Modifier.size(20.dp), tint = c.ink2)
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(stringResource(R.string.flash_dial_header), style = MikaType.BodyStrong)
                             Text(stringResource(R.string.flash_dial_sub), style = MikaType.Hint, color = c.ink3)
@@ -231,7 +274,7 @@ internal fun CallTaskScreen(
                     label = { Text(stringResource(R.string.calls_number)) },
                     modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-number"),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     textStyle = TextStyle(
                         textDirection = TextDirection.Ltr,
                         fontSize = 16.sp,
@@ -267,7 +310,7 @@ internal fun CallTaskScreen(
 
         // Card 2: Core Mission Brief (Goal & Questions + Quick Templates)
         CallSurfaceCard(
-            tone = if (brief != null) TileTone.Ok else TileTone.Neutral,
+            tone = TileTone.Neutral,
         ) {
             Column(
                 Modifier.fillMaxWidth().padding(16.dp),
@@ -282,7 +325,7 @@ internal fun CallTaskScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        IconTile(MikaIcons.Doc, if (brief != null) TileTone.Ok else TileTone.Accent)
+                        Icon(MikaIcons.Doc, null, Modifier.size(20.dp), tint = c.ink2)
                         Text(stringResource(R.string.calls_record_brief), style = MikaType.BodyStrong)
                     }
                     CallMetaChip(
@@ -323,7 +366,7 @@ internal fun CallTaskScreen(
                     label = { Text(stringResource(R.string.calls_task_goal)) },
                     placeholder = { Text(stringResource(R.string.calls_task_goal_example)) },
                     modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-task-goal"),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     minLines = 2,
                     maxLines = 4,
                     isError = goalLength > maxGoal,
@@ -339,7 +382,7 @@ internal fun CallTaskScreen(
                     label = { Text(stringResource(R.string.calls_task_questions)) },
                     placeholder = { Text(stringResource(R.string.calls_task_questions_hint)) },
                     modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-task-questions"),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     minLines = 2,
                     maxLines = 5,
                     isError = badQuestions,
@@ -471,7 +514,7 @@ private fun CallTaskLongField(
             .padding(bottom = 12.dp)
             .keepsKeyboard()
             .testTag(tag),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(6.dp),
         minLines = 2,
         maxLines = 5,
         isError = length > max,
@@ -575,7 +618,7 @@ private fun CallTaskReviewDialog(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(c.fill, RoundedCornerShape(12.dp))
+                        .background(c.fill, RoundedCornerShape(6.dp))
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -587,7 +630,7 @@ private fun CallTaskReviewDialog(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(c.fill, RoundedCornerShape(12.dp))
+                        .background(c.fill, RoundedCornerShape(6.dp))
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -614,7 +657,7 @@ private fun CallTaskReviewDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (mode in listOf(false, true)) {
                             val selected = locked == mode
-                            val shape = RoundedCornerShape(12.dp)
+                            val shape = RoundedCornerShape(6.dp)
                             Row(
                                 Modifier
                                     .fillMaxWidth()

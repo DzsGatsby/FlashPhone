@@ -12,9 +12,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -43,95 +42,90 @@ import org.junit.runner.RunWith
 import org.junit.runners.model.Statement
 import java.io.File
 
-/**
- * Acceptance of the current OperatorDeck journeys, not a page-count or navigation-position contract.
- * Runs only on an explicitly opted-in disposable emulator. ChineseUi restores the prior per-app
- * language. This test enters only unsent drafts and cancels the editor; no permissions, call
- * settings, instructions, credentials or records are saved and no call/model/audio check is started.
- */
+/** Native workspace acceptance. No model, call, permission grant or saved business data changes. */
 @RunWith(AndroidJUnit4::class)
 class CallWorkspaceVisualTest {
     private val compose = createEmptyComposeRule()
     @get:Rule val rules: TestRule = RuleChain.outerRule(WorkspaceEmulatorOnlyRule()).around(ChineseUi()).around(compose)
 
-    @Test fun readinessTaskAuditAndInlinePlaybookJourneysAreUsableInChinese() {
+    @Test fun homeHistoryReceiveEditorsAndRecoveryAreUsableInChinese() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as MikaApp
         assumeTrue("Visual review requires an idle, unconfigured disposable emulator",
             app.calls.state.value.phase == CallPhase.IDLE &&
                 !app.calls.settings.state.value.credentialsConfigured && app.calls.history.value.isEmpty())
         val settingsBefore = app.calls.settings.state.value
+        val instructionsBefore = app.calls.instructions.items.value
+        val historyBefore = app.calls.history.value
 
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
-            compose.onNodeWithTag("call-open-system").assertIsDisplayed()
-            screenshot("operator-deck.png")
-            assertWorkspaceLabelsFullyVisible()
+            compose.onNodeWithTag("call-page-home").assertIsDisplayed()
+            assertWorkspaceNavigationVisible(compose)
+            screenshot("native-home.png")
 
-            // Follow a real setup concern into the system center and the phone-local recovery screen.
-            compose.onNodeWithTag("call-open-system").performClick()
-            compose.onNodeWithText(workspaceText(R.string.flash_system_center_title)).assertIsDisplayed()
-            compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
-            screenshot("system-recovery.png")
-            compose.onNodeWithText(workspaceText(R.string.calls_helper_name)).performScrollTo().performClick()
-            compose.onNodeWithText(workspaceText(R.string.calls_helper_setup_title)).assertIsDisplayed()
-            compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
-            screenshot("helper-recovery.png")
-            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            compose.onNodeWithText(workspaceText(R.string.flash_system_center_title)).assertIsDisplayed()
-            compose.onNodeWithTag("call-open-system").assertIsDisplayed().performClick()
+            // This is the actual dashboard-to-records entry. Empty history must remain honest.
+            compose.onNodeWithTag("call-home-history").performScrollTo().performClick()
+            compose.onNodeWithText(workspaceText(R.string.calls_history_empty)).performScrollTo().assertIsDisplayed()
+            assertWorkspaceNavigationVisible(compose)
+            screenshot("native-history-empty.png")
 
-            // The task is a private draft; visiting the audit route must not consume it.
-            selectWorkspace(R.string.flash_hub_dial)
-            compose.onNodeWithTag("call-number").performScrollTo().performTextReplacement(NUMBER)
-            compose.onNodeWithTag("call-task-goal").performScrollTo().performClick()
+            selectWorkspace("receive")
+            compose.onNodeWithTag("call-rules-scope").performScrollTo().performClick()
+            compose.onNodeWithTag("call-allowlist").performScrollTo().performClick()
+            compose.onNodeWithTag("call-allowlist").performTextReplacement(NUMBER)
             compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
-            compose.onNodeWithTag("call-task-goal").performTextReplacement(GOAL)
-            compose.onNodeWithTag("call-task-goal").assertIsDisplayed().assertIsFocused()
-            screenshot("task-keyboard.png")
-            compose.onNodeWithTag("call-task-questions").performScrollTo().performTextReplacement(QUESTION)
+            compose.onNodeWithTag("call-allowlist").assertIsDisplayed().assertIsFocused()
+            compose.onNodeWithText(workspaceText(R.string.calls_cancel)).assertIsDisplayed()
+            screenshot("native-receive-rules-keyboard.png")
+            compose.onNodeWithText(workspaceText(R.string.calls_cancel)).performClick()
+            compose.onNodeWithTag("call-allowlist").assertDoesNotExist()
             hideWorkspaceKeyboard(scenario)
-            compose.onNodeWithTag("call-number").performScrollTo().assertTextContains(NUMBER)
-            screenshot("task-draft.png")
+            compose.runOnIdle { assertEquals(settingsBefore, app.calls.settings.state.value) }
 
-            selectWorkspace(R.string.flash_hub_audit)
-            compose.onNodeWithText(workspaceText(R.string.calls_history_empty)).assertIsDisplayed()
-            screenshot("recording-audit-route.png")
-            compose.onNodeWithTag("call-open-system").assertIsDisplayed()
-            selectWorkspace(R.string.flash_hub_dial)
-            compose.onNodeWithTag("call-task-goal").performScrollTo().assertTextContains(GOAL)
-            compose.onNodeWithTag("call-task-questions").performScrollTo().assertTextContains(QUESTION)
-
-            // Situational instructions now live in the guard workspace, not a mandatory extra page.
-            selectWorkspace(R.string.flash_hub_guard)
-            val instructionsBefore = app.calls.instructions.items.value
-            compose.onNodeWithTag("call-instruction-add").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithTag("call-open-system").assertIsDisplayed()
-            screenshot("inline-playbook.png")
-            compose.onNodeWithTag("call-instruction-add").performClick()
+            compose.onNodeWithTag("call-open-instructions").performScrollTo().performClick()
+            compose.onNodeWithTag("call-instruction-add").performScrollTo().performClick()
             compose.waitUntil(5_000) {
                 compose.onNodeWithTag("call-instruction-title-input").fetchSemanticsNode()
                     .config[SemanticsProperties.Focused]
             }
-            compose.onNodeWithTag("call-instruction-title-input").assertIsDisplayed().assertIsFocused()
-            compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
             compose.onNodeWithTag("call-instruction-title-input").performTextReplacement("仅用于界面验收，取消不保存")
-            compose.onNodeWithTag("call-instruction-title-input").assertTextContains("仅用于界面验收，取消不保存")
-            screenshot("instruction-editor-keyboard.png")
+            compose.waitUntil(5_000) { workspaceImeVisible(scenario) }
+            screenshot("native-instruction-keyboard.png")
+            compose.onNodeWithTag("call-instruction-title-input").assertIsDisplayed().assertIsFocused()
+            compose.onNodeWithText(workspaceText(R.string.call_instructions_cancel)).assertIsDisplayed()
+            compose.onNodeWithText(workspaceText(R.string.call_instructions_save)).assertIsDisplayed()
             compose.onNodeWithText(workspaceText(R.string.call_instructions_cancel)).performClick()
             compose.onNodeWithTag("call-instruction-title-input").assertDoesNotExist()
             hideWorkspaceKeyboard(scenario)
-            compose.onNodeWithTag("call-instruction-add").performScrollTo().assertIsDisplayed()
+
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("call-page-receive").assertIsDisplayed()
+
+            // Scroll through a real long page; navigation must remain visible without scrolling to it.
+            compose.onNodeWithTag("call-page-receive").performTouchInput { swipeUp(durationMillis = 300) }
+            assertWorkspaceNavigationVisible(compose)
+            screenshot("native-receive-scrolled.png")
+
+            selectWorkspace("settings")
+            compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
+            assertWorkspaceNavigationVisible(compose)
+            screenshot("native-settings-recovery.png")
+            compose.onNodeWithText(workspaceText(R.string.calls_helper_name)).performScrollTo().performClick()
+            compose.onNodeWithText(workspaceText(R.string.calls_helper_setup_title)).assertIsDisplayed()
+            compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
+            screenshot("native-helper-recovery.png")
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("call-tab-settings").assertIsDisplayed()
+            assertWorkspaceNavigationVisible(compose)
+            selectWorkspace("home")
+            compose.onNodeWithTag("call-page-home").assertIsDisplayed()
+
             compose.runOnIdle {
                 assertEquals(instructionsBefore, app.calls.instructions.items.value)
                 assertEquals(settingsBefore, app.calls.settings.state.value)
+                assertEquals(historyBefore, app.calls.history.value)
                 assertEquals(CallPhase.IDLE, app.calls.state.value.phase)
             }
-
-            // Real native scrolling must leave the global route back to readiness reachable.
-            compose.onNodeWithTag("call-page-receive").performTouchInput { swipeUp(durationMillis = 300) }
-            compose.onNodeWithTag("call-open-system").assertIsDisplayed()
-            assertWorkspaceLabelsFullyVisible()
-            screenshot("operator-deck-scrolled.png")
         }
     }
 
@@ -140,37 +134,40 @@ class CallWorkspaceVisualTest {
         captureWorkspaceScreenshot(name)
     }
 
-    private fun selectWorkspace(@StringRes label: Int) {
-        compose.onNode(
-            hasText(workspaceText(label)) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab),
-        ).assertIsDisplayed().performClick()
-    }
-
-    private fun assertWorkspaceLabelsFullyVisible() {
-        for (id in listOf(R.string.flash_hub_guard, R.string.flash_hub_dial, R.string.flash_hub_audit)) {
-            val label = workspaceText(id)
-            val layouts = mutableListOf<TextLayoutResult>()
-            compose.onNode(
-                hasText(label) and hasAnyAncestor(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)),
-                useUnmergedTree = true,
-            ).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-            assertTrue("The full navigation label must have a measured text layout: $label", layouts.isNotEmpty())
-            for (layout in layouts) {
-                assertTrue("Navigation label must fit without overflow: $label; " +
-                    "widthOverflow=${layout.didOverflowWidth}, heightOverflow=${layout.didOverflowHeight}, " +
-                    "size=${layout.size}, lines=${layout.lineCount}, " +
-                    "ellipsized=${(0 until layout.lineCount).map { layout.isLineEllipsized(it) }}",
-                    !layout.hasVisualOverflow)
-                assertTrue("Navigation label must not be ellipsized: $label",
-                    (0 until layout.lineCount).none { layout.isLineEllipsized(it) })
-            }
-        }
+    private fun selectWorkspace(route: String) {
+        compose.onNodeWithTag("call-tab-$route").assertIsDisplayed().performClick()
     }
 
     private companion object {
         const val NUMBER = "15555550123"
-        const val GOAL = "只确认营业时间，不预约，不承诺购买。"
-        const val QUESTION = "今天几点关门？"
+    }
+
+}
+
+/** Validate the navigation that is currently rendered, including its measured text (not semantics alone). */
+internal fun assertWorkspaceNavigationVisible(compose: ComposeTestRule) {
+    val tabs = compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+    val count = tabs.fetchSemanticsNodes().size
+    assertTrue("The workspace must expose its navigation", count > 0)
+    for (index in 0 until count) tabs[index].assertIsDisplayed()
+    val labels = compose.onAllNodes(
+        SemanticsMatcher.keyIsDefined(SemanticsProperties.Text) and
+            hasAnyAncestor(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)),
+        useUnmergedTree = true,
+    )
+    val labelCount = labels.fetchSemanticsNodes().size
+    assertTrue("The rendered navigation labels must be available for layout inspection", labelCount > 0)
+    for (index in 0 until labelCount) {
+        val node = labels[index]
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue("Navigation label must have a measured text layout", layouts.isNotEmpty())
+        for (layout in layouts) {
+            assertTrue("Navigation text must fit: widthOverflow=${layout.didOverflowWidth}, " +
+                "heightOverflow=${layout.didOverflowHeight}, size=${layout.size}", !layout.hasVisualOverflow)
+            assertTrue("Navigation label must not be ellipsized",
+                (0 until layout.lineCount).none { layout.isLineEllipsized(it) })
+        }
     }
 }
 
@@ -222,7 +219,27 @@ internal class WorkspaceEmulatorOnlyRule : TestRule {
             val descriptor = instrumentation.uiAutomation.executeShellCommand("getprop ro.kernel.qemu")
             val qemu = ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText().trim() }
             assumeTrue("Journey review is forbidden on a physical phone", qemu == "1")
-            base.evaluate()
+            // UI drafts persist across normal launches; isolate only this disposable emulator's draft.
+            val preferences = instrumentation.targetContext.getSharedPreferences(
+                "flash_phone_task_draft", android.content.Context.MODE_PRIVATE,
+            )
+            val draftBefore = preferences.all.toMap()
+            check(preferences.edit().clear().commit()) { "Could not isolate emulator task draft" }
+            try {
+                base.evaluate()
+            } finally {
+                val restore = preferences.edit().clear()
+                for ((key, value) in draftBefore) when (value) {
+                    is String -> restore.putString(key, value)
+                    is Boolean -> restore.putBoolean(key, value)
+                    is Int -> restore.putInt(key, value)
+                    is Long -> restore.putLong(key, value)
+                    is Float -> restore.putFloat(key, value)
+                    is Set<*> -> restore.putStringSet(key, value.filterIsInstance<String>().toSet())
+                    else -> error("Unsupported emulator task draft preference type")
+                }
+                check(restore.commit()) { "Could not restore emulator task draft" }
+            }
         }
     }
 }

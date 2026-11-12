@@ -9,9 +9,16 @@ import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -43,6 +50,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallRecordingInfo
 import com.wangzan101.mika.ui.theme.MikaTheme
+import com.wangzan101.mika.ui.theme.MikaIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -54,6 +62,7 @@ import java.io.File
 
 /** One expanded record owns one player and one temporary recording. Opening a row never starts playback. */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun CallRecordingPlayer(
     recording: CallRecordingInfo,
     onOpen: suspend (String) -> File?,
@@ -95,10 +104,14 @@ internal fun CallRecordingPlayer(
     }
     val c = MikaTheme.colors
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("call-recording-player"),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxWidth().border(0.5.dp, c.edge, RoundedCornerShape(7.dp))
+            .padding(16.dp).testTag("call-recording-player"),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(stringResource(R.string.calls_recording_title), style = MaterialTheme.typography.titleSmall, color = c.ink)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(MikaIcons.Sound, null, Modifier.size(18.dp), tint = c.ink2)
+            Text(stringResource(R.string.calls_recording_title), style = MaterialTheme.typography.titleSmall, color = c.ink)
+        }
         if (recording.partial) Text(
             stringResource(R.string.calls_recording_partial), style = MaterialTheme.typography.bodySmall,
             color = c.warn, modifier = Modifier.testTag("call-recording-partial"),
@@ -112,7 +125,7 @@ internal fun CallRecordingPlayer(
             onValueChange = { seeking = it.toInt() },
             onValueChangeFinished = { seeking?.let(controller::seek); seeking = null },
             enabled = enabled && !state.loading && state.durationMs > 0,
-            modifier = Modifier.fillMaxWidth().testTag("call-recording-seek").semantics { contentDescription = seekLabel },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("call-recording-seek").semantics { contentDescription = seekLabel },
         )
         Text(
             "${recordingTime(seeking ?: state.positionMs)} / ${recordingTime(state.durationMs)}",
@@ -124,14 +137,15 @@ internal fun CallRecordingPlayer(
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag("call-recording-error").semantics { liveRegion = LiveRegionMode.Polite },
         )
-        Row(
-            Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        FlowRow(
+            Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             OutlinedButton(
                 onClick = { if (state.playing) controller.pause() else controller.play() },
                 enabled = enabled && !state.loading,
-                modifier = Modifier.weight(1f).testTag("call-recording-play-pause"),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("call-recording-play-pause"),
             ) {
                 Text(stringResource(when {
                     state.loading -> R.string.calls_recording_loading
@@ -143,7 +157,7 @@ internal fun CallRecordingPlayer(
             TextButton(
                 onClick = controller::stop,
                 enabled = state.loading || state.prepared || state.positionMs > 0,
-                modifier = Modifier.testTag("call-recording-stop"),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("call-recording-stop"),
             ) { Text(stringResource(R.string.calls_recording_stop)) }
         }
     }

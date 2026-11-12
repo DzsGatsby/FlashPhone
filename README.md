@@ -17,6 +17,7 @@ English · [简体中文](docs/readme/README.zh-CN.md) · [繁體中文](docs/re
 - **Place calls with a goal.** Choose the number and SIM, and add what to ask, the background, and what AI may promise. Review the brief before calling.
 - **Work while the screen is locked.** When the audio helper and background standby are ready, AI can answer eligible incoming calls. A confirmed outgoing task can be set to dial once after locking the screen within 45 seconds.
 - **Review the conversation.** Read the transcript beside the original task, play the local two-channel recording, mark the call handled, or reuse the task as a new draft.
+- **Keep the workspace in context.** Home, history, outgoing tasks, answering rules and settings have persistent navigation. Search and filter records, switch between details, copy or export text, and resume an encrypted unsent task after restarting the app. Reusing a record never places a call by itself.
 
 ## Install and get started
 

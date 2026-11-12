@@ -2,7 +2,6 @@ package com.wangzan101.mika.ui
 
 import android.graphics.Bitmap
 import android.media.AudioManager
-import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
@@ -19,8 +18,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -45,15 +42,12 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
-import org.junit.runner.Description
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -74,7 +68,7 @@ import kotlin.math.sin
 @RunWith(AndroidJUnit4::class)
 class CallRecordingUiTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
-    @get:Rule val rules: TestRule = RuleChain.outerRule(EmulatorOnlyRule()).around(compose)
+    @get:Rule val rules: TestRule = RuleChain.outerRule(WorkspaceEmulatorOnlyRule()).around(compose)
 
     private lateinit var fixtures: File
     private lateinit var original: File
@@ -152,7 +146,7 @@ class CallRecordingUiTest {
         assertEquals("Returning to foreground must not reopen the recording", 1, opened.get())
 
         play()
-        historyRow("1").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-back").performScrollTo().performClick()
         compose.waitUntil(3_000) { closed.size == 2 && !audioManager.isMusicActive }
         compose.onNodeWithTag("call-recording-player").assertDoesNotExist()
         expand("1")
@@ -197,6 +191,7 @@ class CallRecordingUiTest {
         expand("1")
         compose.onNodeWithTag("call-history-mark").performScrollTo().performClick()
         compose.waitUntil(3_000) { marked.toList() == listOf("record-1:true") }
+        compose.onNodeWithTag("call-history-back").performScrollTo().performClick()
         compose.onNodeWithTag("call-history-filter-done").performScrollTo().performClick()
         compose.onNodeWithTag("call-history-search").performScrollTo().performTextReplacement(number("2"))
         compose.onNodeWithTag("call-recording-player").assertDoesNotExist()
@@ -310,9 +305,7 @@ class CallRecordingUiTest {
 
     private fun number(index: String) = "555010$index"
 
-    private fun historyRow(index: String) = compose.onNode(
-        hasText(number(index), substring = true) and !hasTestTag("call-history-search"),
-    )
+    private fun historyRow(index: String) = compose.onNodeWithTag("call-history-row-record-$index")
 
     private fun writeStereoWav(file: File) {
         val rate = 16_000
@@ -328,18 +321,5 @@ class CallRecordingUiTest {
             wav.putShort((1_400 * sin(2 * PI * 660 * frame / rate)).toInt().toShort())
         }
         file.writeBytes(wav.array())
-    }
-}
-
-private class EmulatorOnlyRule : TestRule {
-    override fun apply(base: Statement, description: Description): Statement = object : Statement() {
-        override fun evaluate() {
-            assumeTrue("Pass -e flashPhoneUiEmulator true for this isolated test",
-                InstrumentationRegistry.getArguments().getString("flashPhoneUiEmulator") == "true")
-            val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("getprop ro.kernel.qemu")
-            val qemu = ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText().trim() }
-            assumeTrue("This test is forbidden on physical phones", qemu == "1")
-            base.evaluate()
-        }
     }
 }

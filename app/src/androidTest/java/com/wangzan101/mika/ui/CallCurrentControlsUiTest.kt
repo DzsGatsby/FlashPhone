@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -70,8 +71,14 @@ class CallCurrentControlsUiTest {
                 }
             }
         }
-        compose.onNodeWithText(workspaceText(R.string.calls_expand)).assertIsDisplayed().performClick()
-        compose.onNodeWithText(workspaceText(R.string.calls_collapse)).assertIsDisplayed()
+        if (compose.onAllNodesWithText(workspaceText(R.string.calls_expand)).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText(workspaceText(R.string.calls_expand)).assertIsDisplayed().performClick()
+            compose.onNodeWithText(workspaceText(R.string.calls_collapse)).assertIsDisplayed()
+        } else {
+            // Compact landscapes and large text use the same always-visible transcript shortcut.
+            compose.onNodeWithTag("call-current-transcript").assertIsDisplayed().performClick()
+            compose.runOnIdle { assertEquals(listOf("transcript"), events); events.clear() }
+        }
         assertControlsAndWorkspaceVisible()
         compose.onNodeWithTag("call-live-transcript").performTouchInput { swipeUp(durationMillis = 400) }
         compose.waitUntil(3_000) {

@@ -17,14 +17,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallActionResult
 import com.wangzan101.mika.calls.CallRuntime
@@ -81,6 +84,9 @@ internal fun CallPlaybookSection(
     val configuredProviders by providers.providers.collectAsState()
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var expandedRuleId by rememberSaveable { mutableStateOf<String?>(null) }
+    var templatesOpen by rememberSaveable { mutableStateOf(false) }
     var draft by remember { mutableStateOf<CallInstruction?>(null) }
     var deleting by remember { mutableStateOf<CallInstruction?>(null) }
     var showNewChat by remember { mutableStateOf(false) }
@@ -141,26 +147,26 @@ internal fun CallPlaybookSection(
             )
         }
 
-        SegmentedControl(
-            options = listOf(
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
                 if (rules.isEmpty()) stringResource(R.string.call_instructions_rules)
                 else "${stringResource(R.string.call_instructions_rules)} (${rules.size})",
                 stringResource(R.string.call_instructions_chat),
-            ),
-            selected = tab,
-            onSelect = { tab = it },
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
+            ).forEachIndexed { index, title ->
+                FilterChip(selected = tab == index, onClick = { tab = index },
+                    label = { Text(title) }, modifier = Modifier.heightIn(min = 48.dp))
+            }
+        }
 
         (storageError ?: feedback)?.let { msg ->
             CallFeedback(CallActionResult(ok = storageError == null && msg == savedLabel, message = msg))
         }
 
         if (tab == 0) {
-            CallSurfaceCard(
-                modifier = Modifier.padding(bottom = 12.dp),
-                tone = if (activeCount > 0) TileTone.Ok else TileTone.Accent,
-            ) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -169,7 +175,7 @@ internal fun CallPlaybookSection(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        IconTile(MikaIcons.Doc, if (activeCount > 0) TileTone.Ok else TileTone.Accent)
+                        Icon(MikaIcons.Doc, null, Modifier.size(22.dp), tint = c.ink2)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(stringResource(R.string.call_instructions_rules), style = MikaType.BodyStrong)
                             Text(
@@ -184,6 +190,10 @@ internal fun CallPlaybookSection(
                         onClick = { draft = CallInstruction("", "", "", "") },
                         modifier = Modifier.fillMaxWidth().testTag("call-instruction-add"),
                     )
+                    TextButton(onClick = { templatesOpen = !templatesOpen }) {
+                        Text(stringResource(R.string.call_instructions_presets))
+                    }
+                    if (templatesOpen) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = stringResource(R.string.call_instructions_presets),
@@ -200,6 +210,7 @@ internal fun CallPlaybookSection(
                             subtitle = businessWhen,
                             onClick = { draft = CallInstruction("", businessTitle, businessWhen, businessReply) },
                         )
+                    }
                     }
                 }
             }
@@ -219,18 +230,27 @@ internal fun CallPlaybookSection(
                 }
             }
 
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it },
+                singleLine = true,
+                label = { Text(stringResource(R.string.flash_instructions_search)) },
+                leadingIcon = { Icon(MikaIcons.Search, null, Modifier.size(20.dp)) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("call-instructions-search"),
+                shape = MikaShapes.Button,
+            )
+            val visibleRules = rules.filter { rule ->
+                search.isBlank() || listOf(rule.title, rule.situation, rule.response).any { it.contains(search.trim(), ignoreCase = true) }
+            }
+            if (rules.isNotEmpty() && visibleRules.isEmpty()) {
+                Text(stringResource(R.string.flash_instructions_no_match), style = MikaType.Body, color = c.ink2,
+                    modifier = Modifier.padding(vertical = 24.dp))
+            }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                rules.forEach { rule ->
+                visibleRules.forEach { rule ->
                     val expired = rule.expiresAtMs?.let { it <= System.currentTimeMillis() } == true
-                    val cardTone = when {
-                        expired -> TileTone.Warn
-                        rule.enabled -> TileTone.Ok
-                        else -> TileTone.Neutral
-                    }
-                    CallSurfaceCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        tone = cardTone,
-                    ) {
+                    val expanded = expandedRuleId == rule.id
+                    Column(Modifier.fillMaxWidth().testTag("call-instruction-row-${rule.id}")) {
                         Column(
                             Modifier.fillMaxWidth().padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -240,7 +260,10 @@ internal fun CallPlaybookSection(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Column(
+                                    Modifier.weight(1f).clickable { expandedRuleId = if (expanded) null else rule.id },
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
                                     Text(rule.title, style = MaterialTheme.typography.titleMedium, color = c.ink)
                                     Row(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -271,10 +294,21 @@ internal fun CallPlaybookSection(
                                 )
                             }
 
+                            TextButton(
+                                onClick = { expandedRuleId = if (expanded) null else rule.id },
+                                modifier = Modifier.testTag("call-instruction-expand-${rule.id}"),
+                            ) {
+                                Text(stringResource(if (expanded) R.string.flash_instructions_collapse else R.string.flash_instructions_expand))
+                            }
+                            if (!expanded) {
+                                Text(rule.situation, style = MikaType.Caption, color = c.ink2, maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                            if (expanded) {
                             Column(
                                 Modifier
                                     .fillMaxWidth()
-                                    .background(c.fill, RoundedCornerShape(12.dp))
+                                    .background(c.fill, RoundedCornerShape(6.dp))
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
@@ -323,7 +357,9 @@ internal fun CallPlaybookSection(
                                     )
                                 }
                             }
+                            }
                         }
+                        CallCardDivider()
                     }
                 }
             }
@@ -406,7 +442,7 @@ internal fun CallPlaybookSection(
                             label = { Text(stringResource(R.string.call_instructions_model)) },
                             supportingText = { Text(stringResource(R.string.call_instructions_model_hint)) },
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.fillMaxWidth().keepsKeyboard(),
                             enabled = !busy,
                         )
@@ -426,7 +462,7 @@ internal fun CallPlaybookSection(
                             label = { Text(stringResource(R.string.call_instructions_api_key)) },
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.fillMaxWidth().keepsKeyboard(),
                             enabled = !busy,
                         )
@@ -551,7 +587,7 @@ internal fun CallPlaybookSection(
                             value = input,
                             onValueChange = { input = it.take(CodexOwnerRuntime.MAX_INPUT_CHARS) },
                             label = { Text(stringResource(R.string.call_instructions_message)) },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-owner-input"),
                             minLines = 2,
                             maxLines = 8,
@@ -641,7 +677,7 @@ private fun PresetRuleRow(
     onClick: () -> Unit,
 ) {
     val c = MikaTheme.colors
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(6.dp)
     Row(
         Modifier
             .fillMaxWidth()
@@ -673,14 +709,8 @@ private fun InstructionEditor(
     var situation by remember(row) { mutableStateOf(row.situation) }
     var response by remember(row) { mutableStateOf(row.response) }
     var expiry by remember(row) { mutableStateOf(row.expiresAtMs) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(stringResource(if (row.id.isBlank()) R.string.call_instructions_add else R.string.call_instructions_edit))
-        },
-        modifier = Modifier.imePadding(),
-        properties = DialogProperties(decorFitsSystemWindows = false),
-        text = {
+    val editorTitle = stringResource(if (row.id.isBlank()) R.string.call_instructions_add else R.string.call_instructions_edit)
+    val form: @Composable () -> Unit = {
             val titleFocus = remember { FocusRequester() }
             val window = LocalWindowInfo.current
             val keyboard = LocalSoftwareKeyboardController.current
@@ -699,7 +729,7 @@ private fun InstructionEditor(
                     value = title,
                     onValueChange = { title = it.take(64) },
                     label = { Text(stringResource(R.string.call_instructions_heading)) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier.fillMaxWidth().focusRequester(titleFocus).testTag("call-instruction-title-input"),
                     singleLine = true,
                 )
@@ -707,7 +737,7 @@ private fun InstructionEditor(
                     value = situation,
                     onValueChange = { situation = it.take(200) },
                     label = { Text(stringResource(R.string.call_instructions_situation)) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
                 )
@@ -715,7 +745,7 @@ private fun InstructionEditor(
                     value = response,
                     onValueChange = { response = it },
                     label = { Text(stringResource(R.string.call_instructions_response)) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = { Text("${response.length} / 800") },
                     isError = response.length > 800,
@@ -756,8 +786,8 @@ private fun InstructionEditor(
                 }
                 saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-        },
-        confirmButton = {
+    }
+    val confirm: @Composable () -> Unit = {
             Button(
                 onClick = { onSave(row.copy(title = title, situation = situation, response = response, expiresAtMs = expiry)) },
                 enabled = title.isNotBlank() && situation.isNotBlank() && response.isNotBlank() && response.length <= 800,
@@ -765,9 +795,33 @@ private fun InstructionEditor(
             ) {
                 Text(stringResource(R.string.call_instructions_save))
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.call_instructions_cancel)) }
-        },
-    )
+    }
+    val cancel: @Composable () -> Unit = {
+        TextButton(onClick = onDismiss) { Text(stringResource(R.string.call_instructions_cancel)) }
+    }
+    if (LocalConfiguration.current.screenHeightDp < 500) {
+        // A landscape keyboard can leave less than 120dp. Keep editing and both
+        // actions side by side instead of spending that height on a dialog header/footer.
+        Dialog(onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            Box(Modifier.fillMaxWidth(0.85f).fillMaxHeight().systemBarsPadding().imePadding().padding(8.dp)) {
+                Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(8.dp), color = MikaTheme.colors.surface) {
+                    Row(Modifier.fillMaxSize().padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f).fillMaxHeight()) { form() }
+                        Row(Modifier.width(208.dp), horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically) { cancel(); confirm() }
+                    }
+                }
+            }
+        }
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(editorTitle) },
+            modifier = Modifier.imePadding(),
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            text = form, confirmButton = confirm, dismissButton = cancel,
+        )
+    }
 }

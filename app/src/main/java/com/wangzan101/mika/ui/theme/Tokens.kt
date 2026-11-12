@@ -14,9 +14,9 @@ object MikaType {
     /** 页面标题:顶栏。 */
     val Title = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
     /** 正文、行标题。 */
-    val Body = TextStyle(fontSize = 15.5.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal)
+    val Body = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal)
     /** 卡片标题等需要强调的正文。 */
-    val BodyStrong = TextStyle(fontSize = 15.5.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+    val BodyStrong = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
     /** 说明文字。 */
     val Caption = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Normal)
     /** 分组小标题。 */
@@ -41,7 +41,7 @@ object MikaSpace {
 /** 各类元素的尺寸。 */
 object MikaSize {
     val TopBar = 56.dp
-    val IconButton = 40.dp
+    val IconButton = 48.dp
     val RowMin = 52.dp
     val Button = 52.dp
     val Composer = 52.dp
@@ -56,11 +56,11 @@ object MikaSize {
 
 /** 圆角。 */
 object MikaRadius {
-    val Card = 16.dp
+    val Card = 8.dp
     val Bubble = 20.dp
     val BubbleTail = 6.dp
-    val Button = 14.dp
-    val Tile = 9.dp
+    val Button = 6.dp
+    val Tile = 6.dp
 }
 
 /** 常用形状;顶层常量,重组时不新建。 */

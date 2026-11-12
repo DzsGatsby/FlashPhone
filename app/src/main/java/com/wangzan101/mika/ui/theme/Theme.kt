@@ -109,6 +109,9 @@ private fun scheme(c: MikaColors): ColorScheme {
     return base.copy(
         primary = c.accent, onPrimary = c.onAccent, primaryContainer = c.accentSoft, onPrimaryContainer = c.accent,
         secondary = c.accent, onSecondary = c.onAccent,
+        secondaryContainer = c.fill, onSecondaryContainer = c.ink,
+        tertiary = c.ink2, onTertiary = c.surface,
+        tertiaryContainer = c.fill, onTertiaryContainer = c.ink,
         background = c.bg, onBackground = c.ink,
         surface = c.surface, onSurface = c.ink, surfaceVariant = c.fill, onSurfaceVariant = c.ink2,
         surfaceContainerLowest = c.surface, surfaceContainerLow = c.surface, surfaceContainer = c.surface,

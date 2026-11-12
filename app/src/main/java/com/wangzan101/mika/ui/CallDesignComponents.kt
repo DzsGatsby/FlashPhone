@@ -41,7 +41,7 @@ import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.MikaType
 
 /**
- * Elevated surface card for Flash phone workspaces.
+ * Quiet, flat surface for Flash phone workspaces.
  * Supports subtle tonal border/background emphasis for live call, active standby, or warnings
  * without heavy blur or decorative clutter.
  */
@@ -96,7 +96,7 @@ internal fun CallStatusBadge(
     }
     Row(
         modifier
-            .background(bg, MikaShapes.Pill)
+            .background(bg, RoundedCornerShape(4.dp))
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -290,14 +290,9 @@ internal fun CallTranscriptText(line: CallTranscriptLine, turnNumber: Int? = nul
     val c = MikaTheme.colors
     val isAssistant = line.role == "assistant"
     val speakerLabel = stringResource(if (isAssistant) R.string.app_name else R.string.calls_caller)
-    val bubbleBg = if (isAssistant) c.accentSoft.copy(alpha = if (c.isDark) 0.35f else 0.45f) else c.fill
-    val speakerColor = if (isAssistant) c.accent else c.ink2
-    val shape = RoundedCornerShape(
-        topStart = 12.dp,
-        topEnd = 12.dp,
-        bottomStart = if (isAssistant) 12.dp else 4.dp,
-        bottomEnd = if (isAssistant) 4.dp else 12.dp,
-    )
+    val bubbleBg = c.bg
+    val speakerColor = c.ink2
+    val shape = RoundedCornerShape(4.dp)
     Column(
         Modifier
             .fillMaxWidth()
