@@ -1,8 +1,8 @@
 # Flash phone Mac / iPhone bridge prototype
 
 **iPhone-away scope:** this adapter does not establish calls when the iPhone leaves home
-on cellular while the Mac remains there. The continued investigation, verified platform
-limits, carrier-app candidate and model-specific watch validation gates are recorded in
+on cellular while the Mac remains there. The continued investigation uses the existing
+iPhone, Android phone and Mac only; its platform limits and carrier-app candidate are recorded in
 [the iPhone-away research](../../docs/iphone-away-research.md). Cloud reachability alone
 must not advertise this capability.
 
