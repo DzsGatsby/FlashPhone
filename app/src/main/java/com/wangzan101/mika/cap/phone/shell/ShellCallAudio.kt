@@ -401,6 +401,8 @@ internal class ShellCallAudio(private val context: Context) {
             else observationTime(nowMs) - zeroSinceMs
     }
 
+    internal enum class UplinkFlushStage { NONE, DRAIN, PAUSE, FLUSH, PLAY, PRIME, DONE }
+
     private inner class Session(
         val owner: IBinder,
         private val backend: Int,
@@ -431,6 +433,7 @@ internal class ShellCallAudio(private val context: Context) {
         private var upOffset = 0
         private var downStalledSince = 0L
         private var routeMissingSince = 0L
+        private var flushStage = UplinkFlushStage.NONE
         private val downBuffer = ByteArray(CAPTURE_RATE / 50 * 2)
         private val upBuffer = ByteArray(PLAY_RATE / 50 * 2)
         private val checkUp = StructPollfd().apply { fd = up.fileDescriptor }
@@ -463,10 +466,16 @@ internal class ShellCallAudio(private val context: Context) {
                 track.setStartThresholdInFrames(minOf(PLAY_RATE / 50, track.bufferSizeInFrames).coerceAtLeast(1))
             } else track.bufferSizeInFrames
             val silence = ByteArray(initialFrames.coerceIn(1, PLAY_RATE / 4) * 2)
-            val accepted = track.write(silence, 0, silence.size, AudioTrack.WRITE_NON_BLOCKING)
-            check(accepted > 0) {
-                "Uplink track did not accept its initial silence."
-            }
+            val accepted = writePlaybackPrime(silence.size,
+                nowMs = SystemClock::elapsedRealtime,
+                awaitRetry = { SystemClock.sleep(it) },
+                ensureActive = {
+                    check(!closed && owner.isBinderAlive && inPstnCall()) { "Cellular call or its owner ended." }
+                    check(manager.isMicrophoneMute) { "Handset microphone was unmuted." }
+                    updateRoutes()
+                },
+                write = { offset, size -> track.write(silence, offset, size, AudioTrack.WRITE_NON_BLOCKING) },
+            )
             playbackDiagnostics.recordPrime(accepted)
         }
 
@@ -601,6 +610,7 @@ internal class ShellCallAudio(private val context: Context) {
                 check(!closed)
                 playbackDiagnostics.endZeroStreak(SystemClock.elapsedRealtime())
                 try {
+                    flushStage = UplinkFlushStage.DRAIN
                     // Remove bytes already waiting in the kernel as well as AudioTrack's queue.
                     // The app invalidates its corresponding model generation before invoking this.
                     upOffset = 0
@@ -612,12 +622,17 @@ internal class ShellCallAudio(private val context: Context) {
                         drained += n
                         check(drained <= MAX_FLUSH_BYTES) { "Uplink writer kept sending during the interruption." }
                     } while (n > 0)
+                    flushStage = UplinkFlushStage.PAUSE
                     track.pause()
+                    flushStage = UplinkFlushStage.FLUSH
                     track.flush()
                     playbackDiagnostics.recordTrackFlush()
                     txDevice = -1
+                    flushStage = UplinkFlushStage.PLAY
                     track.play()
+                    flushStage = UplinkFlushStage.PRIME
                     primePlayback()
+                    flushStage = UplinkFlushStage.DONE
                 } finally {
                     playbackDiagnostics.recordFlush(SystemClock.elapsedRealtime() - started)
                 }
@@ -655,6 +670,7 @@ internal class ShellCallAudio(private val context: Context) {
                 putBoolean("upPlaybackHeadFresh", headFresh)
                 putBoolean("upPlaybackRouteReady", playbackActive && playbackRouteReady())
                 putLong("upFlushMaxMs", playbackDiagnostics.flushMaxMs)
+                putString("upFlushStage", flushStage.name)
                 putInt("downPeak", downPeak)
                 putInt("rxDevice", rxDevice)
                 putInt("txDevice", txDevice)
@@ -765,6 +781,33 @@ internal class ShellCallAudio(private val context: Context) {
         private const val MAX_UPLINK_WRITE_STALL_MS = 1_500L
         private const val MAX_FLUSH_BYTES = 256 * 1024
         private val PIPE_CLOSED get() = OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL
+
+        internal fun writePlaybackPrime(
+            bytes: Int,
+            nowMs: () -> Long,
+            awaitRetry: (Long) -> Unit,
+            ensureActive: () -> Unit,
+            write: (Int, Int) -> Int,
+        ): Int {
+            require(bytes > 0 && bytes % 2 == 0)
+            val deadline = nowMs() + 100L
+            var accepted = 0
+            while (accepted < bytes) {
+                ensureActive()
+                val count = write(accepted, bytes - accepted)
+                check(count >= 0) { "Uplink prime write failed ($count)." }
+                check(count <= bytes - accepted && count % 2 == 0) { "Uplink prime returned an invalid byte count ($count)." }
+                accepted += count
+                if (accepted == bytes) return accepted
+                // Zero and short transfers are valid for WRITE_NON_BLOCKING. Queue the full
+                // silence threshold before waiting for the telephony route, without turning
+                // a single temporary zero into a failed interruption or waiting indefinitely.
+                val remaining = deadline - nowMs()
+                check(remaining > 0L) { "Uplink track did not accept its initial silence within 100 ms." }
+                if (count == 0) awaitRetry(minOf(5L, remaining))
+            }
+            return accepted
+        }
 
         internal fun candidates(mode: Int, direct: Boolean, redirect: Boolean): List<Int> = when (mode) {
             AUTO -> buildList { if (direct) add(DIRECT); if (redirect) add(REDIRECT) }

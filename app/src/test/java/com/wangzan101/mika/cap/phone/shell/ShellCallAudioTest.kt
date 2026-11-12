@@ -11,6 +11,60 @@ import java.io.IOException
 
 class ShellCallAudioTest {
     @Test
+    fun nonblockingPrimeRetriesTemporaryZeroAndFillsTheWholeStartThreshold() {
+        var now = 0L
+        var guards = 0
+        val writes = ArrayList<Pair<Int, Int>>()
+        val results = ArrayDeque(listOf(0, 2, 0, 6))
+        val accepted = ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, { guards++ }) { offset, size ->
+            writes += offset to size
+            results.removeFirst()
+        }
+        assertEquals(8, accepted)
+        assertEquals(listOf(0 to 8, 0 to 8, 2 to 6, 2 to 6), writes)
+        assertEquals(10L, now)
+        assertEquals(4, guards)
+    }
+
+    @Test
+    fun nonblockingPrimeStaysBoundedAndRejectsHardErrorsImmediately() {
+        var now = 0L
+        var writes = 0
+        val deadline = runCatching {
+            ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, {}) { _, _ -> writes++; 0 }
+        }.exceptionOrNull()
+        assertTrue(deadline is IllegalStateException)
+        assertEquals(100L, now)
+        assertEquals(21, writes)
+
+        now = 0L
+        writes = 0
+        val hardError = runCatching {
+            ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, {}) { _, _ -> writes++; -6 }
+        }.exceptionOrNull()
+        assertTrue(hardError?.message?.contains("-6") == true)
+        assertEquals(0L, now)
+        assertEquals(1, writes)
+    }
+
+    @Test
+    fun primingRechecksCallMuteAndRouteBeforeEveryAttempt() {
+        listOf("Cellular call or its owner ended.", "Handset microphone was unmuted.", "Uplink unexpectedly routed").forEach { reason ->
+            var now = 0L
+            var guards = 0
+            var writes = 0
+            val failure = runCatching {
+                ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, {
+                    if (++guards == 2) error(reason)
+                }) { _, _ -> writes++; 0 }
+            }.exceptionOrNull()
+            assertEquals(reason, failure?.message)
+            assertEquals(1, writes)
+            assertEquals(5L, now)
+        }
+    }
+
+    @Test
     fun recordingFramesCarryExactChannelSamplesAndAnUnambiguousTerminal() {
         val frames = ArrayList<ByteArray>()
         var closes = 0

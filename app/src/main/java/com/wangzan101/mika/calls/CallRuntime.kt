@@ -1260,7 +1260,7 @@ class CallRuntime(private val app: MikaApp) {
             throw CallProblem("通话状态已变更，AI 未接入音频")
         }
         w.mediaStage = MediaStage.MUTE_ACQUIRE
-        val mute = acquireTelecomMute(w, target)
+        val mute = acquireTelecomMute(w, target, helper)
         if (!sameActiveMuteTarget(w, target) || target.suppressed || shell !== helper ||
             !settings.state.value.enabled || !mute.isConfirmed(target.service.telecomMuted, microphoneMuted())) {
             throw CallProblem("通话状态或静音已变更，AI 未接入音频")
@@ -1433,16 +1433,20 @@ class CallRuntime(private val app: MikaApp) {
         return true
     }
 
-    private suspend fun acquireTelecomMute(w: Work, target: Tracked): TelecomMuteLease {
+    private suspend fun acquireTelecomMute(w: Work, target: Tracked, helper: IMikaShell): TelecomMuteLease {
         val service = target.service
-        var baseline: TelecomMuteLease? = null
-        val known = awaitMute {
-            if (!sameActiveMuteTarget(w, target) || target.suppressed) return@awaitMute false
-            baseline = TelecomMuteLease.fromBaseline(service.telecomMuted, microphoneMuted())
-            baseline != null
-        }
-        val lease = baseline?.takeIf { known }
-            ?: throw CallProblem("Android 未确认原有通话静音状态，AI 未接入音频")
+        val lease = awaitTelecomMuteBaseline(
+            isCurrent = { sameActiveMuteTarget(w, target) && !target.suppressed && settings.state.value.enabled &&
+                shell === helper && runCatching { helper.asBinder().isBinderAlive }.getOrDefault(false) &&
+                settings.state.value.credentialsConfigured && w.config.audioMode == settings.state.value.audioMode },
+            nowMs = SystemClock::elapsedRealtime,
+            sample = { TelecomMuteBaseline(
+                cellularModeReady = runCatching { app.getSystemService(AudioManager::class.java)?.mode == AudioManager.MODE_IN_CALL }.getOrDefault(false),
+                telecomMuted = service.telecomMuted,
+                hardwareMuted = microphoneMuted(),
+                observationRevision = service.muteObservationRevision,
+            ) },
+        )
         w.muteLease = lease
         if (lease.needsMuteRequest) {
             // Mark before the Binder request: an in-flight mute still needs a compensating
