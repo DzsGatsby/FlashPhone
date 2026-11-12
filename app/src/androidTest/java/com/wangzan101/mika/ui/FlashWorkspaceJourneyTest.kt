@@ -160,8 +160,12 @@ class FlashWorkspaceJourneyTest {
         compose.onNodeWithTag("call-history-filter-all").performScrollTo().assertIsSelected()
         assertSelectedRecord(NUMBER)
         backToList()
+        // The bounded record list has its own scroll state inside the workspace scroll.
+        // Reveal that viewport before scrolling individual rows within it.
+        compose.onNodeWithTag("call-history-list").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("call-history-row-delivery").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("call-history-row-completed").performScrollTo().assertIsDisplayed()
+        captureWorkspaceScreenshot("native-history-return-completed-visible.png")
         assertEquals("Selecting and restoring records must never load audio", emptyList<String>(), opened.toList())
         assertEquals(3, records.value.size)
     }
