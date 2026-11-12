@@ -1,5 +1,11 @@
 # Flash phone Mac / iPhone bridge prototype
 
+**iPhone-away scope:** this adapter does not establish calls when the iPhone leaves home
+on cellular while the Mac remains there. The continued investigation, verified platform
+limits, carrier-app candidate and model-specific watch validation gates are recorded in
+[the iPhone-away research](../../docs/iphone-away-research.md). Cloud reachability alone
+must not advertise this capability.
+
 This directory is independent of the Android build. It contains an outbound WSS device agent,
 private persistent command/event spool, and a compiled Core Audio / scoped Phone AX helper.
 **The current build deliberately reports `requires_setup` and does not advertise `calls.dial`.**
