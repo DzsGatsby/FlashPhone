@@ -1,4 +1,4 @@
-<!-- translated-from: README.md @ e5ab1ebcba05 -->
+<!-- translated-from: README.md @ deb26d8962f6 -->
 
 <div align="center">
   <img src="../../app/src/main/res/drawable-nodpi/flash_phone_launcher.png" width="104" alt="Icono de Flash phone" />
@@ -19,6 +19,7 @@
 - **Llamar con un objetivo.** Elige el número y la SIM, añade qué preguntar, el contexto y qué puede prometer la IA. Revisa el encargo antes de llamar.
 - **Atender y llamar con la pantalla bloqueada.** Si el asistente de audio y el modo de espera en segundo plano están listos, la IA puede contestar las llamadas autorizadas. También puedes confirmar una llamada saliente para que se intente una sola vez si bloqueas la pantalla en los siguientes 45 segundos.
 - **Revisar la conversación.** Lee la transcripción junto al encargo original, reproduce la grabación local de dos canales, marca la llamada como atendida o reutiliza el encargo como borrador.
+- **Mantener el contexto de trabajo.** Inicio, historial, tareas salientes, reglas de respuesta y ajustes comparten una navegación permanente. Busca y filtra registros, cambia entre detalles, copia o exporta texto y recupera un encargo sin enviar, guardado de forma cifrada, después de reiniciar la aplicación. Reutilizar un registro nunca inicia una llamada por sí solo.
 
 ## Instalación y primeros pasos
 
