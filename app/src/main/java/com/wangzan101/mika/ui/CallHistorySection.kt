@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -38,6 +39,7 @@ import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallActionResult
 import com.wangzan101.mika.calls.CallDirection
 import com.wangzan101.mika.calls.CallRecord
+import com.wangzan101.mika.calls.CallSummaryStatus
 import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.ui.components.keepsKeyboard
 import com.wangzan101.mika.ui.components.TileTone
@@ -75,9 +77,14 @@ internal fun CallHistorySection(
     onClearAll: (suspend () -> CallActionResult)? = null,
     initialRecordId: String? = null,
     onInitialRecordOpened: () -> Unit = {},
+    summaryStates: Map<String, CallSummaryStatus> = emptyMap(),
+    onSummarize: (String) -> Unit = {},
+    onCancelSummary: (String) -> Unit = {},
+    onConfigureSummary: () -> Unit = {},
 ) {
     val c = MikaTheme.colors
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val listScroll = rememberScrollState()
     var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
@@ -134,6 +141,11 @@ internal fun CallHistorySection(
                 (digits != null && record.number.orEmpty().filter(Char::isDigit).contains(digits)) ||
                 direction.contains(text, ignoreCase = true) || record.result.contains(text, ignoreCase = true) ||
                 record.transcript.any { it.text.contains(text, ignoreCase = true) } ||
+                record.summary?.let { summary ->
+                    (summary.highlights + summary.confirmed + summary.followUps + summary.unknowns).any { item ->
+                        item.text.contains(text, ignoreCase = true) || item.evidence.any { it.quote.contains(text, ignoreCase = true) }
+                    }
+                } == true ||
                 record.task?.let { task ->
                     (listOf(task.goal, task.context, task.constraints) + task.questions).any { it.contains(text, ignoreCase = true) }
                 } == true)
@@ -208,7 +220,7 @@ internal fun CallHistorySection(
                     Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(listScroll).testTag("call-history-list")) {
                         results.forEach { record ->
                             key(record.id) {
-                                HistoryRow(record, selectedId == record.id) { selectedId = record.id }
+                                HistoryRow(record, selectedId == record.id) { focus.clearFocus(); selectedId = record.id }
                                 CallCardDivider()
                             }
                         }
@@ -219,6 +231,10 @@ internal fun CallHistorySection(
                         val index = results.indexOfFirst { it.id == record.id }
                         HistoryDetail(
                             record = record, index = index, count = results.size, busy = busy,
+                            summaryStatus = summaryStates[record.id],
+                            onSummarize = { onSummarize(record.id) },
+                            onCancelSummary = { onCancelSummary(record.id) },
+                            onConfigureSummary = onConfigureSummary,
                             onBack = { selectedId = null },
                             onPrevious = { results.getOrNull(index - 1)?.let { selectedId = it.id } },
                             onNext = { results.getOrNull(index + 1)?.let { selectedId = it.id } },
@@ -338,6 +354,8 @@ private fun HistoryRow(record: CallRecord, selected: Boolean, onSelect: () -> Un
 @Composable
 private fun HistoryDetail(
     record: CallRecord, index: Int, count: Int, busy: Boolean,
+    summaryStatus: CallSummaryStatus?,
+    onSummarize: () -> Unit, onCancelSummary: () -> Unit, onConfigureSummary: () -> Unit,
     onBack: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit,
     onMark: () -> Unit, onDelete: () -> Unit, onReuse: (() -> Unit)?,
     onCopy: () -> Unit, onExport: () -> Unit,
@@ -376,6 +394,7 @@ private fun HistoryDetail(
             }
         }
         CallStatusBadge(stringResource(if (record.handled) R.string.calls_history_done else R.string.calls_history_open), if (record.handled) TileTone.Neutral else TileTone.Warn)
+        CallSummaryCard(record, summaryStatus, onSummarize, onCancelSummary, onConfigureSummary)
         HistoryProperty(stringResource(R.string.flash_history_direction), directionLabel(record.direction))
         HistoryProperty(stringResource(R.string.flash_history_duration), historyDuration(record))
         Text(
@@ -477,13 +496,34 @@ private fun historyDuration(record: CallRecord): String {
 }
 
 /** A shareable text snapshot contains stored facts only, without inventing a summary or turn times. */
-private fun historyExport(context: Context, record: CallRecord): String = buildString {
+internal fun historyExport(context: Context, record: CallRecord): String = buildString {
     val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, context.resources.configuration.locales[0])
     appendLine(context.getString(R.string.flash_history_detail))
     appendLine(record.number ?: context.getString(R.string.calls_unknown_number))
     appendLine(context.getString(R.string.calls_history_period, date.format(Date(record.startedAtMs)), date.format(Date(record.endedAtMs))))
     appendLine(context.getString(if (record.handled) R.string.calls_history_done else R.string.calls_history_open))
     appendLine(record.result)
+    record.summary?.let { summary ->
+        appendLine(); appendLine(context.getString(R.string.call_summary_title))
+        appendLine(context.getString(R.string.call_summary_scope))
+        appendLine(context.getString(R.string.call_summary_caution))
+        appendLine(context.getString(R.string.call_summary_generated, date.format(Date(summary.generatedAtMs)), summary.model))
+        listOf(
+            R.string.call_summary_highlights to summary.highlights,
+            R.string.call_summary_confirmed to summary.confirmed,
+            R.string.call_summary_follow_ups to summary.followUps,
+            R.string.call_summary_unknowns to summary.unknowns,
+        ).forEach { (title, items) ->
+            appendLine(context.getString(title))
+            if (items.isEmpty()) appendLine(context.getString(R.string.call_summary_none))
+            items.forEach { item ->
+                appendLine("• ${item.text}")
+                item.evidence.forEach { evidence ->
+                    appendLine("  ${context.getString(R.string.call_summary_source_line, evidence.lineId)}: ${evidence.quote}")
+                }
+            }
+        }
+    }
     record.task?.let { task ->
         appendLine(); appendLine(context.getString(R.string.calls_record_brief)); appendLine(task.goal)
         task.questions.forEachIndexed { i, q -> appendLine("${i + 1}. $q") }

@@ -35,6 +35,23 @@ class OpenAiCompatModelTest {
     private fun body(): kotlinx.serialization.json.JsonObject =
         Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
 
+    @Test fun boundedStreamingRequestDoesNotRetryAndIncludesCompletionLimit() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("unsupported stream_options"))
+        val bounded = OpenAiCompatModel(server.url("/v1").toString(), "synthetic", "gpt-5-test", caps(), OkHttpClient(),
+            maxOutputTokens = 1_024, allowCompatibilityRetry = false)
+        try { bounded.completeStreaming("s", user, emptyList()) {}; org.junit.Assert.fail("Expected rejection") }
+        catch (_: ModelError) { }
+        assertEquals(1, server.requestCount)
+        assertEquals("1024", body()["max_completion_tokens"].toString())
+    }
+
+    @Test fun boundedLegacyRequestUsesMaxTokens() = runTest {
+        server.enqueue(ok("""{"choices":[{"finish_reason":"stop","message":{"content":"ok"}}]}"""))
+        OpenAiCompatModel(server.url("/v1").toString(), "synthetic", "local-model", caps(), OkHttpClient(),
+            maxOutputTokens = 512, allowCompatibilityRetry = false).complete("s", user, emptyList())
+        assertEquals("512", body()["max_tokens"].toString())
+    }
+
     @Test fun parsesToolCalls() = runTest {
         server.enqueue(ok("""{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"phone_tap","arguments":"{\"ref\":\"a1\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}"""))
         val r = model().complete("sys", user, listOf(ToolSpec("phone_tap", "d", """{"type":"object"}""")))

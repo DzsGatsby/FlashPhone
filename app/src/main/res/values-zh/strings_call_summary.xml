@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">通话 AI 总结</string>
+    <string name="call_summary_scope">仅基于已保存的转写片段</string>
+    <string name="call_summary_caution">转写可能不完整，AI 也可能有误；请结合来源原文和录音核对。</string>
+    <string name="call_summary_generated">生成于 %1$s · %2$s</string>
+    <string name="call_summary_running">正在生成总结…</string>
+    <string name="call_summary_unconfigured">请先配置文字模型，再生成总结。</string>
+    <string name="call_summary_save_failed">新总结保存失败；已有总结仍保留。</string>
+    <string name="call_summary_canceled">已取消生成；已有总结仍保留。</string>
+    <string name="call_summary_timeout">生成超时，请稍后重试。</string>
+    <string name="call_summary_busy">另一个总结或通话正在进行，请稍后重试。</string>
+    <string name="call_summary_invalid">返回内容无法与转写核对，请重试。</string>
+    <string name="call_summary_failed">总结生成失败，请检查模型配置后重试。</string>
+    <string name="call_summary_no_transcript">没有可用于总结的已保存转写。</string>
+    <string name="call_summary_prompt">点击生成将把已保存的转写片段发送给已配置的文字模型服务商。</string>
+    <string name="call_summary_cancel">取消生成</string>
+    <string name="call_summary_configure">配置模型</string>
+    <string name="call_summary_generate">生成总结</string>
+    <string name="call_summary_regenerate">重新生成</string>
+    <string name="call_summary_highlights">要点</string>
+    <string name="call_summary_confirmed">已确认</string>
+    <string name="call_summary_follow_ups">待办</string>
+    <string name="call_summary_unknowns">未知</string>
+    <string name="call_summary_none">保存片段中未识别到相关内容</string>
+    <string name="call_summary_hide_sources">收起来源（%1$d）</string>
+    <string name="call_summary_sources">核对来源（%1$d）</string>
+    <string name="call_summary_source_line">转写第 %1$d 条</string>
+    <string name="call_summary_saved_original">保存原文 · %1$s</string>
+    <string name="call_summary_source_missing">这条来源原文已不可用。</string>
+
+    <string name="call_summary_settings_title">通话总结模型</string>
+    <string name="call_summary_settings_lead">从下方服务商选择文字模型，通话总结独立保存自己的模型选择。</string>
+    <string name="call_summary_selected_model">总结用模型</string>
+    <string name="call_summary_model_unselected">尚未选择模型</string>
+    <string name="call_summary_auto_title">新通话自动总结</string>
+    <string name="call_summary_auto_note">新通话结束后，空闲时总结已保存的转写；不会自动处理历史通话。</string>
+    <string name="call_summary_provider_model_count">%1$d 个模型</string>
+    <string name="call_summary_edit_provider">编辑服务商</string>
+    <string name="call_summary_key_keep">留空保留已保存的 Key</string>
+    <string name="call_summary_load_models_save">获取模型列表并保存</string>
+    <string name="call_summary_save_connection">保存连接</string>
+    <string name="call_summary_connection_note">获取列表只请求模型目录；保存连接或选择模型不会发送通话内容。</string>
+    <string name="call_summary_shared_connection_note">修改连接会影响此服务商的所有用途；Key 留空则保留已保存的 Key。</string>
+    <string name="call_summary_choose_note">选择用于通话总结的模型，不会更改其他模型用途。</string>
+    <string name="call_summary_manual_filter_note">按模型名筛选查看更多，也可在下方填写完整模型 ID。</string>
+    <string name="call_summary_manual_note">按服务商文档填写完整模型 ID；保存时不验证访问权限，生成时会显示真实错误。</string>
+    <string name="call_summary_settings_failed">设置未能保存，请检查连接信息后重试。</string>
+    <string name="call_summary_list_failed">无法获取模型列表，请检查地址和 Key，或保存连接后手填模型 ID。</string>
+    <string name="call_summary_delete_note">这会删除服务商及其加密 Key；其他正在使用此服务商的功能也需要重新配置。</string>
+
+    <string name="call_summary_model_unavailable">当前模型已不可用，请重新选择</string>
+    <string name="call_summary_provider_unsupported">此套餐登录暂不支持通话总结，请添加 API Key 服务商。</string>
+</resources>

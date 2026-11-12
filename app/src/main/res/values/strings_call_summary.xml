@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">AI call summary</string>
+    <string name="call_summary_scope">Based only on saved transcript excerpts</string>
+    <string name="call_summary_caution">The transcript may be incomplete. AI can make mistakes; check the sources and recording.</string>
+    <string name="call_summary_generated">Generated %1$s · %2$s</string>
+    <string name="call_summary_running">Generating summary…</string>
+    <string name="call_summary_unconfigured">Configure a text model before generating a summary.</string>
+    <string name="call_summary_save_failed">The new summary could not be saved. Any previous summary is retained.</string>
+    <string name="call_summary_canceled">Generation canceled. Any previous summary is retained.</string>
+    <string name="call_summary_timeout">Generation timed out. Try again later.</string>
+    <string name="call_summary_busy">Another summary or call is in progress. Try again later.</string>
+    <string name="call_summary_invalid">The response could not be verified against the transcript. Try again.</string>
+    <string name="call_summary_failed">Summary failed. Check the model settings and try again.</string>
+    <string name="call_summary_no_transcript">No saved transcript is available to summarize.</string>
+    <string name="call_summary_prompt">Generate a summary using the configured text model. This sends saved transcript excerpts to that provider.</string>
+    <string name="call_summary_cancel">Cancel generation</string>
+    <string name="call_summary_configure">Configure model</string>
+    <string name="call_summary_generate">Generate summary</string>
+    <string name="call_summary_regenerate">Regenerate</string>
+    <string name="call_summary_highlights">Highlights</string>
+    <string name="call_summary_confirmed">Confirmed</string>
+    <string name="call_summary_follow_ups">Follow-ups</string>
+    <string name="call_summary_unknowns">Unknowns</string>
+    <string name="call_summary_none">None identified in saved excerpts</string>
+    <string name="call_summary_hide_sources">Hide sources (%1$d)</string>
+    <string name="call_summary_sources">Check sources (%1$d)</string>
+    <string name="call_summary_source_line">Transcript line %1$d</string>
+    <string name="call_summary_saved_original">Saved original · %1$s</string>
+    <string name="call_summary_source_missing">This source line is no longer available.</string>
+
+    <string name="call_summary_settings_title">Call summary models</string>
+    <string name="call_summary_settings_lead">Choose a text model from a provider below. Call summaries have their own model selection.</string>
+    <string name="call_summary_selected_model">Summary model</string>
+    <string name="call_summary_model_unselected">No model selected</string>
+    <string name="call_summary_auto_title">Summarize new calls automatically</string>
+    <string name="call_summary_auto_note">After a new call ends, summarize its saved transcript when idle. Existing calls are not processed automatically.</string>
+    <string name="call_summary_provider_model_count">%1$d models</string>
+    <string name="call_summary_edit_provider">Edit provider</string>
+    <string name="call_summary_key_keep">Leave blank to keep the saved key</string>
+    <string name="call_summary_load_models_save">Load models and save</string>
+    <string name="call_summary_save_connection">Save connection</string>
+    <string name="call_summary_connection_note">Loading only requests the model list. Saving or choosing a model does not send any call content.</string>
+    <string name="call_summary_shared_connection_note">Connection changes apply to every use of this provider. A blank key keeps the saved key.</string>
+    <string name="call_summary_choose_note">Select a model for call summaries. This does not change the chat model roles.</string>
+    <string name="call_summary_manual_filter_note">Filter by model name to see more, or enter an exact model ID below.</string>
+    <string name="call_summary_manual_note">Enter the full model ID from the provider documentation. Saving does not verify model access; generation reports any errors.</string>
+    <string name="call_summary_settings_failed">Could not save settings. Check the connection details and try again.</string>
+    <string name="call_summary_list_failed">Could not load the model list. Check the address and key, or save and enter a model ID manually.</string>
+    <string name="call_summary_delete_note">This deletes the provider and its encrypted key. Any other features using this provider must be configured again.</string>
+
+    <string name="call_summary_model_unavailable">Selected model is unavailable. Choose another model.</string>
+    <string name="call_summary_provider_unsupported">This subscription sign-in is unavailable for call summaries. Add an API-key provider.</string>
+</resources>

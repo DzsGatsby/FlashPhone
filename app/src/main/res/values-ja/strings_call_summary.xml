@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">AI 通話要約</string>
+    <string name="call_summary_scope">保存済みの文字起こし断片のみを使用</string>
+    <string name="call_summary_caution">文字起こしは不完全な場合があります。AI の誤りもあるため、原文と録音を確認してください。</string>
+    <string name="call_summary_generated">生成日時 %1$s · %2$s</string>
+    <string name="call_summary_running">要約を生成中…</string>
+    <string name="call_summary_unconfigured">先にテキストモデルを設定してください。</string>
+    <string name="call_summary_save_failed">新しい要約を保存できませんでした。以前の要約は保持されます。</string>
+    <string name="call_summary_canceled">生成をキャンセルしました。以前の要約は保持されます。</string>
+    <string name="call_summary_timeout">生成がタイムアウトしました。後でもう一度お試しください。</string>
+    <string name="call_summary_busy">別の要約または通話が進行中です。後でお試しください。</string>
+    <string name="call_summary_invalid">応答を文字起こしと照合できませんでした。再試行してください。</string>
+    <string name="call_summary_failed">要約に失敗しました。モデル設定を確認し、再試行してください。</string>
+    <string name="call_summary_no_transcript">要約できる保存済みの文字起こしがありません。</string>
+    <string name="call_summary_prompt">生成すると、保存済みの文字起こし断片が設定済みモデルの提供元へ送信されます。</string>
+    <string name="call_summary_cancel">生成をキャンセル</string>
+    <string name="call_summary_configure">モデル設定</string>
+    <string name="call_summary_generate">要約を生成</string>
+    <string name="call_summary_regenerate">再生成</string>
+    <string name="call_summary_highlights">要点</string>
+    <string name="call_summary_confirmed">確認済み</string>
+    <string name="call_summary_follow_ups">次の対応</string>
+    <string name="call_summary_unknowns">不明点</string>
+    <string name="call_summary_none">保存された断片では該当事項なし</string>
+    <string name="call_summary_hide_sources">出典を閉じる（%1$d）</string>
+    <string name="call_summary_sources">出典を確認（%1$d）</string>
+    <string name="call_summary_source_line">文字起こし %1$d 行目</string>
+    <string name="call_summary_saved_original">保存済み原文 · %1$s</string>
+    <string name="call_summary_source_missing">この出典の原文は利用できません。</string>
+
+    <string name="call_summary_settings_title">通話要約モデル</string>
+    <string name="call_summary_settings_lead">以下のプロバイダーからテキストモデルを選択してください。通話要約のモデル選択は独立しています。</string>
+    <string name="call_summary_selected_model">要約用モデル</string>
+    <string name="call_summary_model_unselected">モデル未選択</string>
+    <string name="call_summary_auto_title">新しい通話を自動要約</string>
+    <string name="call_summary_auto_note">新しい通話の終了後、待機中に保存済みの文字起こしを要約します。過去の通話は自動処理しません。</string>
+    <string name="call_summary_provider_model_count">%1$d 個のモデル</string>
+    <string name="call_summary_edit_provider">プロバイダーを編集</string>
+    <string name="call_summary_key_keep">空欄なら保存済みキーを保持</string>
+    <string name="call_summary_load_models_save">モデル一覧を取得して保存</string>
+    <string name="call_summary_save_connection">接続を保存</string>
+    <string name="call_summary_connection_note">一覧取得ではモデル情報のみを要求します。保存やモデル選択では通話内容を送信しません。</string>
+    <string name="call_summary_shared_connection_note">接続の変更は、このプロバイダーのすべての用途に適用されます。キーが空欄なら保存済みキーを保持します。</string>
+    <string name="call_summary_choose_note">通話要約用モデルを選択してください。他のモデル用途は変更しません。</string>
+    <string name="call_summary_manual_filter_note">モデル名で絞り込むか、下に完全なモデル ID を入力してください。</string>
+    <string name="call_summary_manual_note">プロバイダーの資料にある完全なモデル ID を入力してください。保存時にはアクセス権を検証しません。生成時に実際のエラーを表示します。</string>
+    <string name="call_summary_settings_failed">設定を保存できませんでした。接続情報を確認して再試行してください。</string>
+    <string name="call_summary_list_failed">モデル一覧を取得できませんでした。アドレスとキーを確認するか、接続を保存してモデル ID を手入力してください。</string>
+    <string name="call_summary_delete_note">プロバイダーと暗号化されたキーを削除します。このプロバイダーを使用する他の機能も再設定が必要になります。</string>
+
+    <string name="call_summary_model_unavailable">選択中のモデルは利用できません。別のモデルを選択してください。</string>
+    <string name="call_summary_provider_unsupported">このサブスクリプションログインは通話要約に対応していません。API キーのプロバイダーを追加してください。</string>
+</resources>

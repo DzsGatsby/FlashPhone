@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">Ringkasan panggilan AI</string>
+    <string name="call_summary_scope">Hanya berdasarkan cuplikan transkrip tersimpan</string>
+    <string name="call_summary_caution">Transkrip mungkin tidak lengkap dan AI dapat keliru. Periksa sumber dan rekaman.</string>
+    <string name="call_summary_generated">Dibuat %1$s · %2$s</string>
+    <string name="call_summary_running">Membuat ringkasan…</string>
+    <string name="call_summary_unconfigured">Atur model teks sebelum membuat ringkasan.</string>
+    <string name="call_summary_save_failed">Ringkasan baru tidak dapat disimpan. Ringkasan sebelumnya tetap tersimpan.</string>
+    <string name="call_summary_canceled">Pembuatan dibatalkan. Ringkasan sebelumnya tetap tersimpan.</string>
+    <string name="call_summary_timeout">Waktu pembuatan habis. Coba lagi nanti.</string>
+    <string name="call_summary_busy">Ringkasan atau panggilan lain sedang berlangsung. Coba lagi nanti.</string>
+    <string name="call_summary_invalid">Respons tidak dapat dicocokkan dengan transkrip. Coba lagi.</string>
+    <string name="call_summary_failed">Ringkasan gagal. Periksa pengaturan model dan coba lagi.</string>
+    <string name="call_summary_no_transcript">Tidak ada transkrip tersimpan untuk diringkas.</string>
+    <string name="call_summary_prompt">Pembuatan akan mengirim cuplikan transkrip tersimpan ke penyedia model teks yang diatur.</string>
+    <string name="call_summary_cancel">Batalkan pembuatan</string>
+    <string name="call_summary_configure">Atur model</string>
+    <string name="call_summary_generate">Buat ringkasan</string>
+    <string name="call_summary_regenerate">Buat ulang</string>
+    <string name="call_summary_highlights">Poin utama</string>
+    <string name="call_summary_confirmed">Dikonfirmasi</string>
+    <string name="call_summary_follow_ups">Tindak lanjut</string>
+    <string name="call_summary_unknowns">Belum diketahui</string>
+    <string name="call_summary_none">Tidak ditemukan dalam cuplikan tersimpan</string>
+    <string name="call_summary_hide_sources">Sembunyikan sumber (%1$d)</string>
+    <string name="call_summary_sources">Periksa sumber (%1$d)</string>
+    <string name="call_summary_source_line">Baris transkrip %1$d</string>
+    <string name="call_summary_saved_original">Teks asli tersimpan · %1$s</string>
+    <string name="call_summary_source_missing">Baris sumber ini tidak lagi tersedia.</string>
+
+    <string name="call_summary_settings_title">Model ringkasan panggilan</string>
+    <string name="call_summary_settings_lead">Pilih model teks dari penyedia di bawah. Pilihan model ringkasan panggilan disimpan secara terpisah.</string>
+    <string name="call_summary_selected_model">Model ringkasan</string>
+    <string name="call_summary_model_unselected">Belum ada model dipilih</string>
+    <string name="call_summary_auto_title">Ringkas panggilan baru otomatis</string>
+    <string name="call_summary_auto_note">Setelah panggilan baru berakhir, ringkas transkrip tersimpan saat tidak sibuk. Panggilan lama tidak diproses otomatis.</string>
+    <string name="call_summary_provider_model_count">%1$d model</string>
+    <string name="call_summary_edit_provider">Edit penyedia</string>
+    <string name="call_summary_key_keep">Kosongkan untuk mempertahankan kunci tersimpan</string>
+    <string name="call_summary_load_models_save">Muat model dan simpan</string>
+    <string name="call_summary_save_connection">Simpan koneksi</string>
+    <string name="call_summary_connection_note">Hanya daftar model yang diminta. Menyimpan atau memilih model tidak mengirim isi panggilan.</string>
+    <string name="call_summary_shared_connection_note">Perubahan koneksi berlaku untuk semua penggunaan penyedia ini. Kunci kosong mempertahankan kunci tersimpan.</string>
+    <string name="call_summary_choose_note">Pilih model untuk ringkasan panggilan. Ini tidak mengubah penggunaan model lainnya.</string>
+    <string name="call_summary_manual_filter_note">Filter berdasarkan nama model atau masukkan ID model lengkap di bawah.</string>
+    <string name="call_summary_manual_note">Masukkan ID model lengkap dari dokumentasi penyedia. Menyimpan tidak memverifikasi izin akses; kesalahan ditampilkan saat membuat ringkasan.</string>
+    <string name="call_summary_settings_failed">Pengaturan tidak dapat disimpan. Periksa koneksi dan coba lagi.</string>
+    <string name="call_summary_list_failed">Daftar model tidak dapat dimuat. Periksa alamat dan kunci, atau simpan koneksi lalu masukkan ID secara manual.</string>
+    <string name="call_summary_delete_note">Penyedia dan kunci terenkripsinya akan dihapus. Fitur lain yang memakai penyedia ini harus diatur ulang.</string>
+
+    <string name="call_summary_model_unavailable">Model terpilih tidak tersedia. Pilih model lain.</string>
+    <string name="call_summary_provider_unsupported">Login langganan ini tidak tersedia untuk ringkasan panggilan. Tambahkan penyedia dengan kunci API.</string>
+</resources>

@@ -67,6 +67,7 @@ fun CallSettingsScreen(
     var remoteOpen by rememberSaveable { mutableStateOf(false) }
     var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
     var instructionsOpen by rememberSaveable { mutableStateOf(false) }
+    var summarySettingsOpen by rememberSaveable { mutableStateOf(false) }
     var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
     val workspaceState = rememberSaveableStateHolder()
     val taskDraft = rememberPersistentCallTaskDraft()
@@ -75,6 +76,7 @@ fun CallSettingsScreen(
             remoteOpen = false
             voiceCloneOpen = false
             instructionsOpen = false
+            summarySettingsOpen = false
         }
     }
     LaunchedEffect(focusRequest) {
@@ -82,10 +84,12 @@ fun CallSettingsScreen(
             remoteOpen = false
             voiceCloneOpen = false
             instructionsOpen = false
+            summarySettingsOpen = false
             handledFocusRequest = focusRequest
         }
     }
     when {
+        summarySettingsOpen -> CallSummarySettingsScreen(onBack = { summarySettingsOpen = false })
         remoteOpen -> com.wangzan101.mika.calls.remote.CallDeviceSettingsScreen { remoteOpen = false }
         voiceCloneOpen -> VoiceCloneScreen(runtime) { voiceCloneOpen = false }
         instructionsOpen -> CallInstructionsScreen(runtime) { instructionsOpen = false }
@@ -101,6 +105,7 @@ fun CallSettingsScreen(
                 updateAvailable = updateAvailable,
                 focusRequest = focusRequest,
                 onRemote = { remoteOpen = true },
+                onSummarySettings = { summarySettingsOpen = true },
             ) {
                 voiceCloneOpen = true
             }
@@ -120,11 +125,13 @@ private fun CallSettingsWorkspace(
     updateAvailable: Boolean,
     focusRequest: Int,
     onRemote: () -> Unit,
+    onSummarySettings: () -> Unit,
     onVoiceClone: () -> Unit,
 ) {
     val config by runtime.settings.state.collectAsState()
     val state by runtime.state.collectAsState()
     val history by runtime.history.collectAsState()
+    val summaryStates by runtime.summaryStates.collectAsState()
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var controlBusy by remember { mutableStateOf(false) }
@@ -397,6 +404,10 @@ private fun CallSettingsWorkspace(
                             )
                             CallWorkspaceTab.History -> CallHistorySection(
                                 history = history,
+                                summaryStates = summaryStates,
+                                onSummarize = runtime::summarizeHistory,
+                                onCancelSummary = runtime::cancelHistorySummary,
+                                onConfigureSummary = onSummarySettings,
                                 initialRecordId = requestedHistoryId,
                                 onInitialRecordOpened = { requestedHistoryId = null },
                                 historyWriteFailed = state.historyWriteFailed,
@@ -413,6 +424,11 @@ private fun CallSettingsWorkspace(
                             CallWorkspaceTab.Settings -> {
                                 FlashPageIntro(stringResource(R.string.flash_workspace_settings), stringResource(R.string.flash_workspace_device_voice_and_background_operation))
                                 CallSurfaceCard(modifier = Modifier.padding(bottom = 20.dp)) {
+                                    ListRow(icon = MikaIcons.Edit, title = stringResource(R.string.call_summary_title),
+                                        subtitle = stringResource(R.string.call_summary_configure), first = true,
+                                        onClick = onSummarySettings.takeIf { idle && pendingLockedDial == null },
+                                        modifier = Modifier.testTag("call-open-summary-settings")) { RowChevron() }
+                                    CallCardDivider()
                                     ListRow(icon = MikaIcons.Link, title = stringResource(R.string.flash_workspace_devices_remote_tasks),
                                         subtitle = stringResource(R.string.flash_workspace_account_device_connection_and_phone_access),
                                         first = true, onClick = onRemote.takeIf { idle && pendingLockedDial == null }, modifier = Modifier.testTag("call-open-remote")) { RowChevron() }

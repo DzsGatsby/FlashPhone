@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">Resumo de chamada por IA</string>
+    <string name="call_summary_scope">Baseado apenas nos trechos de transcrição salvos</string>
+    <string name="call_summary_caution">A transcrição pode estar incompleta e a IA pode errar. Confira as fontes e a gravação.</string>
+    <string name="call_summary_generated">Gerado em %1$s · %2$s</string>
+    <string name="call_summary_running">Gerando resumo…</string>
+    <string name="call_summary_unconfigured">Configure um modelo de texto para gerar o resumo.</string>
+    <string name="call_summary_save_failed">Não foi possível salvar o novo resumo. O anterior foi mantido.</string>
+    <string name="call_summary_canceled">Geração cancelada. O resumo anterior foi mantido.</string>
+    <string name="call_summary_timeout">A geração expirou. Tente novamente mais tarde.</string>
+    <string name="call_summary_busy">Outro resumo ou chamada está em andamento. Tente mais tarde.</string>
+    <string name="call_summary_invalid">A resposta não pôde ser conferida com a transcrição. Tente novamente.</string>
+    <string name="call_summary_failed">Falha no resumo. Confira a configuração do modelo e tente novamente.</string>
+    <string name="call_summary_no_transcript">Não há transcrição salva para resumir.</string>
+    <string name="call_summary_prompt">Ao gerar, os trechos salvos são enviados ao provedor do modelo de texto configurado.</string>
+    <string name="call_summary_cancel">Cancelar geração</string>
+    <string name="call_summary_configure">Configurar modelo</string>
+    <string name="call_summary_generate">Gerar resumo</string>
+    <string name="call_summary_regenerate">Gerar novamente</string>
+    <string name="call_summary_highlights">Destaques</string>
+    <string name="call_summary_confirmed">Confirmado</string>
+    <string name="call_summary_follow_ups">Pendências</string>
+    <string name="call_summary_unknowns">Desconhecido</string>
+    <string name="call_summary_none">Não identificado nos trechos salvos</string>
+    <string name="call_summary_hide_sources">Ocultar fontes (%1$d)</string>
+    <string name="call_summary_sources">Conferir fontes (%1$d)</string>
+    <string name="call_summary_source_line">Linha %1$d da transcrição</string>
+    <string name="call_summary_saved_original">Original salvo · %1$s</string>
+    <string name="call_summary_source_missing">Esta linha da fonte não está mais disponível.</string>
+
+    <string name="call_summary_settings_title">Modelos para resumos de chamadas</string>
+    <string name="call_summary_settings_lead">Escolha um modelo de texto dos provedores abaixo. A seleção do modelo de resumos é independente.</string>
+    <string name="call_summary_selected_model">Modelo de resumo</string>
+    <string name="call_summary_model_unselected">Nenhum modelo selecionado</string>
+    <string name="call_summary_auto_title">Resumir novas chamadas automaticamente</string>
+    <string name="call_summary_auto_note">Após uma nova chamada, resume a transcrição salva quando estiver ocioso. Chamadas anteriores não são processadas automaticamente.</string>
+    <string name="call_summary_provider_model_count">%1$d modelos</string>
+    <string name="call_summary_edit_provider">Editar provedor</string>
+    <string name="call_summary_key_keep">Deixe em branco para manter a chave salva</string>
+    <string name="call_summary_load_models_save">Carregar modelos e salvar</string>
+    <string name="call_summary_save_connection">Salvar conexão</string>
+    <string name="call_summary_connection_note">Apenas a lista de modelos é solicitada. Salvar ou escolher um modelo não envia conteúdo de chamadas.</string>
+    <string name="call_summary_shared_connection_note">Mudanças na conexão afetam todos os usos deste provedor. Se a chave estiver em branco, a chave salva será mantida.</string>
+    <string name="call_summary_choose_note">Selecione um modelo para os resumos de chamadas. Isso não altera os outros usos de modelos.</string>
+    <string name="call_summary_manual_filter_note">Filtre pelo nome do modelo ou digite o ID completo abaixo.</string>
+    <string name="call_summary_manual_note">Digite o ID completo indicado pelo provedor. Salvar não verifica permissões; os erros serão exibidos ao gerar.</string>
+    <string name="call_summary_settings_failed">Não foi possível salvar as configurações. Confira a conexão e tente novamente.</string>
+    <string name="call_summary_list_failed">Não foi possível carregar a lista. Confira o endereço e a chave, ou salve a conexão e digite o ID manualmente.</string>
+    <string name="call_summary_delete_note">O provedor e a chave criptografada serão excluídos. Outros recursos que usam este provedor precisarão ser configurados novamente.</string>
+
+    <string name="call_summary_model_unavailable">O modelo selecionado não está disponível. Escolha outro.</string>
+    <string name="call_summary_provider_unsupported">Este login por assinatura não está disponível para resumos de chamadas. Adicione um provedor com chave de API.</string>
+</resources>

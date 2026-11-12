@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">ИИ-сводка звонка</string>
+    <string name="call_summary_scope">Только на основе сохранённых фрагментов расшифровки</string>
+    <string name="call_summary_caution">Расшифровка может быть неполной, а ИИ может ошибаться. Проверьте источники и запись.</string>
+    <string name="call_summary_generated">Создано %1$s · %2$s</string>
+    <string name="call_summary_running">Создание сводки…</string>
+    <string name="call_summary_unconfigured">Сначала настройте текстовую модель.</string>
+    <string name="call_summary_save_failed">Не удалось сохранить новую сводку. Предыдущая сохранена.</string>
+    <string name="call_summary_canceled">Создание отменено. Предыдущая сводка сохранена.</string>
+    <string name="call_summary_timeout">Время ожидания истекло. Повторите позже.</string>
+    <string name="call_summary_busy">Идёт другой звонок или создаётся сводка. Повторите позже.</string>
+    <string name="call_summary_invalid">Ответ не удалось сверить с расшифровкой. Повторите попытку.</string>
+    <string name="call_summary_failed">Ошибка сводки. Проверьте настройки модели и повторите попытку.</string>
+    <string name="call_summary_no_transcript">Нет сохранённой расшифровки для сводки.</string>
+    <string name="call_summary_prompt">При создании сохранённые фрагменты отправляются поставщику настроенной текстовой модели.</string>
+    <string name="call_summary_cancel">Отменить создание</string>
+    <string name="call_summary_configure">Настроить модель</string>
+    <string name="call_summary_generate">Создать сводку</string>
+    <string name="call_summary_regenerate">Создать заново</string>
+    <string name="call_summary_highlights">Главное</string>
+    <string name="call_summary_confirmed">Подтверждено</string>
+    <string name="call_summary_follow_ups">Дальнейшие действия</string>
+    <string name="call_summary_unknowns">Неизвестно</string>
+    <string name="call_summary_none">В сохранённых фрагментах не выявлено</string>
+    <string name="call_summary_hide_sources">Скрыть источники (%1$d)</string>
+    <string name="call_summary_sources">Проверить источники (%1$d)</string>
+    <string name="call_summary_source_line">Строка расшифровки %1$d</string>
+    <string name="call_summary_saved_original">Сохранённый оригинал · %1$s</string>
+    <string name="call_summary_source_missing">Эта строка источника больше недоступна.</string>
+
+    <string name="call_summary_settings_title">Модели сводок звонков</string>
+    <string name="call_summary_settings_lead">Выберите текстовую модель у поставщика ниже. Выбор модели сводок хранится отдельно.</string>
+    <string name="call_summary_selected_model">Модель сводки</string>
+    <string name="call_summary_model_unselected">Модель не выбрана</string>
+    <string name="call_summary_auto_title">Автоматические сводки новых звонков</string>
+    <string name="call_summary_auto_note">После нового звонка его сохранённая расшифровка обрабатывается в режиме ожидания. Старые звонки автоматически не обрабатываются.</string>
+    <string name="call_summary_provider_model_count">%1$d моделей</string>
+    <string name="call_summary_edit_provider">Изменить поставщика</string>
+    <string name="call_summary_key_keep">Оставьте пустым, чтобы сохранить прежний ключ</string>
+    <string name="call_summary_load_models_save">Загрузить модели и сохранить</string>
+    <string name="call_summary_save_connection">Сохранить подключение</string>
+    <string name="call_summary_connection_note">Запрашивается только список моделей. При сохранении или выборе модели содержимое звонков не отправляется.</string>
+    <string name="call_summary_shared_connection_note">Изменения подключения применяются ко всем функциям этого поставщика. Пустое поле ключа сохраняет прежний ключ.</string>
+    <string name="call_summary_choose_note">Выберите модель сводок звонков. Это не изменяет другие назначения моделей.</string>
+    <string name="call_summary_manual_filter_note">Отфильтруйте по имени или введите полный ID модели ниже.</string>
+    <string name="call_summary_manual_note">Введите полный ID из документации поставщика. Сохранение не проверяет права доступа; ошибки отображаются при создании сводки.</string>
+    <string name="call_summary_settings_failed">Не удалось сохранить настройки. Проверьте подключение и повторите попытку.</string>
+    <string name="call_summary_list_failed">Не удалось загрузить список. Проверьте адрес и ключ или сохраните подключение и введите ID вручную.</string>
+    <string name="call_summary_delete_note">Поставщик и его зашифрованный ключ будут удалены. Другие функции, использующие этого поставщика, потребуется настроить заново.</string>
+
+    <string name="call_summary_model_unavailable">Выбранная модель недоступна. Выберите другую.</string>
+    <string name="call_summary_provider_unsupported">Этот вход по подписке не поддерживает сводки звонков. Добавьте поставщика с API-ключом.</string>
+</resources>

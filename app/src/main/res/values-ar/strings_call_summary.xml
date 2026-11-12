@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">ملخص المكالمة بالذكاء الاصطناعي</string>
+    <string name="call_summary_scope">بناءً على مقتطفات النص المحفوظة فقط</string>
+    <string name="call_summary_caution">قد يكون النص غير مكتمل وقد يخطئ الذكاء الاصطناعي. راجع المصادر والتسجيل.</string>
+    <string name="call_summary_generated">أُنشئ في %1$s · %2$s</string>
+    <string name="call_summary_running">جارٍ إنشاء الملخص…</string>
+    <string name="call_summary_unconfigured">اضبط نموذجًا نصيًا قبل إنشاء الملخص.</string>
+    <string name="call_summary_save_failed">تعذر حفظ الملخص الجديد. تم الاحتفاظ بالملخص السابق.</string>
+    <string name="call_summary_canceled">أُلغي الإنشاء. تم الاحتفاظ بالملخص السابق.</string>
+    <string name="call_summary_timeout">انتهت مهلة الإنشاء. حاول لاحقًا.</string>
+    <string name="call_summary_busy">هناك ملخص أو مكالمة أخرى قيد التنفيذ. حاول لاحقًا.</string>
+    <string name="call_summary_invalid">تعذرت مطابقة الرد مع النص. حاول مجددًا.</string>
+    <string name="call_summary_failed">فشل الملخص. راجع إعدادات النموذج وحاول مجددًا.</string>
+    <string name="call_summary_no_transcript">لا يوجد نص محفوظ لتلخيصه.</string>
+    <string name="call_summary_prompt">سيؤدي الإنشاء إلى إرسال مقتطفات النص المحفوظة إلى مزود النموذج النصي المضبوط.</string>
+    <string name="call_summary_cancel">إلغاء الإنشاء</string>
+    <string name="call_summary_configure">إعداد النموذج</string>
+    <string name="call_summary_generate">إنشاء الملخص</string>
+    <string name="call_summary_regenerate">إعادة الإنشاء</string>
+    <string name="call_summary_highlights">النقاط الرئيسية</string>
+    <string name="call_summary_confirmed">المؤكد</string>
+    <string name="call_summary_follow_ups">المتابعة</string>
+    <string name="call_summary_unknowns">غير المعروف</string>
+    <string name="call_summary_none">لم يُحدد شيء في المقتطفات المحفوظة</string>
+    <string name="call_summary_hide_sources">إخفاء المصادر (%1$d)</string>
+    <string name="call_summary_sources">مراجعة المصادر (%1$d)</string>
+    <string name="call_summary_source_line">سطر النص %1$d</string>
+    <string name="call_summary_saved_original">النص الأصلي المحفوظ · %1$s</string>
+    <string name="call_summary_source_missing">سطر المصدر هذا لم يعد متاحًا.</string>
+
+    <string name="call_summary_settings_title">نماذج ملخصات المكالمات</string>
+    <string name="call_summary_settings_lead">اختر نموذجًا نصيًا من المزودين أدناه. يُحفظ اختيار نموذج ملخصات المكالمات بشكل مستقل.</string>
+    <string name="call_summary_selected_model">نموذج الملخص</string>
+    <string name="call_summary_model_unselected">لم يُحدد نموذج</string>
+    <string name="call_summary_auto_title">تلخيص المكالمات الجديدة تلقائيًا</string>
+    <string name="call_summary_auto_note">بعد انتهاء مكالمة جديدة، يُلخص نصها المحفوظ عند عدم الانشغال. لا تُعالج المكالمات السابقة تلقائيًا.</string>
+    <string name="call_summary_provider_model_count">%1$d نماذج</string>
+    <string name="call_summary_edit_provider">تعديل المزود</string>
+    <string name="call_summary_key_keep">اتركه فارغًا للاحتفاظ بالمفتاح المحفوظ</string>
+    <string name="call_summary_load_models_save">تحميل النماذج والحفظ</string>
+    <string name="call_summary_save_connection">حفظ الاتصال</string>
+    <string name="call_summary_connection_note">يُطلب فهرس النماذج فقط. حفظ الاتصال أو اختيار نموذج لا يرسل محتوى المكالمات.</string>
+    <string name="call_summary_shared_connection_note">تنطبق تغييرات الاتصال على جميع استخدامات هذا المزود. ترك المفتاح فارغًا يُبقي المفتاح المحفوظ.</string>
+    <string name="call_summary_choose_note">اختر نموذجًا لملخصات المكالمات. لا يغير ذلك استخدامات النماذج الأخرى.</string>
+    <string name="call_summary_manual_filter_note">رشّح حسب اسم النموذج أو أدخل معرّفه الكامل أدناه.</string>
+    <string name="call_summary_manual_note">أدخل معرّف النموذج الكامل من وثائق المزود. الحفظ لا يتحقق من صلاحيات الوصول؛ تظهر الأخطاء الفعلية عند إنشاء الملخص.</string>
+    <string name="call_summary_settings_failed">تعذر حفظ الإعدادات. راجع تفاصيل الاتصال وحاول مجددًا.</string>
+    <string name="call_summary_list_failed">تعذر تحميل قائمة النماذج. راجع العنوان والمفتاح، أو احفظ الاتصال ثم أدخل معرّف النموذج يدويًا.</string>
+    <string name="call_summary_delete_note">سيُحذف المزود ومفتاحه المشفر. يجب إعادة إعداد أي ميزات أخرى تستخدم هذا المزود.</string>
+
+    <string name="call_summary_model_unavailable">النموذج المحدد غير متاح. اختر نموذجًا آخر.</string>
+    <string name="call_summary_provider_unsupported">تسجيل الدخول بهذا الاشتراك غير متاح لملخصات المكالمات. أضف مزودًا بمفتاح API.</string>
+</resources>

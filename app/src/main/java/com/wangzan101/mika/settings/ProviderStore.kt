@@ -59,7 +59,11 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import com.wangzan101.mika.core.net.NetProxy
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -250,6 +254,8 @@ data class ClientSetup(
     val reasoningEffort: String? = null,
     val thinkingTypes: List<String>? = null,
     val readTimeoutSeconds: Int? = null,
+    /** A bounded auxiliary call must not retry or follow a different endpoint. */
+    val singleRequest: Boolean = false,
 )
 
 /** 「测试并保存」试调用(见 [ProviderStore.probe])的结果。 */
@@ -305,6 +311,7 @@ class ProviderStore(
     private val configFile = File(dir, CONFIG_FILE)
     private val keyFile = File(dir, KEY_FILE)
     private val chatGptHostFile = File(dir, CHATGPT_HOST_FILE)
+    private val editRecoveryFile = File(dir, "provider-edit-recovery.json")
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _providers = MutableStateFlow<List<Provider>>(emptyList())
@@ -323,6 +330,7 @@ class ProviderStore(
 
     init {
         dir.mkdirs()
+        recoverProviderEdit()
         load()
     }
 
@@ -434,6 +442,55 @@ class ProviderStore(
     @Synchronized
     fun updateProviderKey(providerId: String, apiKey: String) {
         if (provider(providerId) != null) setKey(providerId, apiKey)
+    }
+
+    /** Edit one API connection in place. Roles keep the same IDs; endpoint changes invalidate old probes. */
+    @Synchronized
+    fun updateProviderConnection(
+        providerId: String, name: String, kind: ProviderConfig.Kind, baseUrl: String,
+        apiKey: String? = null, typedModels: Set<String>? = null,
+    ): Provider? {
+        val previous = provider(providerId) ?: return null
+        if (previous.signIn != null || previous.kind !in ProviderConfig.Kind.withApiKey || kind !in ProviderConfig.Kind.withApiKey) return null
+        val url = baseUrl.trim().toHttpUrlOrNull() ?: return null
+        if (url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null || name.trim().length > 160) return null
+        val typed = (typedModels ?: previous.typedModels).map(String::trim).toSet()
+        if (typed.any { it.isBlank() || it.length > 256 || it.any(Char::isISOControl) } || typed.size > 100) return null
+        val normalized = ProviderConnection.normalizeUrl(baseUrl)
+        val changed = previous.kind != kind || ProviderConnection.normalizeUrl(previous.baseUrl) != normalized
+        val keyChanged = apiKey != null
+        val edited = previous.copy(name = name.trim(), kind = kind, baseUrl = normalized,
+            models = if (changed) emptyList() else previous.models,
+            sessionHeader = if (changed) ProviderPresets.forBaseUrl(normalized)?.sessionHeader else previous.sessionHeader,
+            verifiedModels = if (changed || keyChanged) emptySet() else previous.verifiedModels,
+            typedModels = typed, savedUntested = changed || keyChanged || previous.savedUntested,
+            contextSettings = if (changed) emptyMap() else previous.contextSettings,
+            visionOverrides = if (changed) emptyMap() else previous.visionOverrides)
+        if (_providers.value.any { it.id != providerId && it.key == edited.key && it.signIn == null }) return null
+        val nextProviders = _providers.value.map { if (it.id == providerId) edited else it }
+        val nextConfigs = _configs.value.map { if (it.providerId == providerId) it.copy(kind = kind, baseUrl = normalized, name = edited.name) else it }
+        val nextKeys = if (apiKey == null) keys else if (apiKey.isBlank()) keys - providerId else {
+            val bytes = apiKey.trim().toByteArray(Charsets.UTF_8)
+            try { keys + (providerId to encode(cipher.encrypt(bytes))) } finally { bytes.fill(0) }
+        }
+        // Publish no live changes until both files commit. The recovery record contains encrypted keys only.
+        recoverProviderEdit()
+        writeDurably(editRecoveryFile, buildJsonObject {
+            put("config", configJson()); put("keys", keysJson())
+        }.toString())
+        try {
+            writeDurably(keyFile, keysJson(nextKeys))
+            writeDurably(configFile, configJson(nextProviders, nextConfigs))
+            check(editRecoveryFile.delete())
+        } catch (_: Exception) {
+            // On an unavailable disk the journal remains, so the next store load restores the pair first.
+            runCatching { recoverProviderEdit() }
+            throw IllegalStateException("Unable to save provider connection")
+        }
+        keys = nextKeys
+        _providers.value = nextProviders
+        _configs.value = nextConfigs
+        return edited
     }
 
     /**
@@ -575,6 +632,23 @@ class ProviderStore(
             headers(p?.sessionHeader, session), reasoningEffort = _roles.value.reasoningEffort(role),
             thinkingTypes = listed?.thinkingTypes, readTimeoutSeconds = settings?.readTimeoutSeconds,
         )).metered(source, usage)
+    }
+
+    /** Build a detached, metered text request without choosing a role or changing any saved config. */
+    @Synchronized
+    internal fun summaryModel(providerId: String, model: String, maxOutputTokens: Int, readTimeoutSeconds: Int): ChatModel? {
+        require(maxOutputTokens in 1..2_048 && readTimeoutSeconds in 1..30)
+        val p = provider(providerId) ?: return null
+        // This endpoint rejects output limits; do not silently make an unbounded request.
+        if (p.kind == ProviderConfig.Kind.ChatGpt) return null
+        val existing = _configs.value.firstOrNull { it.providerId == providerId && it.model == model }
+        val cfg = existing ?: ProviderConfig("call-summary", p.kind, p.baseUrl, model,
+            Capabilities(toolCalls = false, vision = false, contextTokens = 32_000, reasoning = false), p.name, p.id)
+        val listed = listedOf(cfg)
+        return modelFactory(cfg, providerKey(p.id), listed?.endpoint, ClientSetup(
+            headers = headers(p.sessionHeader, ModelSession.fresh()), maxOutputTokens = maxOutputTokens,
+            readTimeoutSeconds = readTimeoutSeconds, thinkingTypes = listed?.thinkingTypes, singleRequest = true,
+        )).metered(UsageSource(p.id, p.name, model, UsagePurpose.Other), usage)
     }
 
     /**
@@ -782,9 +856,9 @@ class ProviderStore(
 
     /** 模型单独指定了接口的,按它的协议选适配器、用它的地址;否则按配置的接口类型和地址。Key 都用服务商的。 */
     /**
-     * 请求头四种协议一样带。回复上限([ClientSetup.maxOutputTokens])只给 Messages(本来就必填)和 generateContent;
-     * Chat Completions 不给(有的模型只认 `max_tokens`、有的只认 `max_completion_tokens`,给错了整个请求被拒,
-     * 连接测试就会误报),Responses 也不给(ChatGPT 套餐那条路不收 `max_output_tokens`)。
+     * 请求头四种协议一样带。普通连接测试只给 Messages 和 generateContent 回复上限，保持兼容性。
+     * 有界摘要(singleRequest)额外给 API Chat Completions/Responses 硬上限；不支持参数时直接失败，绝不无上限重试。
+     * ChatGPT 套餐不收 `max_output_tokens`，摘要入口在建模型前拒绝这类连接。
      * 读超时([ClientSetup.readTimeoutSeconds])配置了的按它派生 client(共享连接池与代理),慢速本地推理可调大(#295);
      * 没配置用全局默认(120 秒)。派生只在建模型时发生一次,不影响别的模型。
      */
@@ -795,14 +869,17 @@ class ProviderStore(
             provider(cfg.providerId)?.baseUrl?.takeIf { it.isNotBlank() } ?: adapterBase
         } else adapterBase
         val defaultHttp = http
-        val http = setup.readTimeoutSeconds
+        val timedHttp = setup.readTimeoutSeconds
             ?.takeIf { it in MODEL_READ_TIMEOUT_SECONDS }
             ?.let { seconds -> defaultHttp.newBuilder().readTimeout(seconds.toLong(), TimeUnit.SECONDS).build() }
             ?: defaultHttp
+        val http = if (setup.singleRequest) timedHttp.newBuilder().retryOnConnectionFailure(false)
+            .followRedirects(false).followSslRedirects(false).callTimeout(30, TimeUnit.SECONDS).build() else timedHttp
         return when (kind) {
             ProviderConfig.Kind.OpenAiCompat ->
                 OpenAiCompatModel(baseUrl, apiKey, cfg.model, cfg.capabilities, http, endpoint?.reasoningField, setup.headers,
-                    reasoningEffort = setup.reasoningEffort)
+                    reasoningEffort = setup.reasoningEffort, maxOutputTokens = if (setup.singleRequest) setup.maxOutputTokens else null,
+                    allowCompatibilityRetry = !setup.singleRequest)
             ProviderConfig.Kind.Anthropic -> AnthropicModel(
                 baseUrl, apiKey.orEmpty(), cfg.model, cfg.capabilities, http,
                 maxTokens = setup.maxOutputTokens,
@@ -813,13 +890,16 @@ class ProviderStore(
                     reasoningEffort = setup.reasoningEffort)
             ProviderConfig.Kind.OpenAiResponses ->
                 ResponsesModel(baseUrl, BearerToken.fixed(apiKey), cfg.model, cfg.capabilities, http, headers = setup.headers,
-                    reasoningEffort = setup.reasoningEffort)
+                    reasoningEffort = setup.reasoningEffort, maxOutputTokens = if (setup.singleRequest) setup.maxOutputTokens else null,
+                    allowCompatibilityRetry = !setup.singleRequest)
             ProviderConfig.Kind.ChatGpt ->
                 ResponsesModel(baseUrl, tokensFor(cfg.providerId), cfg.model, cfg.capabilities, http, chatGptPlan = true, headers = setup.headers,
                     reasoningEffort = setup.reasoningEffort)
             ProviderConfig.Kind.Xai ->
                 ResponsesModel(baseUrl, accountTokensFor(cfg.providerId), cfg.model, cfg.capabilities, http, headers = setup.headers,
-                    reasoningEffort = setup.reasoningEffort, accountLogin = XAI_ACCOUNT)
+                    reasoningEffort = setup.reasoningEffort, accountLogin = XAI_ACCOUNT,
+                    maxOutputTokens = if (setup.singleRequest) setup.maxOutputTokens else null,
+                    allowCompatibilityRetry = !setup.singleRequest)
         }
     }
 
@@ -1028,7 +1108,7 @@ class ProviderStore(
 
     private fun writeConfig() = writeAtomically(configFile, configJson())
 
-    private fun configJson(providers: List<Provider> = _providers.value): String {
+    private fun configJson(providers: List<Provider> = _providers.value, configs: List<ProviderConfig> = _configs.value): String {
         val root = buildJsonObject {
             putJsonArray("services") {
                 providers.forEach { p ->
@@ -1078,7 +1158,7 @@ class ProviderStore(
                 }
             }
             putJsonArray("providers") {
-                _configs.value.forEach { c ->
+                configs.forEach { c ->
                     addJsonObject {
                         put("id", c.id); put("providerId", c.providerId); put("name", c.name); put("kind", c.kind.name)
                         put("baseUrl", c.baseUrl); put("model", c.model)
@@ -1106,7 +1186,28 @@ class ProviderStore(
         return root.toString()
     }
 
-    private fun keysJson() = buildJsonObject { keys.forEach { (id, v) -> put(id, v) } }.toString()
+    private fun keysJson(values: Map<String, String> = keys) = buildJsonObject { values.forEach { (id, v) -> put(id, v) } }.toString()
+
+    private fun recoverProviderEdit() {
+        if (!editRecoveryFile.exists()) return
+        try {
+            val previous = json.parseToJsonElement(editRecoveryFile.readText()).jsonObject
+            writeDurably(keyFile, previous.str("keys"))
+            writeDurably(configFile, previous.str("config"))
+            check(editRecoveryFile.delete())
+        } catch (_: Exception) {
+            // Refuse to load a possibly mismatched endpoint and encrypted credential.
+            throw IllegalStateException("Provider connection recovery required")
+        }
+    }
+
+    private fun writeDurably(file: File, value: String) {
+        val temp = File.createTempFile("provider-edit-", ".tmp", file.parentFile)
+        try {
+            FileOutputStream(temp).use { it.write(value.toByteArray(Charsets.UTF_8)); it.fd.sync() }
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally { temp.delete() }
+    }
 
     private fun writeAtomically(f: File, text: String) {
         val tmp = File(f.parentFile, f.name + ".tmp")

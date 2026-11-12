@@ -65,6 +65,55 @@ class ProviderStoreTest {
 
     // ---------- 用途的选择 ----------
 
+    @Test fun editingApiConnectionKeepsProviderAndRoleIdsButInvalidatesOldEndpointProbes() {
+        val s = store()
+        val p = connected(s)
+        assertTrue(s.use(ModelRole.Main, p.id, "m1", none))
+        val before = s.roles.value
+        val configId = s.configFor(ModelRole.Main)!!.id
+        s.markTyped(p.id, "manual")
+        s.markVerified(p.id, "m1")
+        val edited = s.updateProviderConnection(p.id, "Edited", ProviderConfig.Kind.Anthropic,
+            "https://second.test/v1", "synthetic-new-key")!!
+        assertEquals(p.id, edited.id)
+        assertEquals(before, s.roles.value)
+        assertEquals(configId, s.configFor(ModelRole.Main)!!.id)
+        assertEquals(ProviderConfig.Kind.Anthropic, s.configFor(ModelRole.Main)!!.kind)
+        assertEquals("https://second.test/v1", s.configFor(ModelRole.Main)!!.baseUrl)
+        assertTrue(edited.verifiedModels.isEmpty())
+        assertEquals(setOf("manual"), edited.typedModels)
+        val reloaded = store()
+        assertEquals(p.id, reloaded.provider(p.id)!!.id)
+        assertEquals(before, reloaded.roles.value)
+        assertNull(s.updateProviderConnection(p.id, "Unsafe", ProviderConfig.Kind.ChatGpt, "https://second.test"))
+    }
+
+    @Test fun failedConnectionEditKeepsLiveStateAndRecoversEncryptedKeyAndEndpointTogetherOnRestart() {
+        val s = store()
+        val p = connected(s, key = "synthetic-old")
+        assertTrue(s.use(ModelRole.Main, p.id, "m1", none))
+        val previousRoles = s.roles.value
+        val previous = s.provider(p.id)
+        val config = File(tmp.root, "providers.json")
+        assertTrue(config.delete())
+        assertTrue(config.mkdir())
+        File(config, "blocked").writeText("simulate config replacement failure")
+        try {
+            s.updateProviderConnection(p.id, "New", ProviderConfig.Kind.Anthropic, "https://new.test/v1", "synthetic-new")
+            fail("Expected disk failure")
+        } catch (_: IllegalStateException) { }
+        assertEquals(previous, s.provider(p.id))
+        assertEquals(previousRoles, s.roles.value)
+        assertEquals("synthetic-old", s.providerKey(p.id))
+        assertTrue(File(tmp.root, "provider-edit-recovery.json").isFile)
+        config.deleteRecursively()
+        val recovered = store()
+        assertEquals(previous, recovered.provider(p.id))
+        assertEquals(previousRoles, recovered.roles.value)
+        assertEquals("synthetic-old", recovered.providerKey(p.id))
+        assertFalse(File(tmp.root, "provider-edit-recovery.json").exists())
+    }
+
     @Test fun modelContextSurvivesPruningAndIsSharedOnlyWithinTheSameProviderAndModel() {
         val s = store()
         val first = connected(s)

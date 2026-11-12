@@ -134,9 +134,27 @@ class CallRuntime(private val app: MikaApp) {
     private var lockedDialDetail: String? = null
     private var liveTranscriptCallId: String? = null
     private val liveTranscript = mutableListOf<CallTranscriptLine>()
+    private val summarySettings by lazy { CallSummarySettingsStore.get(app) }
+    private val summaryModel by lazy { CallSummaryModel(app) }
+    private val summaries by lazy { CallSummaryCoordinator(scope, records,
+        idle = { work == null && lockedDial == null && !unobservedManagedCall && liveCalls().isEmpty() && managedCallPresent() == false },
+        available = { summaryModel.available() },
+        generate = { record ->
+            val prompt = CallSummaryEngine.buildPrompt(record)
+            val result = summaryModel.summarize(prompt.system, prompt.user)
+            CallSummaryEngine.parseResponse(result.text, record, result.provider, result.model)
+        }, automaticEnabled = { summarySettings.state.value.autoGenerate && !summarySettings.error.value }) }
+    internal val summaryStates get() = summaries.states
+    internal fun summarizeHistory(id: String) = summaries.request(id)
+    internal fun cancelHistorySummary(id: String) = summaries.cancel(id)
+
 
 
     init {
+        scope.launch {
+            combine(summarySettings.state, summarySettings.error) { _, _ -> Unit }
+                .collect { summaries.onCallStateChanged() }
+        }
         scope.launch {
             app.phone.hub.shell.collect { current ->
                 if (shell != null && shell !== current) {
@@ -435,6 +453,7 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     suspend fun deleteHistory(id: String): CallActionResult = onMain {
+        summaries.forget(id)
         val result = records.delete(id)
         if (result == CallHistory.Result.SAVED) {
             runCatching { recordings.delete(id) }
@@ -444,6 +463,7 @@ class CallRuntime(private val app: MikaApp) {
     }
 
     suspend fun clearHistory(): CallActionResult = onMain {
+        summaries.clear()
         val result = records.clear()
         if (result == CallHistory.Result.SAVED) pruneRecordings()
         historyResult(result, "已清空通话记录")
@@ -488,7 +508,8 @@ class CallRuntime(private val app: MikaApp) {
         scope.launch {
             try {
                 // Publish the actual end time promptly. Audio archiving never delays handoff or cleanup.
-                runCatching { records.append(record) }
+                val saved = runCatching { records.append(record) }.getOrNull()
+                if (saved == CallHistory.Result.SAVED) summaries.scheduleNew(record.id)
                 val info = runCatching { session?.finish() }.getOrNull()
                 val attached = recordingMetadataLock.withLock { records.setRecording(record.id, info) }
                 if (attached == CallHistory.Result.NOT_FOUND && info != null) {
@@ -505,6 +526,7 @@ class CallRuntime(private val app: MikaApp) {
     private fun historyResult(result: CallHistory.Result, message: String): CallActionResult = when (result) {
         CallHistory.Result.SAVED -> ok(message)
         CallHistory.Result.NOT_FOUND -> fail("这条通话记录已不存在")
+        CallHistory.Result.SOURCE_CHANGED -> fail("转写已变化，请重新生成总结")
         CallHistory.Result.WRITE_FAILED -> fail("无法保存通话记录变更，请重试")
     }
 
@@ -1651,6 +1673,7 @@ class CallRuntime(private val app: MikaApp) {
         withTimeoutOrNull(timeout) { changes.first { test() }; true } == true
 
     private fun publish() {
+        summaries.onCallStateChanged()
         // Real Telecom termination is independent of the AI work/history lifetime.
         remoteCalls.values.forEach { handle ->
             val old = handle.state.value

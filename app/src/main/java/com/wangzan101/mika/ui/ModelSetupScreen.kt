@@ -351,13 +351,16 @@ private fun ProvidersSection(ui: ModelSetupUi, actions: ModelSetupActions) {
 /** 添加服务商:先是「用账号登录」一组(不用填 Key),再是填 Key 的:预设胶囊 → (自定义时)接口类型和地址 → API Key →「测试并保存」。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
+internal fun AddProviderForm(
+    ui: ModelSetupUi, actions: ModelSetupActions, phoneSummary: Boolean = false,
+    editing: Boolean = false, hasSavedKey: Boolean = false,
+) {
     val c = MikaTheme.colors
     val f = ui.form
     var showKey by remember { mutableStateOf(false) }
     var confirmUntested by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        GroupLabel(ModelsCopy.ADD_PROVIDER, Modifier.weight(1f))
+        GroupLabel(if (editing) stringResource(R.string.call_summary_edit_provider) else ModelsCopy.ADD_PROVIDER, Modifier.weight(1f))
         if (ui.providers.isNotEmpty()) {
             Text(
                 ModelSetupCopy.CANCEL, Modifier.clickable(onClick = actions.closeForm).padding(horizontal = 4.dp, vertical = 6.dp),
@@ -365,7 +368,7 @@ private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
             )
         }
     }
-    AccountSignInGroup(ui, actions.openSignIn, actions.openProvider)
+    if (!phoneSummary) AccountSignInGroup(ui, actions.openSignIn, actions.openProvider)
     GroupLabel(ModelsCopy.KEY_GROUP)
     FlowRow(
         Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -405,7 +408,7 @@ private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
         }
         InputRow(
             ModelSetupCopy.API_KEY, f.apiKey, actions.setApiKey,
-            if (f.keyRequired) ModelSetupCopy.KEY_HINT else ModelSetupCopy.KEY_OPTIONAL, first = !f.urlEditable,
+            if (hasSavedKey) stringResource(R.string.call_summary_key_keep) else if (f.keyRequired) ModelSetupCopy.KEY_HINT else ModelSetupCopy.KEY_OPTIONAL, first = !f.urlEditable,
             keyboard = KeyboardType.Password, secret = !showKey, modifier = Modifier.testTag("setup-api-key"),
         ) {
             Text(if (showKey) stringResource(R.string.hide) else stringResource(R.string.show), Modifier.clickable { showKey = !showKey }, fontSize = 13.sp, color = c.accent)
@@ -425,16 +428,16 @@ private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
             fontSize = 13.sp, color = c.accent,
         )
     }
-    if (f.manual && !f.noList) FooterNote(ModelSetupCopy.MANUAL_NOTE, Modifier.testTag("setup-manual-note"))
+    if (f.manual && !f.noList) FooterNote(if (phoneSummary) stringResource(R.string.call_summary_manual_note) else ModelSetupCopy.MANUAL_NOTE, Modifier.testTag("setup-manual-note"))
     f.urlProblem?.takeIf { f.urlEditable && f.baseUrl.isNotBlank() }?.let { FooterNote(it, color = c.bad) }
     f.suggestedPreset?.let { preset -> PresetSuggestion(f, preset.label) { actions.selectPreset(preset.label) } }
-    if (f.noList) FooterNote(if (f.isCustom) ModelSetupCopy.NO_LIST_CUSTOM else ModelSetupCopy.NO_LIST_PRESET, Modifier.testTag("setup-no-list"))
+    if (f.noList) FooterNote(if (phoneSummary) stringResource(R.string.call_summary_manual_note) else if (f.isCustom) ModelSetupCopy.NO_LIST_CUSTOM else ModelSetupCopy.NO_LIST_PRESET, Modifier.testTag("setup-no-list"))
     if (f.isSelfHosted) FooterNote(ModelSetupCopy.SELF_HOSTED_NOTE, Modifier.testTag("setup-self-hosted"))
     f.unencryptedWarning?.let { FooterNote(it, Modifier.testTag("setup-url-unencrypted"), color = c.warn) }
     MikaButton(
-        if (f.test == ListState.Running) ModelSetupCopy.TESTING else ModelSetupCopy.TEST_AND_SAVE,
+        if (f.test == ListState.Running) ModelSetupCopy.TESTING else if (phoneSummary) stringResource(R.string.call_summary_load_models_save) else ModelSetupCopy.TEST_AND_SAVE,
         actions.testAndSave, Modifier.fillMaxWidth().padding(top = 2.dp).testTag("setup-test"),
-        kind = ButtonKind.Secondary, size = ButtonSize.Medium, enabled = f.canTest,
+        kind = ButtonKind.Secondary, size = ButtonSize.Medium, enabled = f.canTest || (hasSavedKey && f.urlProblem == null && f.test != ListState.Running && (!f.noList || f.model.isNotBlank())),
     )
     (f.test as? ListState.Failed)?.let { failed ->
         Text(
@@ -444,9 +447,10 @@ private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
     }
     // 试不成又想先存下的:做成按钮,不要藏成一行小字——它是个真实的动作,不是说明
     MikaButton(
-        ModelSetupCopy.SAVE_UNTESTED, { confirmUntested = true },
+        if (phoneSummary) stringResource(R.string.call_summary_save_connection) else ModelSetupCopy.SAVE_UNTESTED,
+        { if (phoneSummary) actions.saveUntested() else confirmUntested = true },
         Modifier.fillMaxWidth().padding(top = 6.dp).testTag("setup-save-untested"),
-        kind = ButtonKind.Tonal, size = ButtonSize.Small, enabled = f.canSaveUntested,
+        kind = ButtonKind.Tonal, size = ButtonSize.Small, enabled = f.canSaveUntested || (hasSavedKey && f.urlProblem == null && f.test != ListState.Running),
     )
     if (confirmUntested) MikaDialog(
         onDismissRequest = { confirmUntested = false },
@@ -462,7 +466,7 @@ private fun AddProviderForm(ui: ModelSetupUi, actions: ModelSetupActions) {
             TextButton({ confirmUntested = false }) { Text(stringResource(R.string.cancel)) }
         },
     )
-    FooterNote(ModelSetupCopy.TEST_NOTE, Modifier.padding(top = 6.dp))
+    FooterNote(if (phoneSummary) stringResource(R.string.call_summary_connection_note) else ModelSetupCopy.TEST_NOTE, Modifier.padding(top = 6.dp))
 }
 
 /** 自定义填的是某家的官方地址:建议改用那家的预设(不拦着),接口类型对不上时一并说;点一下就换过去,Key 留着。 */

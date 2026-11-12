@@ -32,6 +32,7 @@ data class CallRecord(
     val audioReport: CallAudioReport? = null,
     val recording: CallRecordingInfo? = null,
     val recordingPending: Boolean = false,
+    val summary: CallSummary? = null,
 ) {
     override fun toString(): String = "CallRecord(direction=$direction, result=$result)"
 }
@@ -73,7 +74,7 @@ internal class CallHistory(private val storage: Storage) {
         fun write(records: List<CallRecord>): Boolean
     }
 
-    enum class Result { SAVED, NOT_FOUND, WRITE_FAILED }
+    enum class Result { SAVED, NOT_FOUND, WRITE_FAILED, SOURCE_CHANGED }
 
     private val lock = Mutex()
     private val mutable = MutableStateFlow<List<CallRecord>>(emptyList())
@@ -98,6 +99,19 @@ internal class CallHistory(private val storage: Storage) {
 
     suspend fun setHandled(id: String, handled: Boolean): Result =
         edit(id) { records -> records.map { if (it.id == id) it.copy(handled = handled) else it } }
+
+    /** Merge only the summary into the latest record; late model replies cannot resurrect deleted calls. */
+    suspend fun setSummary(id: String, expectedFingerprint: String, summary: CallSummary): Result =
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                if (!readOnce()) return@withLock Result.WRITE_FAILED
+                val current = mutable.value.firstOrNull { it.id == id } ?: return@withLock Result.NOT_FOUND
+                if (CallSummaryEngine.sourceFingerprint(current) != expectedFingerprint ||
+                    summary.sourceFingerprint != expectedFingerprint) return@withLock Result.SOURCE_CHANGED
+                CallSummaryEngine.validate(summary, current)
+                persist(mutable.value.map { if (it.id == id) it.copy(summary = summary) else it })
+            }
+        }
 
     suspend fun setRecording(id: String, recording: CallRecordingInfo?): Result = withContext(Dispatchers.IO) {
         lock.withLock {
@@ -194,8 +208,8 @@ internal class CallHistory(private val storage: Storage) {
         const val MAX_CALLS = 50
         const val MAX_LINES = 32
         const val MAX_LINE_LENGTH = 240
-        // Allow worst-case JSON escaping + Base64 for 50 bounded transcripts and task briefs.
-        private const val MAX_ENCODED_CHARS = 5_000_000
+        // Allow worst-case JSON escaping + Base64 for 50 bounded transcripts, briefs and summaries.
+        private const val MAX_ENCODED_CHARS = 10_000_000
         private const val KEY = "encrypted_calls_v1"
     }
 }

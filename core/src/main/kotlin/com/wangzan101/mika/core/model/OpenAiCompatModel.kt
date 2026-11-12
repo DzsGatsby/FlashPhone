@@ -41,6 +41,8 @@ class OpenAiCompatModel(
     private val headers: Map<String, String> = emptyMap(),
     /** 用户选的思考强度(`reasoning_effort`);null 不发。 */
     private val reasoningEffort: String? = null,
+    private val maxOutputTokens: Int? = null,
+    private val allowCompatibilityRetry: Boolean = true,
 ) : StreamingChatModel {
     override val name: String get() = model
     private val endpoint = baseUrl.trimEnd('/') + "/chat/completions"
@@ -70,7 +72,7 @@ class OpenAiCompatModel(
     ): ModelReply {
         var stream = OpenAiStream(onText, ::parseUsage, ::thinking)
         var response = HttpSupport.stream(http, request(system, messages, tools, stream = true), stream::accept)
-        if (response.status == 400 && response.body.contains("stream_options")) {
+        if (allowCompatibilityRetry && response.status == 400 && response.body.contains("stream_options")) {
             // 一些兼容端点能流式生成，却没有用量选项。
             stream = OpenAiStream(onText, ::parseUsage, ::thinking)
             response = HttpSupport.stream(http, request(system, messages, tools, stream = true, includeUsage = false), stream::accept)
@@ -78,7 +80,7 @@ class OpenAiCompatModel(
         val (status, retryAfter, text) = response
         if (status !in 200..299) {
             // 不支持流式传输的兼容端点仍可按原接口完成任务。
-            if (status == 400 && text.contains("stream", ignoreCase = true)) return complete(system, messages, tools).also {
+            if (allowCompatibilityRetry && status == 400 && text.contains("stream", ignoreCase = true)) return complete(system, messages, tools).also {
                 it.parts.filterIsInstance<Part.Text>().joinToString("") { part -> part.text }.takeIf(String::isNotEmpty)?.let(onText)
             }
             throw mapError(status, retryAfter, text)
@@ -92,6 +94,10 @@ class OpenAiCompatModel(
     private suspend fun request(system: String, messages: List<Message>, tools: List<ToolSpec>, stream: Boolean, includeUsage: Boolean = true): Request {
         val payload = buildJsonObject {
             put("model", model)
+            maxOutputTokens?.let {
+                val completionLimit = model.startsWith("gpt-5") || Regex("^o[134](?:-|$)").containsMatchIn(model)
+                put(if (completionLimit) "max_completion_tokens" else "max_tokens", it)
+            }
             reasoningEffort?.let { put("reasoning_effort", it) }
             // 思考只在带工具的请求里回传(工具调用一步接一步时要接着想);不带工具的旁路调用不需要
             val replayReasoning = tools.isNotEmpty()

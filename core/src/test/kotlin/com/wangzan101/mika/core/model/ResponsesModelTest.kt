@@ -39,6 +39,24 @@ class ResponsesModelTest {
 
     private fun sentBody(): JsonObject = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
 
+    @Test fun boundedAuxiliaryRequestSendsTokenLimitAndNeverRetriesRejectedInclude() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":{"param":"include","message":"unsupported reasoning.encrypted_content"}}"""))
+        val bounded = ResponsesModel(server.url("/v1").toString(), BearerToken.fixed("synthetic"), "gpt-test", caps,
+            OkHttpClient(), maxOutputTokens = 1_024, allowCompatibilityRetry = false)
+        try { bounded.complete("s", user, emptyList()); fail("Expected rejection") } catch (_: ModelError) { }
+        assertEquals(1, server.requestCount)
+        val body = sentBody()
+        assertEquals("1024", body["max_output_tokens"].toString())
+        assertEquals("false", body["store"].toString())
+        assertFalse(body.containsKey("tools"))
+    }
+
+    @Test fun chatGptPlanStillOmitsOutputLimit() {
+        val boundedPlan = ResponsesModel(server.url("/v1").toString(), BearerToken.fixed("synthetic"), "m", caps,
+            OkHttpClient(), chatGptPlan = true, maxOutputTokens = 1_024)
+        assertFalse(boundedPlan.body("s", user, emptyList()).containsKey("max_output_tokens"))
+    }
+
     @Test fun requestKeepsOnlyAllowedFieldsAndPutsSystemPromptInInstructions() = runTest {
         server.enqueue(stream(completed()))
         val history = listOf(

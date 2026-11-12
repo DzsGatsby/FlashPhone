@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_summary_title">通話 AI 摘要</string>
+    <string name="call_summary_scope">僅根據已儲存的轉寫片段</string>
+    <string name="call_summary_caution">轉寫可能不完整，AI 也可能有誤；請配合來源原文和錄音核對。</string>
+    <string name="call_summary_generated">產生於 %1$s · %2$s</string>
+    <string name="call_summary_running">正在產生摘要…</string>
+    <string name="call_summary_unconfigured">請先設定文字模型，再產生摘要。</string>
+    <string name="call_summary_save_failed">新摘要儲存失敗；已有摘要仍保留。</string>
+    <string name="call_summary_canceled">已取消產生；已有摘要仍保留。</string>
+    <string name="call_summary_timeout">產生逾時，請稍後重試。</string>
+    <string name="call_summary_busy">另一個摘要或通話正在進行，請稍後重試。</string>
+    <string name="call_summary_invalid">回傳內容無法與轉寫核對，請重試。</string>
+    <string name="call_summary_failed">摘要產生失敗，請檢查模型設定後重試。</string>
+    <string name="call_summary_no_transcript">沒有可用於摘要的已儲存轉寫。</string>
+    <string name="call_summary_prompt">點擊產生會將已儲存的轉寫片段傳送給已設定的文字模型服務商。</string>
+    <string name="call_summary_cancel">取消產生</string>
+    <string name="call_summary_configure">設定模型</string>
+    <string name="call_summary_generate">產生摘要</string>
+    <string name="call_summary_regenerate">重新產生</string>
+    <string name="call_summary_highlights">要點</string>
+    <string name="call_summary_confirmed">已確認</string>
+    <string name="call_summary_follow_ups">待辦</string>
+    <string name="call_summary_unknowns">未知</string>
+    <string name="call_summary_none">儲存片段中未識別到相關內容</string>
+    <string name="call_summary_hide_sources">收起來源（%1$d）</string>
+    <string name="call_summary_sources">核對來源（%1$d）</string>
+    <string name="call_summary_source_line">轉寫第 %1$d 條</string>
+    <string name="call_summary_saved_original">儲存原文 · %1$s</string>
+    <string name="call_summary_source_missing">這條來源原文已無法使用。</string>
+
+    <string name="call_summary_settings_title">通話摘要模型</string>
+    <string name="call_summary_settings_lead">從下方服務商選擇文字模型，通話摘要獨立儲存自己的模型選擇。</string>
+    <string name="call_summary_selected_model">摘要用模型</string>
+    <string name="call_summary_model_unselected">尚未選擇模型</string>
+    <string name="call_summary_auto_title">新通話自動摘要</string>
+    <string name="call_summary_auto_note">新通話結束後，閒置時摘要已儲存的轉寫；不會自動處理歷史通話。</string>
+    <string name="call_summary_provider_model_count">%1$d 個模型</string>
+    <string name="call_summary_edit_provider">編輯服務商</string>
+    <string name="call_summary_key_keep">留空保留已儲存的 Key</string>
+    <string name="call_summary_load_models_save">取得模型列表並儲存</string>
+    <string name="call_summary_save_connection">儲存連線</string>
+    <string name="call_summary_connection_note">取得列表只請求模型目錄；儲存連線或選擇模型不會傳送通話內容。</string>
+    <string name="call_summary_shared_connection_note">修改連線會影響此服務商的所有用途；Key 留空則保留已儲存的 Key。</string>
+    <string name="call_summary_choose_note">選擇用於通話摘要的模型，不會更改其他模型用途。</string>
+    <string name="call_summary_manual_filter_note">依模型名稱篩選以檢視更多，也可在下方填寫完整模型 ID。</string>
+    <string name="call_summary_manual_note">依服務商文件填寫完整模型 ID；儲存時不驗證存取權限，產生時會顯示實際錯誤。</string>
+    <string name="call_summary_settings_failed">設定無法儲存，請檢查連線資訊後重試。</string>
+    <string name="call_summary_list_failed">無法取得模型列表，請檢查網址和 Key，或儲存連線後手填模型 ID。</string>
+    <string name="call_summary_delete_note">這會刪除服務商及其加密 Key；其他正在使用此服務商的功能也需要重新設定。</string>
+
+    <string name="call_summary_model_unavailable">目前模型已無法使用，請重新選擇</string>
+    <string name="call_summary_provider_unsupported">此套餐登入暫不支援通話摘要，請新增 API Key 服務商。</string>
+</resources>

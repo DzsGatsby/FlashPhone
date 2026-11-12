@@ -54,11 +54,14 @@ class ResponsesModel(
     override val capabilities: Capabilities,
     private val http: OkHttpClient,
     private val chatGptPlan: Boolean = false,
-    /** 每个请求都带的头(见 [ClientHeaders]);令牌的头由适配器自己加。这个接口不给回复上限(套餐那条路不收)。 */
+    /** 每个请求都带的头(见 [ClientHeaders]);令牌的头由适配器自己加。 */
     private val headers: Map<String, String> = emptyMap(),
     /** null 使用服务端默认;服务端拒绝所选档位时照常报错,不悄悄换档重试。 */
     private val reasoningEffort: String? = null,
     private val accountLogin: String? = null,
+    /** Optional bounded side requests; ChatGPT plan endpoints do not accept this field. */
+    private val maxOutputTokens: Int? = null,
+    private val allowCompatibilityRetry: Boolean = true,
 ) : StreamingChatModel {
     override val name: String get() = model
     private val endpoint = baseUrl.trim().trimEnd('/') + "/responses"
@@ -84,8 +87,8 @@ class ResponsesModel(
             }
             val err = errorBody(text)
             when {
-                status == 401 && token.refreshable && !fresh -> fresh = true
-                status == 400 && includeReasoning && (err?.param == "include" || text.contains("reasoning.encrypted_content")) ->
+                allowCompatibilityRetry && status == 401 && token.refreshable && !fresh -> fresh = true
+                allowCompatibilityRetry && status == 400 && includeReasoning && (err?.param == "include" || text.contains("reasoning.encrypted_content")) ->
                     includeReasoning = false
                 else -> throw httpError(status, retryAfter, text, err)
             }
@@ -100,6 +103,7 @@ class ResponsesModel(
             if (tools.isNotEmpty()) putJsonArray("tools") { tools.forEach { add(toolJson(it)) } }
             put("store", false)
             put("stream", true)
+            if (!chatGptPlan) maxOutputTokens?.let { put("max_output_tokens", it) }
             reasoningEffort?.let { effort -> putJsonObject("reasoning") { put("effort", effort) } }
             if (includeReasoning) putJsonArray("include") { add(ENCRYPTED_REASONING) }
         }
