@@ -450,18 +450,20 @@ internal class ShellCallAudio(private val context: Context) {
         fun establishRoute() {
             // AudioFlinger may not activate the output until the start threshold has data.
             // Only silence is allowed to leave the track until the route has been inspected.
-            primePlayback()
-            val deadline = SystemClock.elapsedRealtime() + ROUTE_TIMEOUT_MS
-            do {
-                check(owner.isBinderAlive && inPstnCall()) { "Cellular call or its owner ended." }
-                updateRoutes()
-                if (txDevice == AudioDeviceInfo.TYPE_TELEPHONY || backend == REDIRECT) return
-                SystemClock.sleep(20)
-            } while (SystemClock.elapsedRealtime() < deadline)
-            error("Uplink telephony route was not confirmed.")
+            awaitStartupRoute(backend, SystemClock::elapsedRealtime, SystemClock::sleep,
+                ensureActive = {
+                    check(!closed && owner.isBinderAlive && inPstnCall()) { "Cellular call or its owner ended." }
+                    requireCallMicrophoneMute()
+                },
+                sampleRoutes = {
+                    updateRoutes(checkDevices = false)
+                    rxDevice to txDevice
+                },
+                primeSilence = { startupGuard -> primePlayback(startupGuard) },
+            )
         }
 
-        private fun primePlayback() {
+        private fun primePlayback(startupGuard: (() -> Unit)? = null) {
             val initialFrames = if (Build.VERSION.SDK_INT >= 31) {
                 track.setStartThresholdInFrames(minOf(PLAY_RATE / 50, track.bufferSizeInFrames).coerceAtLeast(1))
             } else track.bufferSizeInFrames
@@ -470,16 +472,18 @@ internal class ShellCallAudio(private val context: Context) {
                 nowMs = SystemClock::elapsedRealtime,
                 awaitRetry = { SystemClock.sleep(it) },
                 ensureActive = {
-                    check(!closed && owner.isBinderAlive && inPstnCall()) { "Cellular call or its owner ended." }
-                    check(manager.isMicrophoneMute) { "Handset microphone was unmuted." }
-                    updateRoutes()
+                    if (startupGuard != null) startupGuard() else {
+                        check(!closed && owner.isBinderAlive && inPstnCall()) { "Cellular call or its owner ended." }
+                        check(manager.isMicrophoneMute) { "Handset microphone was unmuted." }
+                        updateRoutes()
+                    }
                 },
                 write = { offset, size -> track.write(silence, offset, size, AudioTrack.WRITE_NON_BLOCKING) },
             )
             playbackDiagnostics.recordPrime(accepted)
         }
 
-        private fun updateRoutes() {
+        private fun updateRoutes(checkDevices: Boolean = true) {
             rxDevice = record.routedDevice?.type ?: -1
             txDevice = track.routedDevice?.type ?: -1
             val observation = try {
@@ -506,12 +510,7 @@ internal class ShellCallAudio(private val context: Context) {
                 clientSilencedEver = clientSilencedEver || observation.silenced
             }
             val captureSilenced = captureSilence.observe(observation?.silenced, SystemClock.elapsedRealtime())
-            check(rxDevice < 0 || rxDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
-                "Downlink unexpectedly routed to device type $rxDevice."
-            }
-            check(txDevice < 0 || txDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
-                "Uplink unexpectedly routed to device type $txDevice."
-            }
+            if (checkDevices) requireTelephonyRoutes(rxDevice, txDevice)
             check(!captureSilenced) { "Android silenced the cellular audio capture." }
         }
 
@@ -807,6 +806,44 @@ internal class ShellCallAudio(private val context: Context) {
                 if (count == 0) awaitRetry(minOf(5L, remaining))
             }
             return accepted
+        }
+
+        internal fun requireTelephonyRoutes(rxDevice: Int, txDevice: Int) {
+            check(rxDevice < 0 || rxDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
+                "Downlink unexpectedly routed to device type $rxDevice."
+            }
+            check(txDevice < 0 || txDevice == AudioDeviceInfo.TYPE_TELEPHONY) {
+                "Uplink unexpectedly routed to device type $txDevice."
+            }
+        }
+
+        /** Startup only: private pipes and silence priming permit a bounded TX migration. */
+        internal fun awaitStartupRoute(
+            backend: Int,
+            nowMs: () -> Long,
+            awaitRetry: (Long) -> Unit,
+            ensureActive: () -> Unit,
+            sampleRoutes: () -> Pair<Int, Int>,
+            primeSilence: (() -> Unit) -> Unit,
+        ) {
+            fun guardedSample(): Pair<Int, Int> {
+                ensureActive()
+                return sampleRoutes().also { (rx, _) ->
+                    // Capture already runs and can buffer frames before the pipes are exposed.
+                    // Never tolerate a known wrong RX; those frames could otherwise leak later.
+                    requireTelephonyRoutes(rx, -1)
+                }
+            }
+            primeSilence { guardedSample() }
+            val deadline = nowMs() + ROUTE_TIMEOUT_MS
+            do {
+                val (_, tx) = guardedSample()
+                // A redirection track may hide its physical sink; a known speaker is never ready.
+                if (tx == AudioDeviceInfo.TYPE_TELEPHONY || backend == REDIRECT && tx < 0) return
+                val remaining = deadline - nowMs()
+                check(remaining > 0L) { "Uplink telephony route was not confirmed." }
+                awaitRetry(minOf(20L, remaining))
+            } while (true)
         }
 
         internal fun candidates(mode: Int, direct: Boolean, redirect: Boolean): List<Int> = when (mode) {

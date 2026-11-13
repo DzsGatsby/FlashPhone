@@ -1,5 +1,6 @@
 package com.wangzan101.mika.cap.phone.shell
 
+import android.media.AudioDeviceInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -10,6 +11,130 @@ import java.io.DataInputStream
 import java.io.IOException
 
 class ShellCallAudioTest {
+    @Test
+    fun startupAllowsSpeakerToTelephonyTransitionBeforeExposingThePipes() {
+        val startup = StartupRoute { at ->
+            AudioDeviceInfo.TYPE_TELEPHONY to
+                if (at < 20L) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER else AudioDeviceInfo.TYPE_TELEPHONY
+        }
+        startup.run()
+        assertEquals(20L, startup.now)
+        assertEquals(1, startup.silenceWrites)
+        assertTrue(startup.ready)
+    }
+
+    @Test
+    fun startupRejectsKnownWrongCaptureBeforeEvenWritingPrimeSilence() {
+        val startup = StartupRoute { at ->
+            (if (at < 20L) AudioDeviceInfo.TYPE_BUILTIN_MIC else AudioDeviceInfo.TYPE_TELEPHONY) to
+                AudioDeviceInfo.TYPE_TELEPHONY
+        }
+        val failure = runCatching { startup.run() }.exceptionOrNull()
+        assertTrue(failure?.message?.startsWith("Downlink unexpectedly routed") == true)
+        assertEquals(0L, startup.now)
+        assertEquals(0, startup.silenceWrites)
+        assertFalse(startup.ready)
+    }
+
+    @Test
+    fun startupWrongRouteTimesOutWithoutExposingThePipes() {
+        val startup = StartupRoute { AudioDeviceInfo.TYPE_TELEPHONY to AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val failure = runCatching { startup.run() }.exceptionOrNull()
+        assertEquals("Uplink telephony route was not confirmed.", failure?.message)
+        assertEquals(700L, startup.now)
+        assertEquals(1, startup.silenceWrites)
+        assertFalse(startup.ready)
+    }
+
+    @Test
+    fun startupIdentityLossOrUnmuteStopsBeforeTheNextRouteSample() {
+        listOf("owner", "mode", "mute").forEach { ended ->
+            val startup = StartupRoute { -1 to -1 }
+            startup.guard = { at -> check(at < 20L) { ended } }
+            val failure = runCatching { startup.run() }.exceptionOrNull()
+            assertEquals(ended, failure?.message)
+            assertEquals(20L, startup.now)
+            assertTrue(startup.sampleTimes.all { it < 20L })
+            assertFalse(startup.ready)
+        }
+    }
+
+    @Test
+    fun startupIdentityAndMuteGuardAlsoProtectEverySilencePrimeRetry() {
+        listOf("owner", "mode", "mute").forEach { ended ->
+            var now = 0L
+            var samples = 0
+            var writes = 0
+            val failure = runCatching {
+                ShellCallAudio.awaitStartupRoute(ShellCallAudio.DIRECT, { now }, { now += it },
+                    ensureActive = { check(now < 5L) { ended } },
+                    sampleRoutes = { samples++; AudioDeviceInfo.TYPE_TELEPHONY to AudioDeviceInfo.TYPE_BUILTIN_SPEAKER },
+                    primeSilence = { startupGuard ->
+                        ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, startupGuard) { _, _ ->
+                            writes++
+                            0
+                        }
+                    },
+                )
+            }.exceptionOrNull()
+            assertEquals(ended, failure?.message)
+            assertEquals(5L, now)
+            assertEquals(1, samples)
+            assertEquals(1, writes)
+        }
+    }
+
+    @Test
+    fun redirectedStartupAllowsUnknownDevicesButNeverKnownWrongCaptureOrPlayback() {
+        val unknown = StartupRoute { -1 to -1 }
+        unknown.run(ShellCallAudio.REDIRECT)
+        assertTrue(unknown.ready)
+        val wrongCapture = StartupRoute { AudioDeviceInfo.TYPE_BUILTIN_MIC to -1 }
+        assertTrue(runCatching { wrongCapture.run(ShellCallAudio.REDIRECT) }.exceptionOrNull()
+            ?.message?.startsWith("Downlink unexpectedly routed") == true)
+        assertEquals(0, wrongCapture.silenceWrites)
+        assertFalse(wrongCapture.ready)
+        val wrongPlayback = StartupRoute { -1 to AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val failure = runCatching { wrongPlayback.run(ShellCallAudio.REDIRECT) }.exceptionOrNull()
+        assertEquals("Uplink telephony route was not confirmed.", failure?.message)
+        assertEquals(700L, wrongPlayback.now)
+        assertFalse(wrongPlayback.ready)
+    }
+
+    @Test
+    fun runningRouteGuardStillRejectsKnownWrongDevicesImmediately() {
+        for ((rx, tx) in listOf(
+            AudioDeviceInfo.TYPE_BUILTIN_MIC to AudioDeviceInfo.TYPE_TELEPHONY,
+            AudioDeviceInfo.TYPE_TELEPHONY to AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+        )) {
+            assertTrue(runCatching { ShellCallAudio.requireTelephonyRoutes(rx, tx) }.isFailure)
+        }
+        ShellCallAudio.requireTelephonyRoutes(-1, -1)
+        ShellCallAudio.requireTelephonyRoutes(AudioDeviceInfo.TYPE_TELEPHONY, AudioDeviceInfo.TYPE_TELEPHONY)
+    }
+
+    private class StartupRoute(private val routes: (Long) -> Pair<Int, Int>) {
+        var now = 0L
+        var silenceWrites = 0
+        var ready = false
+        var guard: (Long) -> Unit = {}
+        val sampleTimes = ArrayList<Long>()
+
+        fun run(backend: Int = ShellCallAudio.DIRECT) {
+            ShellCallAudio.awaitStartupRoute(backend, { now }, { now += it },
+                ensureActive = { guard(now) },
+                sampleRoutes = { sampleTimes += now; routes(now) },
+                primeSilence = { startupGuard ->
+                    ShellCallAudio.writePlaybackPrime(8, { now }, { now += it }, startupGuard) { _, size ->
+                        silenceWrites++
+                        size
+                    }
+                },
+            )
+            ready = true // The production session transfers its pipes only after this gate returns.
+        }
+    }
+
     @Test
     fun nonblockingPrimeRetriesTemporaryZeroAndFillsTheWholeStartThreshold() {
         var now = 0L
