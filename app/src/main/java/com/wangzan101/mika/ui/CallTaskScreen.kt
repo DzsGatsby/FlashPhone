@@ -175,6 +175,8 @@ internal fun CallTaskScreen(
         val currentSim = sim?.takeIf { selected -> state.simOptions.any { it.id == selected.id } }
         val canEdit = editable && !voiceBusy
         val canStartVoice = canEdit && ready && canDial && number != null && currentSim != null && onStartVoiceBriefing != null
+        val hasTextBrief = draft.goal.isNotBlank() || draft.questions.isNotBlank() ||
+            draft.context.isNotBlank() || draft.constraints.isNotBlank()
         val openText = {
             if (canEdit) {
                 val fields = CallTaskTextFields.fromDraft(draft)
@@ -280,7 +282,11 @@ internal fun CallTaskScreen(
                         )
                         .semantics {
                             contentDescription = if (voiceBusy) "正在语音交代" else "语音交代，长按文字交代"
-                            if (!canStartVoice && canEdit) stateDescription = "请先完成号码、SIM 和通话准备；仍可长按文字交代"
+                            val descriptions = buildList {
+                                if (hasTextBrief) add("已有交代草稿")
+                                if (!canStartVoice && canEdit) add("请先完成号码、SIM 和通话准备；仍可长按文字交代")
+                            }
+                            if (descriptions.isNotEmpty()) stateDescription = descriptions.joinToString("；")
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -297,13 +303,9 @@ internal fun CallTaskScreen(
             }
             tapMessage?.let { Text(it, style = MikaType.Caption, color = c.warn,
                 modifier = Modifier.padding(top = 10.dp).testTag("call-task-action-hint")) }
-            Text("轻点语音交代 · 长按文字交代", style = MikaType.Caption, color = c.ink3,
-                modifier = Modifier.padding(top = if (compactDialer) 8.dp else 12.dp))
-            TextButton(onClick = openText, enabled = canEdit,
-                modifier = Modifier.heightIn(min = 48.dp).testTag("call-open-text-brief")) {
-                Text(if (draft.goal.isNotBlank() || draft.questions.isNotBlank() || draft.context.isNotBlank() || draft.constraints.isNotBlank())
-                    "文字交代 · 已有草稿" else "文字交代", color = c.ink2, style = MikaType.Caption)
-            }
+            Text(if (hasTextBrief) "轻点语音交代 · 长按编辑草稿" else "轻点语音交代 · 长按文字交代",
+                style = MikaType.Caption, color = c.ink3, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = if (compactDialer) 8.dp else 12.dp).testTag("call-task-brief-hint"))
             if (draft.persistenceFailed) {
                 Text(stringResource(R.string.flash_draft_save_failed), color = c.bad, style = MikaType.Caption,
                     modifier = Modifier.testTag("call-draft-save-state"))

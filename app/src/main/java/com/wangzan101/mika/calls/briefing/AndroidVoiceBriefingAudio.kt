@@ -11,8 +11,9 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.os.SystemClock
+import com.wangzan101.mika.calls.CallPlaybackQueue
+import com.wangzan101.mika.calls.CallInputPacer
 import com.wangzan101.mika.calls.VolcRealtimeClient
-import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,9 +38,7 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
     private var focus: AudioFocusRequest? = null
     private var recordingJob: Job? = null
     private var playbackJob: Job? = null
-    private val queue = ArrayDeque<ByteArray>()
-    private var queuedBytes = 0
-    private var epoch = 0L
+    private val playbackQueue = CallPlaybackQueue(VOICE_BRIEFING_MAX_PENDING_BYTES)
 
     @SuppressLint("MissingPermission") // The controller checks permission before and throughout capture.
     override suspend fun start(
@@ -92,7 +91,7 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
         }
         recordingJob = scope.launch(Dispatchers.IO) {
             var lastFrame = SystemClock.elapsedRealtime()
-            var nextSend = lastFrame
+            val pacer = CallInputPacer()
             val frame = ByteArray(CHUNK_BYTES)
             var filled = 0
             try {
@@ -106,6 +105,7 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
                         }
                         recorder!!.read(frame, filled, frame.size - filled, AudioRecord.READ_NON_BLOCKING)
                     }
+                    checkGate(mayUseAudio)
                     if (count < 0 || count % 2 != 0) throw VoiceBriefingFailure("麦克风采集失败，未拨号")
                     if (count == 0) {
                         if (SystemClock.elapsedRealtime() - lastFrame > 1_500) throw VoiceBriefingFailure("麦克风采集已停止，未拨号")
@@ -114,48 +114,50 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
                     }
                     filled += count
                     if (filled < frame.size) continue
-                    val now = SystemClock.elapsedRealtime()
-                    if (nextSend > now) delay(nextSend - now)
-                    checkGate(mayUseAudio)
-                    // Never burst-send accumulated microphone frames after a scheduler stall.
-                    if (SystemClock.elapsedRealtime() - nextSend > 100) throw VoiceBriefingFailure("语音发送延迟过高，未拨号")
-                    if (!send(frame)) throw VoiceBriefingFailure("语音发送失败，未拨号")
-                    nextSend = SystemClock.elapsedRealtime() + 20
+                    // A normal scheduler pause is not the end of the owner's briefing.
+                    // Reuse the call input's absolute media clock: rebase after a delay,
+                    // then resume at 20 ms without bursting or adding per-send drift.
+                    if (!pacer.send {
+                            checkGate(mayUseAudio)
+                            send(frame)
+                        }) throw VoiceBriefingFailure("语音发送失败，未拨号")
                     lastFrame = SystemClock.elapsedRealtime()
                     filled = 0
                 }
             } finally { frame.fill(0) }
         }
         playbackJob = scope.launch(Dispatchers.IO) {
-            var current: ByteArray? = null
+            val pcm = ByteArray(CallPlaybackQueue.WRITE_BYTES)
+            var block: CallPlaybackQueue.Block? = null
             var offset = 0
-            var currentEpoch = -1L
             var lastProgress = SystemClock.elapsedRealtime()
             try {
                 while (true) {
                     ensureActive()
                     checkGate(mayUseAudio)
+                    if (block == null) {
+                        block = playbackQueue.take(pcm) ?: break
+                        offset = 0
+                        lastProgress = SystemClock.elapsedRealtime()
+                    }
                     synchronized(lock) {
                         checkGate(mayUseAudio)
-                        if (currentEpoch != epoch) {
-                            current?.fill(0)
-                            current = null
-                            currentEpoch = epoch
-                            offset = 0
-                        }
-                        if (current == null) {
-                            current = queue.pollFirst()
-                            current?.let { queuedBytes -= it.size }
-                            offset = 0
-                            lastProgress = SystemClock.elapsedRealtime()
-                        }
-                        current?.let { pcm ->
-                            val count = player!!.write(pcm, offset, minOf(960, pcm.size - offset), AudioTrack.WRITE_NON_BLOCKING)
+                        val current = block!!
+                        if (!playbackQueue.isCurrent(current)) {
+                            pcm.fill(0)
+                            block = null
+                        } else {
+                            val count = player!!.write(pcm, offset, current.byteCount - offset, AudioTrack.WRITE_NON_BLOCKING)
+                            checkGate(mayUseAudio)
                             if (count < 0 || count % 2 != 0) throw VoiceBriefingFailure("语音播放失败，未拨号")
                             if (count > 0) {
                                 lastProgress = SystemClock.elapsedRealtime()
                                 offset += count
-                                if (offset == pcm.size) { pcm.fill(0); current = null }
+                                if (offset == current.byteCount) {
+                                    playbackQueue.release(current)
+                                    pcm.fill(0)
+                                    block = null
+                                }
                             } else if (SystemClock.elapsedRealtime() - lastProgress > 2_000) {
                                 throw VoiceBriefingFailure("语音播放停止响应，未拨号")
                             }
@@ -163,34 +165,29 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
                     }
                     delay(5)
                 }
-            } finally { current?.fill(0) }
+            } finally {
+                pcm.fill(0)
+                block?.let(playbackQueue::release)
+            }
         }
     }
 
     override fun enqueue(pcm: ByteArray) = synchronized(lock) {
         if (stopped.get()) return@synchronized
-        if (pcm.size % 2 != 0 || pcm.size > OUTPUT_RATE * 2 || queuedBytes + pcm.size > MAX_QUEUED_BYTES) {
-            throw VoiceBriefingFailure("语音播放缓冲已满，未拨号")
-        }
-        queue.addLast(pcm.copyOf())
-        queuedBytes += pcm.size
+        // Bound actual PCM duration (including the writer's in-flight block), not the
+        // provider's packet count. Short replies can arrive much faster than real-time.
+        if (playbackQueue.offer(pcm) == null) throw VoiceBriefingFailure("语音播放缓冲已满，未拨号")
     }
 
     override fun interrupt() = synchronized(lock) {
-        epoch++
-        queue.forEach { it.fill(0) }
-        queue.clear()
-        queuedBytes = 0
+        playbackQueue.invalidate()
         if (!stopped.get()) player?.let { it.pause(); it.flush(); it.play() }
     }
 
     override fun stopImmediately() {
         stopped.set(true)
         synchronized(lock) {
-            epoch++
-            queue.forEach { it.fill(0) }
-            queue.clear()
-            queuedBytes = 0
+            playbackQueue.close()
             runCatching { recorder?.stop() }
             runCatching { player?.pause(); player?.flush() }
         }
@@ -218,7 +215,7 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
     }
 
     private fun checkGate(gate: () -> Boolean) {
-        if (stopped.get() || !gate()) throw VoiceBriefingFailure("语音交代已停止，未拨号")
+        requireVoiceBriefingAudioActive(stopped.get(), gate)
     }
 
     private fun failAudio(message: String) {
@@ -234,6 +231,9 @@ internal class AndroidVoiceBriefingAudio(context: Context) : VoiceBriefingAudio 
         const val INPUT_RATE = VolcRealtimeClient.INPUT_SAMPLE_RATE
         const val OUTPUT_RATE = VolcRealtimeClient.OUTPUT_SAMPLE_RATE
         const val CHUNK_BYTES = VolcRealtimeClient.INPUT_CHUNK_BYTES
-        const val MAX_QUEUED_BYTES = OUTPUT_RATE * 2 * 4 // Four seconds, plus one current packet.
     }
 }
+
+// A bounded 576 KB accommodates ordinary model replies delivered in a burst. The shared
+// queue includes in-flight PCM in this budget and invalidates old blocks on interruption.
+internal const val VOICE_BRIEFING_MAX_PENDING_BYTES = VolcRealtimeClient.OUTPUT_SAMPLE_RATE * 2 * 12

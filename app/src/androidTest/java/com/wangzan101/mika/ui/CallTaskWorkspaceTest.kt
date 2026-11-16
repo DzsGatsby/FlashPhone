@@ -7,11 +7,13 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wangzan101.mika.ChineseUi
@@ -150,7 +152,7 @@ class CallTaskWorkspaceTest {
     }
 
     private fun openTextBrief() {
-        compose.onNodeWithTag("call-open-text-brief").performScrollTo().performClick()
+        compose.onNodeWithTag("call-start-voice").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithTag("call-text-brief-sheet").assertIsDisplayed()
     }
 

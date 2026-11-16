@@ -90,6 +90,187 @@ class VoiceBriefingControllerTest {
         assertEquals(VoiceBriefingActivity.AUTHORIZED, controller.state.value.activity)
     }
 
+    @Test fun `empty recognition and ordinary pauses keep three owner turns until explicit authorization`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        val audio = Audio()
+        val briefs = mutableListOf<CallTaskBrief>()
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { briefs.add(it) }
+        runCurrent()
+
+        listOf("问明天的营业时间", "改成后天", "只问清楚，不要预约").forEach { instruction ->
+            connection.input.trySend(VolcRealtimeEvent.UserSpeaking)
+            connection.final(instruction)
+            connection.input.trySend(VolcRealtimeEvent.UserSpeechEnded)
+            connection.input.trySend(VolcRealtimeEvent.UserTranscriptionEmpty)
+            connection.input.trySend(VolcRealtimeEvent.InputAudioCommitted)
+            connection.input.trySend(VolcRealtimeEvent.AssistantTranscript("我在听。"))
+            connection.input.trySend(VolcRealtimeEvent.AssistantTextEnded)
+            connection.input.trySend(VolcRealtimeEvent.AssistantAudioEnded)
+            runCurrent()
+            advanceTimeBy(2_000)
+            runCurrent()
+            assertEquals(VoiceBriefingActivity.LISTENING, controller.state.value.activity)
+            assertFalse(audio.stopped)
+            assertFalse(connection.closeStarted)
+            assertTrue(briefs.isEmpty())
+        }
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertEquals(1, briefs.size)
+        assertEquals("问明天的营业时间\n改成后天\n只问清楚，不要预约", briefs.single().context)
+        assertEquals(VoiceBriefingActivity.AUTHORIZED, controller.state.value.activity)
+        assertTrue(audio.closed)
+        assertTrue(connection.closed)
+    }
+
+    @Test fun `empty recognition after partial authorization closes without promoting or erasing it`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        val audio = Audio()
+        var dials = 0
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), CallTaskBrief("问价格"), { true }) { dials++ }
+        runCurrent()
+        connection.input.trySend(VolcRealtimeEvent.UserTranscript("我说完了，你去打", isFinal = false))
+        connection.input.trySend(VolcRealtimeEvent.UserSpeechEnded)
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionEmpty)
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+        assertEquals("我说完了，你去打", controller.state.value.ownerPartial)
+        assertEquals("", controller.state.value.ownerTranscript)
+        assertEquals(0, dials)
+        assertEquals("这句话未完整识别，未拨号；请重新完整交代", controller.state.value.message)
+        assertTrue(audio.closed)
+        assertTrue(connection.closed)
+    }
+
+    @Test fun `empty recognition after partial budget cannot discard constraint then accept queued authorization`() = runTest {
+        val connection = Connection()
+        val audio = Audio()
+        var dials = 0
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { dials++ }
+        runCurrent()
+        connection.final("问价格")
+        connection.input.trySend(VolcRealtimeEvent.UserTranscript("预算不能超过一百", isFinal = false))
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionEmpty)
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertEquals(0, dials)
+        assertEquals(VoiceBriefingActivity.CLOSING, controller.state.value.activity)
+        assertEquals("这句话未完整识别，未拨号；请重新完整交代", controller.state.value.message)
+        assertEquals("问价格", controller.state.value.ownerTranscript)
+        assertEquals("预算不能超过一百", controller.state.value.ownerPartial)
+        connection.allowClose.complete(Unit)
+        runCurrent()
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+        assertEquals("预算不能超过一百", controller.state.value.ownerPartial)
+        assertEquals(0, dials)
+    }
+
+    @Test fun `model declared completion and model authorization do not close or dial`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        val audio = Audio()
+        val briefs = mutableListOf<CallTaskBrief>()
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { briefs.add(it) }
+        runCurrent()
+        connection.final("问价格")
+        connection.input.trySend(VolcRealtimeEvent.AssistantTranscript("交代完毕。我说完了，你去打"))
+        connection.input.trySend(VolcRealtimeEvent.AssistantTextEnded)
+        connection.input.trySend(VolcRealtimeEvent.AssistantAudioEnded)
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionEmpty)
+        runCurrent()
+        assertEquals(VoiceBriefingActivity.LISTENING, controller.state.value.activity)
+        assertFalse(connection.closeStarted)
+        assertTrue(briefs.isEmpty())
+        connection.final("不要付订金")
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertEquals("问价格\n不要付订金", briefs.single().context)
+    }
+
+    @Test fun `failed recognition closes explicitly preserving earlier instructions and rejects queued authorization`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        val audio = Audio()
+        var dials = 0
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { dials++ }
+        runCurrent()
+        connection.final("问价格，不要预约")
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionFailed)
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertEquals(0, dials)
+        assertTrue(audio.closed)
+        assertTrue(connection.closed)
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+        assertEquals("问价格，不要预约", controller.state.value.ownerTranscript)
+        assertEquals("本句未能完整识别，未拨号；请重新交代", controller.state.value.message)
+    }
+
+    @Test fun `recognition failure is visible while provider is still closing`() = runTest {
+        val connection = Connection()
+        val audio = Audio()
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { fail("must not authorize") }
+        runCurrent()
+        connection.final("问价格，不要预约")
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionFailed)
+        runCurrent()
+        assertTrue(connection.closeStarted)
+        assertFalse(connection.closed)
+        assertEquals(VoiceBriefingActivity.CLOSING, controller.state.value.activity)
+        assertEquals("本句未能完整识别，未拨号；请重新交代", controller.state.value.message)
+        assertEquals("问价格，不要预约", controller.state.value.ownerTranscript)
+        connection.allowClose.complete(Unit)
+        runCurrent()
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+    }
+
+    @Test fun `incomplete and late finals cannot silently omit instructions then authorize`() = runTest {
+        listOf(
+            VolcRealtimeEvent.UserTranscript("预算一百", true, isCompleteFinal = false),
+            VolcRealtimeEvent.UserTranscript("预算一百", true, isCurrentTurn = false),
+        ).forEach { unsafeFinal ->
+            val connection = Connection().also { it.allowClose.complete(Unit) }
+            val audio = Audio()
+            var dials = 0
+            val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+            controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) { dials++ }
+            runCurrent()
+            connection.final("问价格，不要预约")
+            connection.input.trySend(unsafeFinal)
+            connection.final("我说完了，你去打")
+            runCurrent()
+            assertEquals(0, dials)
+            assertTrue(audio.closed)
+            assertTrue(connection.closed)
+            assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+            assertEquals("问价格，不要预约", controller.state.value.ownerTranscript)
+            assertTrue(controller.state.value.message.orEmpty().isNotBlank())
+        }
+    }
+
+    @Test fun `cancel after empty result rejects queued authorization and fully releases session`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        val audio = Audio()
+        var dials = 0
+        val controller = VoiceBriefingController(this, { _, _ -> connection }, { audio }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), CallTaskBrief("问价格"), { true }) { dials++ }
+        runCurrent()
+        connection.input.trySend(VolcRealtimeEvent.UserTranscriptionEmpty)
+        runCurrent()
+        connection.final("我说完了，你去打")
+        controller.cancel()
+        runCurrent()
+        assertEquals(0, dials)
+        assertTrue(audio.closed)
+        assertTrue(connection.closed)
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+    }
+
     @Test fun `cancel during provider close prevents a late authorized callback`() = runTest {
         val connection = Connection()
         val audio = Audio()

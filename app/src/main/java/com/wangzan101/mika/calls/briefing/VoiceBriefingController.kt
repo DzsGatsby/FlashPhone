@@ -166,7 +166,15 @@ class VoiceBriefingController internal constructor(
                                     }
                                     is VolcRealtimeEvent.Failed, VolcRealtimeEvent.Closed ->
                                         throw VoiceBriefingFailure("语音连接已结束，未拨号；请重新开始")
-                                    VolcRealtimeEvent.UserTranscriptionFailed, VolcRealtimeEvent.UserTranscriptionEmpty ->
+                                    // Blank recognition without prior text can be ordinary silence.
+                                    // An unfinished partial may contain a constraint: never drop it
+                                    // and then authorize from a later, unrelated complete final.
+                                    VolcRealtimeEvent.UserTranscriptionEmpty -> {
+                                        if (mutable.value.ownerPartial.isNotBlank()) {
+                                            throw VoiceBriefingFailure("这句话未完整识别，未拨号；请重新完整交代")
+                                        }
+                                    }
+                                    VolcRealtimeEvent.UserTranscriptionFailed ->
                                         throw VoiceBriefingFailure("本句未能完整识别，未拨号；请重新交代")
                                     else -> Unit
                                 }
@@ -189,7 +197,12 @@ class VoiceBriefingController internal constructor(
                 failure = "语音交代中断，未拨号；请检查权限或连接后重试"
             } finally {
                 conversation.cancel()
-                if (token == generation) mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.CLOSING)
+                if (token == generation) mutable.value = mutable.value.copy(
+                    activity = VoiceBriefingActivity.CLOSING,
+                    // Publish the actual stop reason while shutdown is pending. Provider cleanup
+                    // may take several seconds and must not look like successful authorization.
+                    message = audioFailure.get() ?: failure,
+                )
                 withContext(NonCancellable) {
                     // No owner instruction can escape until both devices and the provider have ended.
                     val audioClosed = runCatching { localAudio?.stopImmediately(); localAudio?.close() }.isSuccess
@@ -208,7 +221,7 @@ class VoiceBriefingController internal constructor(
                 mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.AUTHORIZED, ownerPartial = "")
                 onAuthorized(brief.validatedSnapshot())
             } else {
-                mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.IDLE, ownerPartial = "",
+                mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.IDLE,
                     message = audioFailure.get() ?: failure ?: "语音交代已停止，未拨号")
             }
         }

@@ -69,8 +69,10 @@ internal fun rememberCallVoiceBriefing(
                     Text(when {
                         starting || voice.activity == VoiceBriefingActivity.CONNECTING -> "正在连接豆包…"
                         voice.activity == VoiceBriefingActivity.LISTENING -> "正在听，请交代要办的事"
-                        voice.activity == VoiceBriefingActivity.CLOSING -> "正在结束语音交代…"
-                        else -> "尚未拨号"
+                        voice.activity == VoiceBriefingActivity.CLOSING -> if (voice.message != null) "语音交代已中断，未拨号" else "正在释放语音连接…"
+                        voice.activity == VoiceBriefingActivity.AUTHORIZED -> "交代已确认，正在提交拨号"
+                        voice.message != null -> "语音交代已中断，未拨号"
+                        else -> "尚未开始语音交代"
                     })
                     Text("交代完毕后，单独说“我说完了，你去打”，才会拨出。")
                     if (voice.assistantTranscript.isNotBlank()) Text("豆包\n${voice.assistantTranscript}")

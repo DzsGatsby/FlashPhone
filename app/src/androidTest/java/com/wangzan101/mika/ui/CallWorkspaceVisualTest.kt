@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -71,11 +72,13 @@ class CallWorkspaceVisualTest {
                 val nav = compose.onNodeWithTag("call-tab-task").getUnclippedBoundsInRoot()
                 assertTrue("The complete green button must remain above navigation without scrolling", callButton.bottom <= nav.top)
                 compose.onNodeWithText("轻点语音交代 · 长按文字交代").assertIsDisplayed()
-                assertTrue("Text alternative must remain completely above navigation",
-                    compose.onNodeWithTag("call-open-text-brief").getUnclippedBoundsInRoot().bottom <= nav.top)
+                assertTrue("The long-press hint must remain completely above navigation",
+                    compose.onNodeWithTag("call-task-brief-hint").getUnclippedBoundsInRoot().bottom <= nav.top)
             }
+            compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
+            compose.onNodeWithText("文字交代").assertDoesNotExist()
             screenshot("native-dialer-home.png")
-            compose.onNodeWithTag("call-open-text-brief").performScrollTo().performClick()
+            compose.onNodeWithTag("call-start-voice").performScrollTo().performTouchInput { longClick() }
             compose.onNodeWithTag("call-text-brief-sheet").assertIsDisplayed()
             compose.onNodeWithTag("call-task-text-brief").assertIsDisplayed()
             screenshot("native-dialer-text-sheet.png")

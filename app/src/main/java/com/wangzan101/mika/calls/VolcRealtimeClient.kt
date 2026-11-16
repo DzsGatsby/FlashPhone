@@ -151,9 +151,11 @@ class VolcRealtimeSession internal constructor(
     private val toolCalls = LinkedHashMap<String, ToolCall>()
     private var currentUserItem: String? = null
     private var userText = StringBuilder()
+    private var userTextTruncated = false
     private var userTurnActive = false
     private class UserItemState {
         val text = StringBuilder()
+        var truncated = false
         var started = false
         var ended = false
         var finalEmitted = false
@@ -315,6 +317,7 @@ class VolcRealtimeSession internal constructor(
                 item?.started = true
                 currentUserItem = itemId
                 userText = item?.text ?: StringBuilder()
+                userTextTruncated = item?.truncated ?: false
                 userTurnActive = true
                 interruptAudio()
                 publish(VolcRealtimeEvent.UserSpeaking)
@@ -324,23 +327,31 @@ class VolcRealtimeSession internal constructor(
                 val isNewItem = itemId != null && itemId !in userItems
                 val item = itemId?.let(::userItem)
                 if (item?.ended == true) return
-                val delta = frame.string("delta") ?: return
+                val snapshot = asrText(frame) ?: return
                 if (isNewItem) {
                     // Adopt an explicitly new ID, including a current anonymous turn. Known parked
                     // items can keep accumulating history but must never reclaim the current lane.
                     if (currentUserItem == null && userTurnActive && userText.isNotEmpty()) {
                         item!!.text.append(userText)
+                        item.truncated = userTextTruncated
                     }
                     currentUserItem = itemId
                     userText = item!!.text
                 }
                 val text = item?.text ?: userText
-                val remaining = MAX_TRANSCRIPT_CHARS - text.length
-                if (remaining > 0 && delta.isNotEmpty()) text.append(delta, 0, minOf(remaining, delta.length))
+                // Seeduplex's official Web demo replaces the owner question for each ASR
+                // delta (setQuestion), while appending assistant text (appendAnswer). ASR
+                // events are full, revisable snapshots despite the event's "delta" name.
+                // Never infer this by text overlap: genuine repeated words must survive.
+                text.setLength(0)
+                text.append(snapshot, 0, minOf(MAX_TRANSCRIPT_CHARS, snapshot.length))
+                val truncated = snapshot.length > MAX_TRANSCRIPT_CHARS
+                item?.truncated = truncated
                 // Unidentified events retain the legacy in-order current lane; never guess an ID by delay.
                 if (itemId == null || itemId == currentUserItem) {
                     userTurnActive = true
-                    if (delta.isNotEmpty()) publish(VolcRealtimeEvent.UserTranscript(text.toString(), isFinal = false))
+                    userTextTruncated = truncated
+                    publish(VolcRealtimeEvent.UserTranscript(text.toString(), isFinal = false))
                 }
             }
             VolcRealtimeProtocol.USER_COMPLETED -> {
@@ -348,12 +359,16 @@ class VolcRealtimeSession internal constructor(
                 val item = itemId?.let(::userItem)
                 if (item?.finalEmitted == true) return
                 val isCurrent = itemId == null || itemId == currentUserItem
-                val explicitFinal = (frame.string("transcript") ?: frame.string("text"))?.takeIf { it.isNotBlank() }
+                val explicitFinal = asrText(frame)?.takeIf { it.isNotBlank() }
+                val hasFinalText = ASR_TEXT_FIELDS.any { frame.string(it) != null }
                 val transcript = explicitFinal ?: (item?.text ?: userText).toString()
                 if (transcript.isNotBlank()) publish(VolcRealtimeEvent.UserTranscript(
                     transcript.take(MAX_TRANSCRIPT_CHARS),
                     isFinal = true,
-                    isCompleteFinal = explicitFinal != null && explicitFinal.length <= MAX_TRANSCRIPT_CHARS,
+                    // A payload-free completed event finalizes the latest full snapshot.
+                    // Explicitly blank results and truncated snapshots cannot authorize.
+                    isCompleteFinal = if (explicitFinal != null) explicitFinal.length <= MAX_TRANSCRIPT_CHARS
+                        else !hasFinalText && !(item?.truncated ?: userTextTruncated),
                     isCurrentTurn = isCurrent,
                 ))
                 (item ?: currentUserItem?.let(userItems::get))?.let {
@@ -506,7 +521,13 @@ class VolcRealtimeSession internal constructor(
     private fun finishCurrentUser() {
         currentUserItem = null
         userText = StringBuilder()
+        userTextTruncated = false
         userTurnActive = false
+    }
+
+    // Same field priority as the official Seeduplex Web demo's extractEventText.
+    private fun asrText(frame: JsonObject): String? = ASR_TEXT_FIELDS.firstNotNullOfOrNull { key ->
+        frame.string(key)?.takeIf { it.isNotEmpty() }
     }
 
     private fun isRetiredResponse(id: String?): Boolean = id != null && id in retiredResponseIds
@@ -592,6 +613,7 @@ class VolcRealtimeSession internal constructor(
     }
 
     private companion object {
+        val ASR_TEXT_FIELDS = listOf("text", "delta", "transcript", "content")
         const val MAX_SEND_QUEUE_BYTES = 32 * 1024 // Well below OkHttp's 16 MiB default WebSocket queue.
         const val MAX_TRANSCRIPT_CHARS = 16_384
         const val MAX_TRACKED_USER_ITEMS = 64

@@ -8,14 +8,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
@@ -68,6 +76,9 @@ class CallDialerGestureTest {
     @Test fun tapStartsOnlyVoiceBriefingAndBusyStateBlocksAnotherStart() {
         show()
         compose.onNodeWithTag("call-task-text-brief").assertDoesNotExist()
+        compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
+        compose.onNodeWithText("文字交代").assertDoesNotExist()
+        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按文字交代")
         compose.onNodeWithTag("call-start-voice").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(1, voiceStarts)
@@ -75,7 +86,7 @@ class CallDialerGestureTest {
             busy.value = true
         }
         compose.onNodeWithTag("call-start-voice").performScrollTo().assertIsNotEnabled().performClick()
-        compose.onNodeWithTag("call-open-text-brief").assertIsNotEnabled()
+        compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, voiceStarts) }
     }
 
@@ -86,8 +97,12 @@ class CallDialerGestureTest {
         draft.constraints = "不要预约"
         val original = draft.snapshotFields()
         show()
+        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按编辑草稿")
+        compose.onNodeWithTag("call-start-voice").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已有交代草稿"))
         compose.onNodeWithTag("call-start-voice").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithTag("call-text-brief-sheet").assertIsDisplayed()
+        compose.onAllNodesWithTag("call-task-text-brief").assertCountEquals(1)
         compose.onNodeWithTag("call-task-text-brief").assertTextContains("几点关门？", substring = true)
         compose.onNodeWithTag("call-task-text-brief").assertTextContains("只有今天方便去", substring = true)
         compose.onNodeWithTag("call-task-text-brief").assertTextContains("不要预约", substring = true)
@@ -96,11 +111,15 @@ class CallDialerGestureTest {
             assertEquals(original, draft.snapshotFields())
             assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
         }
+        compose.onNodeWithText("返回拨号键盘").performScrollTo().performClick()
+        compose.onNodeWithTag("call-task-clear").performScrollTo().performClick()
+        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按文字交代")
     }
 
     @Test fun accessibleTextEntryRetainsReviewAndLockedConfirmation() {
         show()
-        compose.onNodeWithTag("call-open-text-brief").performScrollTo().performClick()
+        compose.onNodeWithTag("call-start-voice").performScrollTo()
+            .performSemanticsAction(SemanticsActions.OnLongClick) { it() }
         compose.onNodeWithTag("call-task-text-brief").performTextReplacement("确认营业时间，不要预约。")
         compose.onNodeWithTag("call-task-review").performScrollTo().performClick()
         compose.onNodeWithTag("call-task-review-dialog").assertIsDisplayed()
