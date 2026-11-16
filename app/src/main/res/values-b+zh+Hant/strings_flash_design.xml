@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">接起電話後的第一句話</string>
     <string name="flash_design_instructions_note">讓助手知道不同場合怎麼回應</string>
     <string name="flash_design_voice_clone_note">熟悉的聲音，更自然的回應</string>
+    <string name="flash_design_phone_assistant">您的電話助手</string>
 </resources>

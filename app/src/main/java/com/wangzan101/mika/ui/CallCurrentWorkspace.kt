@@ -1,5 +1,6 @@
 package com.wangzan101.mika.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.*
 import com.wangzan101.mika.ui.theme.MikaIcons
+import kotlinx.coroutines.flow.collect
 
 private val LiveWash = Color(0xFFF3F2F8)
 private val LiveInk = Color(0xFF1A201D)
@@ -58,6 +61,8 @@ internal fun CurrentCallCard(
     val screen = LocalConfiguration.current
     val compact = screen.screenHeightDp < 500 || screen.fontScale >= 1.5f
     var transcriptRequest by rememberSaveable(state.callId) { mutableIntStateOf(0) }
+    // Keep the same viewport while the live detail is temporarily collapsed.
+    val transcriptViewport = rememberLiveTranscriptViewport(state.callId)
     var keypadCallId by remember { mutableStateOf<String?>(null) }
     var showTask by rememberSaveable(state.callId) { mutableStateOf(false) }
     val canUseKeypad = state.phase == CallPhase.ACTIVE && state.canSendDtmf && state.callId != null && onSendDtmf != null
@@ -122,7 +127,16 @@ internal fun CurrentCallCard(
                     Text(listOfNotNull(phase, state.direction?.let { directionLabel(it) }).joinToString(" · "),
                         color = LiveMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                state.detail?.takeIf { !compact && it.isNotBlank() && it != phase }?.let {
+                if (!expanded) state.liveTranscript.lastOrNull { it.text.isNotBlank() }?.let { latest ->
+                    Row(Modifier.fillMaxWidth().testTag("call-current-latest"),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(callTranscriptSpeakerLabel(latest.role)), color = LiveMuted, fontSize = 11.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 80.dp))
+                        Text(latest.text, color = LiveInk, fontSize = 11.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    }
+                }
+                state.detail?.takeIf { (expanded || state.liveTranscript.none { line -> line.text.isNotBlank() }) && !compact && it.isNotBlank() && it != phase }?.let {
                     Text(it, color = LiveMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -154,7 +168,7 @@ internal fun CurrentCallCard(
                 Box(Modifier.size(44.dp).background(Color(0xFFE4EBE5), CircleShape), contentAlignment = Alignment.Center) {
                     Icon(MikaIcons.Spark, null, Modifier.size(25.dp), tint = Color(0xFF53765C))
                 }
-                Text("您的电话助手", color = LiveInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.flash_design_phone_assistant), color = LiveInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
             Column(Modifier.weight(1f).fillMaxWidth().background(LiveWash, RoundedCornerShape(27.dp))
                 .padding(if (compact) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
@@ -173,7 +187,7 @@ internal fun CurrentCallCard(
                     .padding(if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 10.dp)) {
                     header()
                     LiveCallTranscript(state.callId, state.liveTranscript, transcriptRequest, compact,
-                        Modifier.weight(1f), showHeading = !compact, fillViewport = true, onExpand = {
+                        Modifier.weight(1f), showHeading = !compact, fillViewport = true, viewport = transcriptViewport, onExpand = {
                             transcriptRequest++
                             onTranscript()
                         })
@@ -223,6 +237,33 @@ internal fun CurrentCallCard(
     }
 }
 
+/** Reading position and follow mode belong to a call, including across collapse and recreation. */
+@Stable
+internal class LiveTranscriptViewport(
+    scrollPosition: Int = 0,
+    expandedInitially: Boolean = false,
+    initializedInitially: Boolean = false,
+    followingInitially: Boolean = true,
+    contentInitially: Int = 0,
+) {
+    val scroll = ScrollState(scrollPosition)
+    var expanded by mutableStateOf(expandedInitially)
+    var initialized by mutableStateOf(initializedInitially)
+    var following by mutableStateOf(followingInitially)
+    var contentSignature by mutableIntStateOf(contentInitially)
+
+    companion object {
+        val Saver = listSaver<LiveTranscriptViewport, Any>(
+            save = { listOf(it.scroll.value, it.expanded, it.initialized, it.following, it.contentSignature) },
+            restore = { LiveTranscriptViewport(it[0] as Int, it[1] as Boolean, it[2] as Boolean, it[3] as Boolean, it[4] as Int) },
+        )
+    }
+}
+
+@Composable
+private fun rememberLiveTranscriptViewport(callId: String?): LiveTranscriptViewport =
+    rememberSaveable(callId, saver = LiveTranscriptViewport.Saver) { LiveTranscriptViewport() }
+
 @Composable
 internal fun LiveCallTranscript(
     callId: String?,
@@ -233,9 +274,25 @@ internal fun LiveCallTranscript(
     showHeading: Boolean = true,
     onExpand: (() -> Unit)? = null,
     fillViewport: Boolean = false,
+    viewport: LiveTranscriptViewport? = null,
 ) {
-    var expanded by rememberSaveable(callId) { mutableStateOf(false) }
+    val reading = viewport ?: rememberLiveTranscriptViewport(callId)
+    var expanded by reading::expanded
+    val scroll = reading.scroll
     LaunchedEffect(callId, expandRequest) { if (expandRequest > 0) expanded = true }
+    // A growing transcript must not change the follow decision using the *new* scroll range.
+    // Only movement within an unchanged range represents the reader leaving/returning to the end.
+    LaunchedEffect(reading) {
+        var previousMaximum = scroll.maxValue
+        var previousPosition = scroll.value
+        snapshotFlow { scroll.value to scroll.maxValue }.collect { (position, maximum) ->
+            if (maximum == previousMaximum && position != previousPosition) {
+                reading.following = maximum - position <= 24
+            }
+            previousMaximum = maximum
+            previousPosition = position
+        }
+    }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (showHeading) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.calls_live_transcript), color = LiveMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
@@ -247,9 +304,20 @@ internal fun LiveCallTranscript(
                 Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(16.dp), tint = Color(0xFF167447))
             }
         }
-        val scroll = rememberScrollState()
         val visibleLines = if (expanded) lines else lines.takeLast(if (compact) 1 else 3)
-        LaunchedEffect(callId, lines.size, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+        val contentSignature = visibleLines.hashCode()
+        LaunchedEffect(reading, contentSignature) {
+            val newContent = !reading.initialized || reading.contentSignature != contentSignature
+            reading.contentSignature = contentSignature
+            reading.initialized = true
+            if (newContent && reading.following) {
+                // Wait for the new bubbles to be measured. Layout-only changes and restored content
+                // never enter this branch, so rotation cannot overwrite a restored reading offset.
+                withFrameNanos { }
+                withFrameNanos { }
+                if (reading.following) scroll.scrollTo(scroll.maxValue)
+            }
+        }
         Column(Modifier.then(if (fillViewport) Modifier.weight(1f) else Modifier.heightIn(max = if (compact) 80.dp else 160.dp)).fillMaxWidth()
             .background(LiveWash, RoundedCornerShape(17.dp)).verticalScroll(scroll)
             .padding(if (compact) 8.dp else 10.dp).testTag("call-live-transcript"),

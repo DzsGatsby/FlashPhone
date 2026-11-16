@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">Первые слова после ответа на звонок</string>
     <string name="flash_design_instructions_note">Как отвечать в разных ситуациях</string>
     <string name="flash_design_voice_clone_note">Знакомый голос для естественных ответов</string>
+    <string name="flash_design_phone_assistant">Ваш телефонный помощник</string>
 </resources>

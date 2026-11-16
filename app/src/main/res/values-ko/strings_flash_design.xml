@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">전화를 받은 뒤 처음 하는 말</string>
     <string name="flash_design_instructions_note">상황별 응답 방법</string>
     <string name="flash_design_voice_clone_note">익숙한 목소리로 더 자연스럽게</string>
+    <string name="flash_design_phone_assistant">전화 도우미</string>
 </resources>

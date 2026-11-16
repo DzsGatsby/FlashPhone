@@ -150,7 +150,7 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
             screenshot("native-helper-recovery.png")
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            compose.onNodeWithTag("call-settings-panel-close").performScrollTo().performClick()
+            compose.onNodeWithTag("call-settings-panel-close").assertIsDisplayed().performClick()
             compose.onNodeWithTag("call-tab-settings").assertIsDisplayed()
             assertWorkspaceNavigationVisible(compose)
             selectWorkspace("task")

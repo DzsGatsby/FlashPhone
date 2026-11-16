@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">電話に出て最初に話す言葉</string>
     <string name="flash_design_instructions_note">状況に応じた応答方法</string>
     <string name="flash_design_voice_clone_note">聞き慣れた声で、自然な応答</string>
+    <string name="flash_design_phone_assistant">電話アシスタント</string>
 </resources>

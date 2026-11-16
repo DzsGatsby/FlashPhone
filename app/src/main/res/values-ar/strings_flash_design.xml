@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">أول ما يُقال بعد الرد</string>
     <string name="flash_design_instructions_note">كيفية الرد في المواقف المختلفة</string>
     <string name="flash_design_voice_clone_note">صوت مألوف لردود طبيعية</string>
+    <string name="flash_design_phone_assistant">مساعدك الهاتفي</string>
 </resources>

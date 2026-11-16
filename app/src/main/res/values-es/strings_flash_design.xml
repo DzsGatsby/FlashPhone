@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">Las primeras palabras al responder</string>
     <string name="flash_design_instructions_note">Cómo responder en distintas situaciones</string>
     <string name="flash_design_voice_clone_note">Una voz familiar para respuestas naturales</string>
+    <string name="flash_design_phone_assistant">Su asistente telefónico</string>
 </resources>

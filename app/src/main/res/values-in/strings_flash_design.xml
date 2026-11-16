@@ -22,4 +22,5 @@
     <string name="flash_design_greeting_note">Ucapan pertama setelah menjawab</string>
     <string name="flash_design_instructions_note">Cara merespons dalam berbagai situasi</string>
     <string name="flash_design_voice_clone_note">Suara yang akrab untuk respons alami</string>
+    <string name="flash_design_phone_assistant">Asisten telepon Anda</string>
 </resources>

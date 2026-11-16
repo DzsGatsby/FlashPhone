@@ -3,6 +3,8 @@ package com.wangzan101.mika.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,7 +59,10 @@ import com.wangzan101.mika.ui.theme.FlashPhoneSheetSystemBars
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.MikaType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -90,6 +95,7 @@ internal fun CallHistorySection(
     onSummarize: (String) -> Unit = {},
     onCancelSummary: (String) -> Unit = {},
     onConfigureSummary: () -> Unit = {},
+    exportStore: HistoryExportStore? = null,
 ) {
     val c = MikaTheme.colors
     val context = LocalContext.current
@@ -106,7 +112,12 @@ internal fun CallHistorySection(
     var showStatus by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<CallActionResult?>(null) }
-    var exportPayload by rememberSaveable { mutableStateOf<String?>(null) }
+    // Saved state contains no transcript: the encrypted snapshot survives the document picker.
+    var exportToken by rememberSaveable { mutableStateOf<String?>(null) }
+    var exportTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var exportPreparing by remember { mutableStateOf(false) }
+    val exports = remember(context.applicationContext, exportStore) { exportStore ?: HistoryExportStore.forContext(context) }
+    val canExport = !exportPreparing && exportToken == null
     val failure = stringResource(R.string.calls_action_failed)
     val deleted = stringResource(R.string.calls_history_deleted)
     val cleared = stringResource(R.string.flash_audit_cleared)
@@ -117,15 +128,66 @@ internal fun CallHistorySection(
     val exportFailed = stringResource(R.string.flash_history_export_failed)
     val searchHint = stringResource(R.string.flash_history_search_hint)
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        val payload = exportPayload
-        exportPayload = null
-        if (uri != null && payload != null) scope.launch {
+        val token = exportToken
+        if (uri == null) {
+            exportToken = null
+            exportTarget = null
+            if (token != null) scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                withContext(NonCancellable + Dispatchers.IO) { exports.discard(token) }
+            }
+        } else if (token == null) {
+            feedback = CallActionResult(false, exportFailed)
+        } else {
+            // A provider may support a grant that survives process death while writing resumes.
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            exportTarget = uri.toString()
+        }
+    }
+    LaunchedEffect(exports, exportToken) {
+        withContext(Dispatchers.IO) { exports.cleanup(setOfNotNull(exportToken)) }
+    }
+    LaunchedEffect(exports, exportToken, exportTarget) {
+        val token = exportToken ?: return@LaunchedEffect
+        val target = exportTarget ?: return@LaunchedEffect
+        val uri = Uri.parse(target)
+        val ok = withContext(NonCancellable + Dispatchers.IO) {
             try {
-                withContext(Dispatchers.IO) {
-                    checkNotNull(context.contentResolver.openOutputStream(uri)).bufferedWriter(Charsets.UTF_8).use { it.write(payload) }
-                }
+                exports.deliver(token) { checkNotNull(context.contentResolver.openOutputStream(uri, "wt")) }
+            } catch (_: Exception) { false }
+            finally {
+                runCatching { context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            }
+        }
+        if (!ok) feedback = CallActionResult(false, exportFailed)
+        // If recreation canceled this effect, the receipt remains for its replacement to observe.
+        if (exportToken == token && exportTarget == target) {
+            exportToken = null
+            exportTarget = null
+            withContext(NonCancellable + Dispatchers.IO) { exports.discard(token) }
+        }
+    }
+    fun beginExport(name: String, text: () -> String) {
+        if (exportPreparing || exportToken != null) return
+        exportPreparing = true
+        scope.launch {
+            var staged: String? = null
+            var awaitingResult = false
+            try {
+                withContext(NonCancellable + Dispatchers.IO) { staged = exports.create(text()) }
+                ensureActive()
+                exportToken = staged
+                exportTarget = null
+                export.launch(name)
+                awaitingResult = true
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { feedback = CallActionResult(false, exportFailed) }
+            finally {
+                exportPreparing = false
+                if (!awaitingResult) {
+                    if (exportToken == staged) exportToken = null
+                    staged?.let { token -> withContext(NonCancellable + Dispatchers.IO) { exports.discard(token) } }
+                }
+            }
         }
     }
     // Home links name a real record. A new explicit target takes priority over saved review filters.
@@ -197,10 +259,8 @@ internal fun CallHistorySection(
                     text = { Text(stringResource(R.string.flash_history_export)) },
                     onClick = {
                         showManagement = false
-                        exportPayload = history.joinToString("\n\n────────\n\n") { historyExport(context, it) }
-                        try { export.launch("Flash-phone-history.txt") }
-                        catch (_: Exception) { exportPayload = null; feedback = CallActionResult(false, exportFailed) }
-                    }, enabled = history.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-export-all"),
+                        beginExport("Flash-phone-history.txt") { history.joinToString("\n\n────────\n\n") { historyExport(context, it) } }
+                    }, enabled = history.isNotEmpty() && canExport, modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-export-all"),
                 )
                 if (onClearAll != null) DropdownMenuItem(
                     text = { Text(stringResource(R.string.flash_audit_clear_all), color = MaterialTheme.colorScheme.error) },
@@ -305,9 +365,7 @@ internal fun CallHistorySection(
                                 else feedback = CallActionResult(false, failure)
                             },
                             onExport = {
-                                exportPayload = historyExport(context, record)
-                                try { export.launch("Flash-phone-${record.startedAtMs}.txt") }
-                                catch (_: Exception) { exportPayload = null; feedback = CallActionResult(false, exportFailed) }
+                                beginExport("Flash-phone-${record.startedAtMs}.txt") { historyExport(context, record) }
                             },
                             onOpenRecording = onOpenRecording, onCloseRecording = onCloseRecording,
                             playbackEnabled = playbackEnabled && pendingDelete != record.id && !pendingClearAll,

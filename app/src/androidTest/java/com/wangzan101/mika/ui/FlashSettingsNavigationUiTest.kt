@@ -146,7 +146,7 @@ class FlashSettingsNavigationUiTest {
     }
 
     private fun closePanel() {
-        compose.onNodeWithTag("call-settings-panel-close").performScrollTo().performClick()
+        compose.onNodeWithTag("call-settings-panel-close").assertIsDisplayed().performClick()
         compose.onNodeWithTag("call-settings-panel").assertDoesNotExist()
         assertSettingsHome()
     }

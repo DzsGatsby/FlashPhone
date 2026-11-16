@@ -493,40 +493,29 @@ private fun CallSettingsWorkspace(
             modifier = Modifier.testTag("call-settings-panel"),
         ) {
             FlashPhoneSheetSystemBars()
-            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
-                .padding(horizontal = 23.dp).padding(bottom = 24.dp).imePadding()) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(when (panel) {
-                        FlashSettingsPanel.Device -> R.string.flash_design_device
-                        FlashSettingsPanel.Voice -> R.string.flash_design_voice
-                        FlashSettingsPanel.Sim -> R.string.calls_default_sim_settings
-                    }), Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-                    IconButton(onClick = { settingsPanel = null }, modifier = Modifier.testTag("call-settings-panel-close")) {
-                        Icon(MikaIcons.Close, stringResource(R.string.calls_cancel))
-                    }
-                }
-                    FlashSystemCenter(
-                                panel = panel,
-                                config = config,
-                                state = state,
-                                ready = ready,
-                                openDeviceRequest = deviceNavigation,
-                                canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
-                                stopBusy = controlBusy || settingsBusy,
-                                device = device,
-                                canStartStandby = canStartStandby,
-                                onPrepare = prepare,
-                                onStop = { perform(priority = true) { runtime.stop() } },
-                                onHelperSetup = onHelperSetup,
-                                onStartStandby = startStandby,
-                                onCredentials = { dialog = CallDialog.Credentials },
-                                onProfile = { dialog = CallDialog.Profile },
-                                onVoiceClone = onVoiceClone,
-                                onVerifyAudio = { verified ->
-                                    scope.launch { save { it.copy(audioVerified = verified, autoAnswer = verified && it.autoAnswer) } }
-                                },
-                                onDefaultSim = { id -> scope.launch { save { it.copy(defaultOutgoingSimId = id) } } },
-                            )
+            FlashSettingsPanelContent(panel, feedback, onDismiss = { settingsPanel = null }) {
+                FlashSystemCenter(
+                    panel = panel,
+                    config = config,
+                    state = state,
+                    ready = ready,
+                    openDeviceRequest = deviceNavigation,
+                    canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
+                    stopBusy = controlBusy || settingsBusy,
+                    device = device,
+                    canStartStandby = canStartStandby,
+                    onPrepare = prepare,
+                    onStop = { perform(priority = true) { runtime.stop() } },
+                    onHelperSetup = onHelperSetup,
+                    onStartStandby = startStandby,
+                    onCredentials = { dialog = CallDialog.Credentials },
+                    onProfile = { dialog = CallDialog.Profile },
+                    onVoiceClone = onVoiceClone,
+                    onVerifyAudio = { verified ->
+                        scope.launch { save { it.copy(audioVerified = verified, autoAnswer = verified && it.autoAnswer) } }
+                    },
+                    onDefaultSim = { id -> scope.launch { save { it.copy(defaultOutgoingSimId = id) } } },
+                )
             }
         }
     }
