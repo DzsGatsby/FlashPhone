@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">錄音儲存中</string>
     <string name="flash_workspace_no_recording">無錄音</string>
     <string name="flash_workspace_to_review">待處理</string>
-    <string name="flash_workspace_answering">接聽</string>
+    <string name="flash_workspace_answering">規則</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">決定哪些電話交給 AI，以及它需要知道什麼。</string>
     <string name="flash_workspace_pause_15_min">暫停 15 分鐘</string>
     <string name="flash_workspace_pause_1_hour">暫停 1 小時</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">首頁</string>
     <string name="flash_workspace_history">紀錄</string>
     <string name="flash_workspace_call">外撥</string>
-    <string name="flash_workspace_answer">接聽</string>
+    <string name="flash_workspace_answer">規則</string>
     <string name="flash_workspace_setup">設定</string>
     <string name="flash_history_detail">通話詳情</string>
     <string name="flash_history_previous">上一通電話</string>

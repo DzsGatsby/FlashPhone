@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">Menyimpan rekaman</string>
     <string name="flash_workspace_no_recording">Tanpa rekaman</string>
     <string name="flash_workspace_to_review">Belum ditinjau</string>
-    <string name="flash_workspace_answering">Penerimaan</string>
+    <string name="flash_workspace_answering">Aturan</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">Pilih panggilan yang dijawab AI dan informasi yang perlu diketahuinya.</string>
     <string name="flash_workspace_pause_15_min">Jeda 15 menit</string>
     <string name="flash_workspace_pause_1_hour">Jeda 1 jam</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">Beranda</string>
     <string name="flash_workspace_history">Riwayat</string>
     <string name="flash_workspace_call">Telepon</string>
-    <string name="flash_workspace_answer">Terima</string>
+    <string name="flash_workspace_answer">Aturan</string>
     <string name="flash_workspace_setup">Setelan</string>
     <string name="flash_history_detail">Detail panggilan</string>
     <string name="flash_history_previous">Panggilan sebelumnya</string>

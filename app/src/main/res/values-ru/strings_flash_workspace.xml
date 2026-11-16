@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">Сохранение записи</string>
     <string name="flash_workspace_no_recording">Нет записи</string>
     <string name="flash_workspace_to_review">К обработке</string>
-    <string name="flash_workspace_answering">Приём звонков</string>
+    <string name="flash_workspace_answering">Правила</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">Выберите, на какие звонки отвечает AI и что ему нужно знать.</string>
     <string name="flash_workspace_pause_15_min">Пауза на 15 мин</string>
     <string name="flash_workspace_pause_1_hour">Пауза на 1 час</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">Главная</string>
     <string name="flash_workspace_history">Журнал</string>
     <string name="flash_workspace_call">Звонок</string>
-    <string name="flash_workspace_answer">Приём</string>
+    <string name="flash_workspace_answer">Правила</string>
     <string name="flash_workspace_setup">Настройка</string>
     <string name="flash_history_detail">Сведения о звонке</string>
     <string name="flash_history_previous">Предыдущий звонок</string>

@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">녹음 저장 중</string>
     <string name="flash_workspace_no_recording">녹음 없음</string>
     <string name="flash_workspace_to_review">미처리</string>
-    <string name="flash_workspace_answering">전화 응답</string>
+    <string name="flash_workspace_answering">규칙</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">AI가 응답할 전화와 알아야 할 정보를 정하세요.</string>
     <string name="flash_workspace_pause_15_min">15분 일시 중지</string>
     <string name="flash_workspace_pause_1_hour">1시간 일시 중지</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">홈</string>
     <string name="flash_workspace_history">기록</string>
     <string name="flash_workspace_call">발신</string>
-    <string name="flash_workspace_answer">응답</string>
+    <string name="flash_workspace_answer">규칙</string>
     <string name="flash_workspace_setup">설정</string>
     <string name="flash_history_detail">통화 상세</string>
     <string name="flash_history_previous">이전 통화</string>

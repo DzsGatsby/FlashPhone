@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">جارٍ حفظ التسجيل</string>
     <string name="flash_workspace_no_recording">لا يوجد تسجيل</string>
     <string name="flash_workspace_to_review">للمتابعة</string>
-    <string name="flash_workspace_answering">الرد على المكالمات</string>
+    <string name="flash_workspace_answering">القواعد</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">اختر المكالمات التي يرد عليها AI والمعلومات التي يحتاجها.</string>
     <string name="flash_workspace_pause_15_min">إيقاف مؤقت لمدة 15 دقيقة</string>
     <string name="flash_workspace_pause_1_hour">إيقاف مؤقت لمدة ساعة</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">الرئيسية</string>
     <string name="flash_workspace_history">السجل</string>
     <string name="flash_workspace_call">اتصال</string>
-    <string name="flash_workspace_answer">الرد</string>
+    <string name="flash_workspace_answer">القواعد</string>
     <string name="flash_workspace_setup">الإعداد</string>
     <string name="flash_history_detail">تفاصيل المكالمة</string>
     <string name="flash_history_previous">المكالمة السابقة</string>

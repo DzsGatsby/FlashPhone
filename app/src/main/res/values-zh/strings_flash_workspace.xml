@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">录音归档中</string>
     <string name="flash_workspace_no_recording">无录音</string>
     <string name="flash_workspace_to_review">待处理</string>
-    <string name="flash_workspace_answering">接听</string>
+    <string name="flash_workspace_answering">规则</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">决定哪些电话交给 AI，以及它需要知道什么。</string>
     <string name="flash_workspace_pause_15_min">暂停 15 分钟</string>
     <string name="flash_workspace_pause_1_hour">暂停 1 小时</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">首页</string>
     <string name="flash_workspace_history">记录</string>
     <string name="flash_workspace_call">外呼</string>
-    <string name="flash_workspace_answer">接听</string>
+    <string name="flash_workspace_answer">规则</string>
     <string name="flash_workspace_setup">设置</string>
     <string name="flash_history_detail">通话详情</string>
     <string name="flash_history_previous">上一条通话</string>

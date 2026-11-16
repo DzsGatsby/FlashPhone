@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">録音を保存中</string>
     <string name="flash_workspace_no_recording">録音なし</string>
     <string name="flash_workspace_to_review">未対応</string>
-    <string name="flash_workspace_answering">着信応答</string>
+    <string name="flash_workspace_answering">ルール</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">AI が応答する電話と、伝えておく情報を設定します。</string>
     <string name="flash_workspace_pause_15_min">15分間停止</string>
     <string name="flash_workspace_pause_1_hour">1時間停止</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">ホーム</string>
     <string name="flash_workspace_history">履歴</string>
     <string name="flash_workspace_call">発信</string>
-    <string name="flash_workspace_answer">応答</string>
+    <string name="flash_workspace_answer">ルール</string>
     <string name="flash_workspace_setup">設定</string>
     <string name="flash_history_detail">通話の詳細</string>
     <string name="flash_history_previous">前の通話</string>

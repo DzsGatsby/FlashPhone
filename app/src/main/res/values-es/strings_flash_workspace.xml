@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">Guardando grabación</string>
     <string name="flash_workspace_no_recording">Sin grabación</string>
     <string name="flash_workspace_to_review">Pendiente</string>
-    <string name="flash_workspace_answering">Respuesta</string>
+    <string name="flash_workspace_answering">Reglas</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">Elige qué llamadas responde AI y qué necesita saber.</string>
     <string name="flash_workspace_pause_15_min">Pausar 15 min</string>
     <string name="flash_workspace_pause_1_hour">Pausar 1 hora</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">Inicio</string>
     <string name="flash_workspace_history">Historial</string>
     <string name="flash_workspace_call">Llamar</string>
-    <string name="flash_workspace_answer">Responder</string>
+    <string name="flash_workspace_answer">Reglas</string>
     <string name="flash_workspace_setup">Configurar</string>
     <string name="flash_history_detail">Detalles de la llamada</string>
     <string name="flash_history_previous">Llamada anterior</string>

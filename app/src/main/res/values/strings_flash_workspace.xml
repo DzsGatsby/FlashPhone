@@ -26,7 +26,7 @@
     <string name="flash_workspace_saving_recording">Saving recording</string>
     <string name="flash_workspace_no_recording">No recording</string>
     <string name="flash_workspace_to_review">To review</string>
-    <string name="flash_workspace_answering">Answering</string>
+    <string name="flash_workspace_answering">Rules</string>
     <string name="flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know">Choose which calls AI answers and what it needs to know.</string>
     <string name="flash_workspace_pause_15_min">Pause 15 min</string>
     <string name="flash_workspace_pause_1_hour">Pause 1 hour</string>
@@ -40,7 +40,7 @@
     <string name="flash_workspace_home">Home</string>
     <string name="flash_workspace_history">History</string>
     <string name="flash_workspace_call">Call</string>
-    <string name="flash_workspace_answer">Answer</string>
+    <string name="flash_workspace_answer">Rules</string>
     <string name="flash_workspace_setup">Setup</string>
     <string name="flash_history_detail">Call details</string>
     <string name="flash_history_previous">Previous call</string>

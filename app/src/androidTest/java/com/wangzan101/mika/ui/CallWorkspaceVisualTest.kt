@@ -168,7 +168,7 @@ class CallWorkspaceVisualTest {
 internal fun assertWorkspaceNavigationVisible(compose: ComposeTestRule) {
     val tabs = compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
     val count = tabs.fetchSemanticsNodes().size
-    assertEquals("The selected workspace exposes 外呼、记录、接听、设置", 4, count)
+    assertEquals("The selected workspace exposes 外呼、记录、规则、设置", 4, count)
     for (route in listOf("task", "history", "receive", "settings")) {
         compose.onNodeWithTag("call-tab-$route").assertIsDisplayed()
     }

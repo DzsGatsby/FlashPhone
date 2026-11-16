@@ -284,8 +284,11 @@ private fun CallSettingsWorkspace(
                             onSelect = ::selectTab,
                         )
                     }
-                    Column(Modifier.weight(1f).fillMaxHeight().then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White).statusBarsPadding() else Modifier)) {
-                        if (tab != CallWorkspaceTab.Task) FlashWorkspaceHeader(
+                    val showWorkspaceHeader = tab == CallWorkspaceTab.Settings || tab == CallWorkspaceTab.Home
+                    Column(Modifier.weight(1f).fillMaxHeight()
+                        .then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White) else Modifier)
+                        .then(if (!showWorkspaceHeader) Modifier.statusBarsPadding() else Modifier)) {
+                        if (showWorkspaceHeader) FlashWorkspaceHeader(
                             title = tab.title(),
                             standalone = standalone,
                             onBack = onBack,
