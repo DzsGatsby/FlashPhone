@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_dtmf_status_label">通话状态</string>
+    <string name="calls_dtmf_open">按键</string>
+    <string name="calls_dtmf_title">通话按键</string>
+    <string name="calls_dtmf_close">关闭</string>
+    <string name="calls_dtmf_batch">连续输入</string>
+    <string name="calls_dtmf_hint">按下即发送，请按语音提示操作。</string>
+    <string name="calls_dtmf_batch_hint">最多输入 32 个按键，再点发送。</string>
+    <string name="calls_dtmf_input">0–9、* 或 #</string>
+    <string name="calls_dtmf_delete">删除</string>
+    <string name="calls_dtmf_send">发送</string>
+    <string name="calls_dtmf_sending">正在发送…</string>
+    <string name="calls_dtmf_sent">按键已发送</string>
+    <string name="calls_dtmf_failed">按键发送失败，请重试。</string>
+    <string name="calls_dtmf_invalid">仅支持 0–9、*、#，最多 32 个按键。</string>
+</resources>

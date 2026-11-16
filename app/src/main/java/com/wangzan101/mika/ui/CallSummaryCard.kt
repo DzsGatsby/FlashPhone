@@ -137,7 +137,7 @@ private fun SummaryGroup(record: CallRecord, group: String, @StringRes label: In
                         Text(evidence.quote, style = MikaType.Body, color = c.ink)
                         if (line != null) {
                             Text(stringResource(R.string.call_summary_saved_original,
-                                stringResource(if (line.role == "assistant") R.string.app_name else R.string.calls_caller)),
+                                stringResource(callTranscriptSpeakerLabel(line.role))),
                                 style = MikaType.Hint, color = c.ink3)
                             Text(line.text, style = MikaType.Body, color = c.ink2)
                         } else Text(stringResource(R.string.call_summary_source_missing), style = MikaType.Caption, color = c.ink3)

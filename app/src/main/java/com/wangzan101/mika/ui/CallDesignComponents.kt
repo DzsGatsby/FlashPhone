@@ -282,14 +282,18 @@ internal fun CallExpandIcon(expanded: Boolean) {
     )
 }
 
-/**
- * Structured conversation turn bubble for both live transcripts and history review.
- */
+internal fun callTranscriptSpeakerLabel(role: String): Int = when (role) {
+    "assistant" -> R.string.app_name
+    "system" -> R.string.calls_dtmf_status_label
+    else -> R.string.calls_caller
+}
+
+/** Structured conversation turn bubble for both live transcripts and history review. */
 @Composable
 internal fun CallTranscriptText(line: CallTranscriptLine, turnNumber: Int? = null) {
     val c = MikaTheme.colors
     val isAssistant = line.role == "assistant"
-    val speakerLabel = stringResource(if (isAssistant) R.string.app_name else R.string.calls_caller)
+    val speakerLabel = stringResource(callTranscriptSpeakerLabel(line.role))
     val bubbleBg = c.bg
     val speakerColor = c.ink2
     val shape = RoundedCornerShape(4.dp)

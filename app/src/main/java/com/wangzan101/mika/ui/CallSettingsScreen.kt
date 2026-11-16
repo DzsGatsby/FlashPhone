@@ -316,6 +316,7 @@ private fun CallSettingsWorkspace(
                             selectTab(CallWorkspaceTab.Receive)
                             liveNavigation++
                         },
+                        onSendDtmf = { expectedCallId, digits -> runtime.sendDtmf(expectedCallId, digits) },
                     )
                 }
                 if (pendingLockedDial != null) {
@@ -555,11 +556,28 @@ internal fun CurrentCallCard(
     onTakeover: () -> Unit,
     onCancelAuto: () -> Unit,
     onTranscript: () -> Unit,
+    onSendDtmf: (suspend (String, String) -> CallActionResult)? = null,
 ) {
     val c = MikaTheme.colors
     val screen = LocalConfiguration.current
     val compact = screen.screenHeightDp < 500 || screen.fontScale >= 1.5f
     var transcriptRequest by rememberSaveable(state.callId) { mutableIntStateOf(0) }
+    var keypadCallId by remember { mutableStateOf<String?>(null) }
+    val canUseKeypad = state.phase == CallPhase.ACTIVE && state.canSendDtmf && state.callId != null && onSendDtmf != null
+    LaunchedEffect(state.callId, state.phase, canUseKeypad) {
+        if (!canUseKeypad || keypadCallId != state.callId) keypadCallId = null
+    }
+    if (canUseKeypad && keypadCallId == state.callId) {
+        // Removing the dialog cancels its coroutine and discards input; it never controls hangup.
+        key(keypadCallId) {
+            CallDtmfKeypadDialog(
+                callId = checkNotNull(keypadCallId),
+                externallyBusy = state.dtmfBusy,
+                onDismiss = { keypadCallId = null },
+                onSend = checkNotNull(onSendDtmf),
+            )
+        }
+    }
     val cancelAuto = state.autoAnswerStage == CallAutoAnswerStage.COUNTDOWN ||
         state.autoAnswerStage == CallAutoAnswerStage.PREPARING
     val ringing = state.phase == CallPhase.RINGING && state.autoAnswerStage != CallAutoAnswerStage.ANSWERING
@@ -613,6 +631,14 @@ internal fun CurrentCallCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                }
+                if (canUseKeypad) {
+                    TextButton(
+                        onClick = { keypadCallId = state.callId },
+                        enabled = canControl && !state.dtmfBusy,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-dtmf-open"),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    ) { Text(stringResource(R.string.calls_dtmf_open)) }
                 }
                 if (state.aiActive || state.liveTranscript.isNotEmpty()) {
                     IconButton(

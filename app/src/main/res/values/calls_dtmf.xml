@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calls_dtmf_status_label">Call status</string>
+    <string name="calls_dtmf_open">Keypad</string>
+    <string name="calls_dtmf_title">Call keypad</string>
+    <string name="calls_dtmf_close">Close</string>
+    <string name="calls_dtmf_batch">Enter a sequence</string>
+    <string name="calls_dtmf_hint">Each key sends immediately. Follow the voice prompts.</string>
+    <string name="calls_dtmf_batch_hint">Enter up to 32 keys, then tap Send.</string>
+    <string name="calls_dtmf_input">0–9, * or #</string>
+    <string name="calls_dtmf_delete">Delete</string>
+    <string name="calls_dtmf_send">Send</string>
+    <string name="calls_dtmf_sending">Sending…</string>
+    <string name="calls_dtmf_sent">Keys sent</string>
+    <string name="calls_dtmf_failed">Could not send keys. Try again.</string>
+    <string name="calls_dtmf_invalid">Use only 0–9, * and #, up to 32 keys.</string>
+</resources>

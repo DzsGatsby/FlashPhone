@@ -54,6 +54,17 @@ class VoiceBriefingControllerTest {
     }
     private val credentials = VolcRealtimeCredentials(apiKey = "fake-test-only")
 
+    @Test fun `precall conversation strips phone tools even from a reused call config`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        var actual: VolcRealtimeConfig? = null
+        val controller = VoiceBriefingController(this, { _, config -> actual = config; connection }, { Audio() }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(enablePhoneDtmf = true), canContinue = { true }) {}
+        runCurrent()
+        assertEquals(false, actual?.enablePhoneDtmf)
+        controller.cancel()
+        runCurrent()
+    }
+
     @Test fun `authorization waits for audio and provider close and is delivered only once`() = runTest {
         val connection = Connection()
         val audio = Audio()

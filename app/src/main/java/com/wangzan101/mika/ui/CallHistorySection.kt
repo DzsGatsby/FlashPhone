@@ -437,7 +437,7 @@ private fun HistoryDetail(
                 Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("call-history-transcript")) {
                     record.transcript.forEachIndexed { i, line ->
                         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text("${i + 1} · ${stringResource(if (line.role == "assistant") R.string.app_name else R.string.calls_caller)}", style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold), color = if (line.role == "assistant") c.ink2 else c.accent)
+                            Text("${i + 1} · ${stringResource(callTranscriptSpeakerLabel(line.role))}", style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold), color = if (line.role == "user") c.accent else c.ink2)
                             Text(line.text, style = MikaType.Body, color = c.ink)
                         }
                         CallCardDivider()
@@ -543,7 +543,7 @@ internal fun historyExport(context: Context, record: CallRecord): String = build
     appendLine(); appendLine(context.getString(R.string.calls_original_transcript))
     if (record.transcript.isEmpty()) appendLine(context.getString(R.string.calls_no_transcript))
     record.transcript.forEach { line ->
-        appendLine(context.getString(if (line.role == "assistant") R.string.app_name else R.string.calls_caller))
+        appendLine(context.getString(callTranscriptSpeakerLabel(line.role)))
         appendLine(line.text); appendLine()
     }
 }
