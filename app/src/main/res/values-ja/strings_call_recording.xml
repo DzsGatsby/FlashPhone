@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calls_recording_title">通話録音 · このスマホに保存</string>
+    <string name="calls_recording_title">通話録音 · この端末に暗号化して保存</string>
     <string name="calls_recording_partial">録音は一部のみです。保存できなかった音声があります。</string>
     <string name="calls_recording_channels">左：相手の声 · 右：通話に送った AI の声</string>
     <string name="calls_recording_output_note">AI の音声は、このスマホが通話に送った音声の記録です。相手が実際に聞いた内容を証明するものではありません。</string>

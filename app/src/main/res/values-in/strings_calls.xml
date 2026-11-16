@@ -35,7 +35,7 @@
     <string name="calls_all_note">Termasuk nomor di luar daftar dan penelepon tanpa nomor yang ditampilkan</string>
     <string name="calls_allowlist">Nomor masuk yang boleh dijawab otomatis</string>
     <string name="calls_allowlist_empty">Daftar kosong: tidak ada panggilan yang dijawab otomatis kecuali opsi untuk semua panggilan diaktifkan</string>
-    <string name="calls_privacy_note">Audio panggilan hanya dikirim ke Volcengine selama AI menangani panggilan. Rekaman audio tidak disimpan. Transkrip disimpan secara terenkripsi di ponsel ini; Anda dapat mengambil alih kapan saja.</string>
+    <string name="calls_privacy_note">Selama AI menangani panggilan, audio dikirim ke layanan suara yang dikonfigurasi. Transkrip dan rekaman disimpan terenkripsi di ponsel ini; tugas jarak jauh yang diizinkan menyinkronkan hasil dan rekaman ke layanan jarak jauh. Anda dapat mengambil alih kapan saja.</string>
     <string name="calls_history_empty">Belum ada riwayat panggilan AI</string>
     <string name="calls_collapse">Ciutkan</string>
     <string name="calls_transcript">Tampilkan transkrip</string>

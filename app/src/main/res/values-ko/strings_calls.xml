@@ -35,7 +35,7 @@
     <string name="calls_all_note">목록에 없는 번호와 발신 번호가 표시되지 않는 전화도 포함됩니다</string>
     <string name="calls_allowlist">자동 응답을 허용할 번호</string>
     <string name="calls_allowlist_empty">목록이 비어 있으면 모든 수신 전화 받기를 켜지 않는 한 자동으로 받지 않습니다</string>
-    <string name="calls_privacy_note">AI가 통화하는 동안에만 통화 음성이 Volcengine으로 전송됩니다. 녹음은 저장되지 않습니다. 통화 텍스트는 이 휴대전화에 암호화되어 저장되며, 언제든 직접 통화할 수 있습니다.</string>
+    <string name="calls_privacy_note">AI가 통화를 처리하는 동안 오디오가 설정된 음성 서비스로 전송됩니다. 통화 텍스트와 녹음은 이 휴대전화에 암호화되어 저장되며, 승인된 원격 작업의 결과와 녹음은 원격 서비스에 동기화됩니다. 언제든 직접 통화할 수 있습니다.</string>
     <string name="calls_history_empty">아직 AI 통화 기록이 없습니다</string>
     <string name="calls_collapse">접기</string>
     <string name="calls_transcript">통화 텍스트 보기</string>

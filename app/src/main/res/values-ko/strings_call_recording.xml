@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calls_recording_title">통화 녹음 · 이 휴대전화에 저장됨</string>
+    <string name="calls_recording_title">통화 녹음 · 이 휴대전화에 암호화 저장</string>
     <string name="calls_recording_partial">일부 녹음 · 저장하지 못한 오디오가 있습니다.</string>
     <string name="calls_recording_channels">왼쪽: 상대방 · 오른쪽: 통화로 보낸 AI 음성</string>
     <string name="calls_recording_output_note">AI 트랙은 이 휴대전화에서 통화로 보낸 오디오입니다. 상대방이 실제로 들은 내용을 확인하는 자료는 아닙니다.</string>

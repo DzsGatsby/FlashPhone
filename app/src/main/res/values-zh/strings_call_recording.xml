@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calls_recording_title">通话录音 · 仅保存在本机</string>
+    <string name="calls_recording_title">通话录音 · 本机加密保存</string>
     <string name="calls_recording_partial">录音不完整，部分声音未能保存。</string>
     <string name="calls_recording_channels">左声道：对方 · 右声道：AI 发出的声音</string>
     <string name="calls_recording_output_note">AI 声音记录的是本机送入通话的音频，不能单凭录音确认对方实际听到。</string>

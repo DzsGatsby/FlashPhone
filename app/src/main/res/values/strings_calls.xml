@@ -35,7 +35,7 @@
     <string name="calls_all_note">Includes numbers outside the list and unknown callers</string>
     <string name="calls_allowlist">Allowed incoming numbers</string>
     <string name="calls_allowlist_empty">Empty list: no automatic answering unless all callers is enabled</string>
-    <string name="calls_privacy_note">Call audio is sent to Volcengine only during AI handling. No audio recordings are saved. Transcripts stay encrypted on this phone; use Take over at any time.</string>
+    <string name="calls_privacy_note">During AI handling, call audio goes to your configured voice provider. Transcripts and recordings are saved encrypted on this phone; authorized remote tasks sync results and recordings to the remote service. Take over at any time.</string>
     <string name="calls_history_empty">No AI call records yet</string>
     <string name="calls_collapse">Collapse</string>
     <string name="calls_transcript">Show transcript</string>

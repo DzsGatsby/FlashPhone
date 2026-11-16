@@ -53,6 +53,7 @@ import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.ui.components.keepsKeyboard
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
+import com.wangzan101.mika.ui.theme.FlashPhoneSheetSystemBars
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.MikaType
 import kotlinx.coroutines.CancellationException
@@ -327,6 +328,7 @@ internal fun CallHistorySection(
                         contentColor = c.ink,
                         shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
                     ) {
+                        FlashPhoneSheetSystemBars()
                         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                             // Action failures must stay visible above the review scroll, inside the modal.
                             Column(Modifier.fillMaxWidth().testTag("call-history-sheet-feedback")) {

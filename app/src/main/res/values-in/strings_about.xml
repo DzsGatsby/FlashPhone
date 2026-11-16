@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · beri bintang ya</string>
     <string name="about_guide">Panduan &amp; cara berkontribusi</string>
     <string name="about_guide_sub">Mulai memakai; tambahkan pengetahuan aplikasi tanpa perlu coding</string>
-    <string name="about_data_note">Selama AI menangani panggilan, audio dikirim ke layanan suara yang telah Anda atur. Rekaman tidak disimpan; transkrip dienkripsi di ponsel. Pemeriksaan pembaruan terhubung ke GitHub.</string>
+    <string name="about_data_note">Selama AI menangani panggilan, audio dikirim ke layanan suara yang dikonfigurasi. Transkrip dan rekaman disimpan terenkripsi di ponsel ini. Tugas jarak jauh yang diizinkan menyinkronkan hasil dan rekaman ke layanan jarak jauh. Pemeriksaan pembaruan terhubung ke GitHub.</string>
     <string name="about_license_link">Lisensi Apache-2.0</string>
     <string name="about_author">Kode sumber asal © 2026 Wang Zan</string>
     <string name="about_license_title">Lisensi Apache-2.0</string>

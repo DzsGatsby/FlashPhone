@@ -42,6 +42,7 @@ import com.wangzan101.mika.ui.components.*
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.MikaSpace
+import com.wangzan101.mika.ui.theme.FlashPhoneSheetSystemBars
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.MikaType
 import com.wangzan101.mika.ui.theme.FlashPhoneTheme
@@ -491,6 +492,7 @@ private fun CallSettingsWorkspace(
             containerColor = MikaTheme.colors.surface,
             modifier = Modifier.testTag("call-settings-panel"),
         ) {
+            FlashPhoneSheetSystemBars()
             Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
                 .padding(horizontal = 23.dp).padding(bottom = 24.dp).imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {

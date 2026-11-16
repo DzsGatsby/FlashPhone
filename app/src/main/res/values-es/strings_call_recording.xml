@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calls_recording_title">Grabación de llamada · guardada en este teléfono</string>
+    <string name="calls_recording_title">Grabación de llamada · cifrada en este teléfono</string>
     <string name="calls_recording_partial">Grabación parcial · no se pudo guardar parte del audio.</string>
     <string name="calls_recording_channels">Izquierda: interlocutor · derecha: voz de la IA enviada a la llamada</string>
     <string name="calls_recording_output_note">La pista de la IA contiene el audio enviado por este teléfono. No confirma lo que oyó la otra persona.</string>

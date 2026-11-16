@@ -35,7 +35,7 @@
     <string name="calls_all_note">リストにない番号や非通知の着信も含みます</string>
     <string name="calls_allowlist">自動応答を許可する番号</string>
     <string name="calls_allowlist_empty">リストが空の場合、すべての着信への応答を有効にしない限り、自動応答しません</string>
-    <string name="calls_privacy_note">通話音声は AI が対応している間だけ Volcengine に送信されます。録音は保存されません。文字起こしは端末に暗号化して保存されます。いつでも自分で話すことができます。</string>
+    <string name="calls_privacy_note">AI が通話を処理している間、設定済みの音声サービスに音声を送信します。文字起こしと録音はこの端末に暗号化して保存し、許可したリモートタスクの結果と録音はリモートサービスに同期します。いつでも自分で話すことができます。</string>
     <string name="calls_history_empty">AI 通話の履歴はまだありません</string>
     <string name="calls_collapse">折りたたむ</string>
     <string name="calls_transcript">文字起こしを表示</string>

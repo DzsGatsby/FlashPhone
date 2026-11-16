@@ -35,7 +35,7 @@
     <string name="calls_all_note">包含名單外號碼及隱藏號碼的來電</string>
     <string name="calls_allowlist">允許自動接聽的來電號碼</string>
     <string name="calls_allowlist_empty">名單為空：除非啟用接聽所有來電，否則不會自動接聽</string>
-    <string name="calls_privacy_note">僅在 AI 處理通話期間將音訊傳送至火山，不儲存錄音。通話逐字稿會加密儲存在這支手機上，隨時可親自接手。</string>
+    <string name="calls_privacy_note">AI 接管期間，音訊傳送至已設定的語音服務。逐字稿與錄音在本機加密儲存；授權的遠端任務會將結果與錄音同步至遠端服務，可隨時親自接手。</string>
     <string name="calls_history_empty">目前沒有 AI 通話紀錄</string>
     <string name="calls_collapse">收合</string>
     <string name="calls_transcript">顯示通話逐字稿</string>

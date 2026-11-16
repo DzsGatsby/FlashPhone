@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. Depuración inalámbrica y autorrecuperación</string>
     <string name="flash_system_section_permissions">3. Permisos, notificaciones y espera</string>
     <string name="flash_system_section_cloud">4. Credenciales de voz y SIM predeterminada</string>
-    <string name="flash_privacy_recording_note">El audio solo se envía a Volcengine mientras la IA gestiona la llamada. Las grabaciones y transcripciones se cifran en el dispositivo y se detienen al tomar el control.</string>
+    <string name="flash_privacy_recording_note">Durante la atención por IA, el audio se envía al servicio de voz configurado. Las grabaciones de ambas partes y las transcripciones se guardan cifradas en este teléfono. La grabación se detiene al tomar el control. Las tareas remotas autorizadas sincronizan resultados y grabaciones con el servicio remoto.</string>
     <string name="flash_voice_clone_cost">Flash phone solo usa ranuras oficiales existentes. El precio público de una ranura nueva es ¥138 según Volcengine. Flash phone no compra ranuras ni usa vistas previas de pago.</string>
 </resources>

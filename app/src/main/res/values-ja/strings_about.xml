@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · スター歓迎</string>
     <string name="about_guide">ガイドと貢献のしかた</string>
     <string name="about_guide_sub">はじめ方。コードを書かなくてもアプリの知識を追加できます</string>
-    <string name="about_data_note">AI が通話を処理している間だけ、設定済みの音声サービスに通話音声を送信します。録音は保存せず、文字起こしは端末に暗号化して保存します。更新確認時は GitHub に接続します。</string>
+    <string name="about_data_note">AI が通話を処理している間、設定済みの音声サービスに音声を送信します。文字起こしと録音はこの端末に暗号化して保存します。許可したリモートタスクの結果と録音はリモートサービスに同期します。更新確認時は GitHub に接続します。</string>
     <string name="about_license_link">Apache-2.0 ライセンス</string>
     <string name="about_author">ベースとなったコード © 2026 Wang Zan</string>
     <string name="about_license_title">Apache-2.0 ライセンス</string>

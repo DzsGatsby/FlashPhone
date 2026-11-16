@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. ワイヤレスデバッグと自動復旧</string>
     <string name="flash_system_section_permissions">3. 権限・通知・バックグラウンド待機</string>
     <string name="flash_system_section_cloud">4. 音声認証情報とデフォルト SIM</string>
-    <string name="flash_privacy_recording_note">AI が応答している間のみ音声を Volcengine に送信します。双方向録音と文字記録は端末内で暗号化保存され、手動引き継ぎ時に録音は停止します。</string>
+    <string name="flash_privacy_recording_note">AI が通話を処理している間、設定済みの音声サービスに音声を送信します。双方の録音と文字起こしはこの端末に暗号化して保存し、手動引き継ぎ時に録音を停止します。許可したリモートタスクの結果と録音はリモートサービスに同期します。</string>
     <string name="flash_voice_clone_cost">Flash phone は既存の正式スロットのみを使用します。新規有料スロットの公開価格は ¥138（Volcengine コンソール準拠）です。Flash phone がスロット購入や有料試聴を行うことはありません。</string>
 </resources>

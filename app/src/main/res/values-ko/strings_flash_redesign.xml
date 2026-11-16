@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. 무선 디버깅 및 백그라운드 자동 복구</string>
     <string name="flash_system_section_permissions">3. 기본 권한, 알림 및 백그라운드 대기</string>
     <string name="flash_system_section_cloud">4. 실시간 음성 자격 증명 및 기본 SIM</string>
-    <string name="flash_privacy_recording_note">AI가 통화를 담당하는 동안에만 오디오를 Volcengine으로 전송합니다. 양방향 녹음과 대화록은 기기에 암호화되어 저장되며 수동 전환 시 즉시 중단됩니다.</string>
+    <string name="flash_privacy_recording_note">AI가 통화를 처리하는 동안 오디오가 설정된 음성 서비스로 전송됩니다. 양방향 녹음과 통화 텍스트는 이 휴대전화에 암호화되어 저장되며 직접 통화로 전환하면 녹음이 중단됩니다. 승인된 원격 작업의 결과와 녹음은 원격 서비스에 동기화됩니다.</string>
     <string name="flash_voice_clone_cost">Flash phone은 기존 정식 슬롯만 사용합니다. 새 유료 슬롯의 공개 가격은 ¥138(Volcengine 콘솔 기준)입니다. Flash phone은 슬롯을 구매하거나 유료 미리듣기를 호출하지 않습니다.</string>
 </resources>

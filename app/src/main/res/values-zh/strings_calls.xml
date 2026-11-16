@@ -35,7 +35,7 @@
     <string name="calls_all_note">包含名单外号码及隐藏号码</string>
     <string name="calls_allowlist">允许自动接听的号码</string>
     <string name="calls_allowlist_empty">名单为空：未开启接听所有来电时不会自动接听</string>
-    <string name="calls_privacy_note">仅在 AI 接管期间向火山发送通话音频，不保存录音。文字记录加密保存在本机，可随时人工接管。</string>
+    <string name="calls_privacy_note">AI 接管期间，音频发送至已配置的语音服务。转写与录音在本机加密保存；授权的远程任务会将结果与录音同步至远程服务，可随时人工接管。</string>
     <string name="calls_history_empty">暂无 AI 通话记录</string>
     <string name="calls_collapse">收起</string>
     <string name="calls_transcript">展开文字记录</string>

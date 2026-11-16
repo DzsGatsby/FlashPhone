@@ -14,6 +14,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 
 /** Colors from the accepted phone preview, scoped to the phone workspace. */
@@ -165,6 +166,26 @@ fun FlashPhoneTheme(
     ) {
         MaterialTheme(colorScheme = PhoneScheme, shapes = PhoneShapes) {
             CompositionLocalProvider(LocalContentColor provides PhoneColors.ink, content = content)
+        }
+    }
+}
+
+/** Apply the phone palette to the sheet's own window, including in system dark mode. */
+@Composable
+fun FlashPhoneSheetSystemBars() {
+    val view = LocalView.current
+    val dark = MikaTheme.colors.isDark
+    DisposableEffect(view, dark) {
+        val window = generateSequence(view as android.view.View?) { it.parent as? android.view.View }
+            .filterIsInstance<DialogWindowProvider>().firstOrNull()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previousStatus = controller?.isAppearanceLightStatusBars
+        val previousNavigation = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = !dark
+        controller?.isAppearanceLightNavigationBars = !dark
+        onDispose {
+            previousStatus?.let { controller?.isAppearanceLightStatusBars = it }
+            previousNavigation?.let { controller?.isAppearanceLightNavigationBars = it }
         }
     }
 }

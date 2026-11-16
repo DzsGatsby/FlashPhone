@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. التصحيح اللاسلكي والاستعادة التلقائية</string>
     <string name="flash_system_section_permissions">3. الأذونات والإشعارات والاستعداد بالخلفية</string>
     <string name="flash_system_section_cloud">4. بيانات اعتماد الصوت وشريحة SIM الافتراضية</string>
-    <string name="flash_privacy_recording_note">يُرسل الصوت إلى Volcengine فقط أثناء إدارة الذكاء الاصطناعي للمكالمة. تُحفظ التسجيلات والنصوص مشفرة محليًا وتتوقف فور الاستلام اليدوي.</string>
+    <string name="flash_privacy_recording_note">أثناء تولّي الذكاء الاصطناعي للمكالمة، يُرسل الصوت إلى خدمة الصوت التي أعددتها. تُحفظ تسجيلات الطرفين والنصوص مشفّرة على هذا الهاتف، ويتوقف التسجيل عند تولّي المكالمة يدويًا. تُزامن نتائج المهام البعيدة المصرّح بها وتسجيلاتها مع الخدمة البعيدة.</string>
     <string name="flash_voice_clone_cost">يستخدم Flash phone الفتحات الرسمية الحالية فقط. السعر المعلن للفتحة الجديدة هو ¥138 حسب وحدة تحكم Volcengine. لا يشتري Flash phone فتحات ولا يستدعي معاينات مدفوعة.</string>
 </resources>

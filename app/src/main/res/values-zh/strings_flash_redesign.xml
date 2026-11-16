@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. 无线调试与后台无感自动恢复</string>
     <string name="flash_system_section_permissions">3. 基础权限、通知与后台待命</string>
     <string name="flash_system_section_cloud">4. 实时语音凭据与默认 SIM</string>
-    <string name="flash_privacy_recording_note">仅在 AI 接管阶段向火山发送实时语音；本机自动加密保存双向核听录音与文字记录，人工接管后立即停止录制。</string>
+    <string name="flash_privacy_recording_note">AI 接管期间，音频发送至已配置的语音服务；双向录音与转写在本机加密保存，人工接管后停止录音。授权的远程任务会将结果与录音同步至远程服务。</string>
     <string name="flash_voice_clone_cost">Flash phone 仅使用已有的正式槽位。新付费槽位公开价 ¥138，实际以火山控制台为准。Flash phone 不代开通服务、不购买槽位，也不调用付费试听。</string>
 </resources>

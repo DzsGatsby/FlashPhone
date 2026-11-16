@@ -44,6 +44,7 @@ import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.ui.components.*
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
+import com.wangzan101.mika.ui.theme.FlashPhoneSheetSystemBars
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import com.wangzan101.mika.ui.theme.MikaType
@@ -324,6 +325,7 @@ internal fun CallTaskScreen(
                 containerColor = c.bg,
                 modifier = Modifier.testTag("call-text-brief-sheet"),
             ) {
+                FlashPhoneSheetSystemBars()
                 Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
                     .padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("文字交代", style = MaterialTheme.typography.titleLarge, color = c.ink)

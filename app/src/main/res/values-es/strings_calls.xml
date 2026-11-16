@@ -35,7 +35,7 @@
     <string name="calls_all_note">Incluye números que no están en la lista y llamadas con número oculto</string>
     <string name="calls_allowlist">Números autorizados para la respuesta automática</string>
     <string name="calls_allowlist_empty">Lista vacía: solo se contestará automáticamente si se habilita la opción para todas las llamadas</string>
-    <string name="calls_privacy_note">El audio solo se envía a Volcengine mientras la IA atiende la llamada. No se guardan grabaciones. Las transcripciones se guardan cifradas en este teléfono; puedes tomar el control en cualquier momento.</string>
+    <string name="calls_privacy_note">Durante la atención por IA, el audio se envía al servicio de voz configurado. Las transcripciones y grabaciones se guardan cifradas en este teléfono; las tareas remotas autorizadas sincronizan resultados y grabaciones con el servicio remoto. Puedes tomar el control en cualquier momento.</string>
     <string name="calls_history_empty">Todavía no hay llamadas con IA en el historial</string>
     <string name="calls_collapse">Contraer</string>
     <string name="calls_transcript">Mostrar transcripción</string>

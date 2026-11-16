@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · 별은 언제나 환영이에요</string>
     <string name="about_guide">가이드 및 기여 방법</string>
     <string name="about_guide_sub">시작하기, 코딩을 몰라도 앱 지식을 추가할 수 있어요</string>
-    <string name="about_data_note">AI가 통화를 처리하는 동안에만 설정된 음성 서비스로 통화 음성이 전송됩니다. 녹음은 저장되지 않으며 텍스트 기록은 기기에 암호화되어 저장됩니다. 업데이트 확인은 GitHub에 연결합니다.</string>
+    <string name="about_data_note">AI가 통화를 처리하는 동안 오디오가 설정된 음성 서비스로 전송됩니다. 통화 텍스트와 녹음은 이 휴대전화에 암호화되어 저장됩니다. 승인된 원격 작업의 결과와 녹음은 원격 서비스에 동기화됩니다. 업데이트 확인 시 GitHub에 연결합니다.</string>
     <string name="about_license_link">Apache-2.0 라이선스</string>
     <string name="about_author">원본 프로젝트 코드 © 2026 Wang Zan</string>
     <string name="about_license_title">Apache-2.0 라이선스</string>

@@ -21,7 +21,7 @@
     <string name="about_repo_sub">%1$s · las estrellas son bienvenidas</string>
     <string name="about_guide">Guía y cómo contribuir</string>
     <string name="about_guide_sub">Primeros pasos; añade conocimiento de apps aunque no programes</string>
-    <string name="about_data_note">Durante la atención por IA, el audio se envía al servicio de voz configurado. No se guardan grabaciones; las transcripciones se cifran en el teléfono. Las comprobaciones de actualización se conectan a GitHub.</string>
+    <string name="about_data_note">Durante la atención por IA, el audio se envía al servicio de voz configurado. Las transcripciones y grabaciones se guardan cifradas en este teléfono. Las tareas remotas autorizadas sincronizan resultados y grabaciones con el servicio remoto. Las comprobaciones de actualización se conectan a GitHub.</string>
     <string name="about_license_link">Licencia Apache-2.0</string>
     <string name="about_author">Código de origen © 2026 Wang Zan</string>
     <string name="about_license_title">Licencia Apache-2.0</string>

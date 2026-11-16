@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. Wireless Debugging &amp; Auto-Recovery</string>
     <string name="flash_system_section_permissions">3. Permissions, Notifications &amp; Standby</string>
     <string name="flash_system_section_cloud">4. Voice Credentials &amp; Default SIM</string>
-    <string name="flash_privacy_recording_note">Audio is sent to Volcengine only while AI manages the call. Two-way recordings and transcripts are encrypted on-device and stop immediately upon takeover.</string>
+    <string name="flash_privacy_recording_note">During AI handling, audio goes to your configured voice provider. Two-way recordings and transcripts are saved encrypted on this phone. Recording stops upon takeover. Authorized remote tasks sync results and recordings to the remote service.</string>
     <string name="flash_voice_clone_cost">Flash phone uses existing official slots only. Paid slots are listed at ¥138 in the Volcengine console. Flash phone never purchases slots or calls paid previews.</string>
 </resources>

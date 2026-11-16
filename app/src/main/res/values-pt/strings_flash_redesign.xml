@@ -47,6 +47,6 @@
     <string name="flash_system_section_recovery">2. Depuração sem fio e autorrecuperação</string>
     <string name="flash_system_section_permissions">3. Permissões, notificações e espera</string>
     <string name="flash_system_section_cloud">4. Credenciais de voz e SIM padrão</string>
-    <string name="flash_privacy_recording_note">O áudio só é enviado à Volcengine enquanto a IA gerencia a chamada. Gravações e transcrições são criptografadas no aparelho e param ao assumir a chamada.</string>
+    <string name="flash_privacy_recording_note">Durante o atendimento por IA, o áudio vai para o serviço de voz configurado. Gravações dos dois lados e transcrições são salvas criptografadas neste celular. A gravação para quando você assume a chamada. Tarefas remotas autorizadas sincronizam resultados e gravações com o serviço remoto.</string>
     <string name="flash_voice_clone_cost">O Flash phone usa apenas slots oficiais existentes. O preço público de um novo slot é ¥138 conforme o console Volcengine. O Flash phone nunca compra slots nem chama prévias pagas.</string>
 </resources>

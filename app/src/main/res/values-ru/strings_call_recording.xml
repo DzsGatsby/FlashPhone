@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calls_recording_title">Запись звонка · хранится на этом телефоне</string>
+    <string name="calls_recording_title">Запись звонка · зашифрована на этом телефоне</string>
     <string name="calls_recording_partial">Неполная запись · часть аудио не удалось сохранить.</string>
     <string name="calls_recording_channels">Слева: собеседник · справа: голос ИИ, отправленный в звонок</string>
     <string name="calls_recording_output_note">Дорожка ИИ содержит звук, отправленный этим телефоном. Она не подтверждает, что именно услышал собеседник.</string>
