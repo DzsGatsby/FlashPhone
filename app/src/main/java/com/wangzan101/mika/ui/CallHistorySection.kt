@@ -88,6 +88,7 @@ internal fun CallHistorySection(
     val scope = rememberCoroutineScope()
     val listScroll = rememberScrollState()
     var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
+    var selectedDirection by rememberSaveable { mutableStateOf<CallDirection?>(CallDirection.INCOMING) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
@@ -119,12 +120,13 @@ internal fun CallHistorySection(
     LaunchedEffect(initialRecordId) {
         if (initialRecordId != null) {
             filter = HistoryFilter.ALL
+            selectedDirection = null
             query = ""
             selectedId = initialRecordId
             onInitialRecordOpened()
         }
     }
-    val results = remember(history, filter, query, incoming, outgoing) {
+    val results = remember(history, filter, selectedDirection, query, incoming, outgoing) {
         val text = query.trim()
         val digits = text.filter(Char::isDigit).takeIf {
             it.isNotEmpty() && text.all { char -> char.isDigit() || char in "+ ().-" }
@@ -137,7 +139,7 @@ internal fun CallHistorySection(
                 HistoryFilter.RECORDED -> record.recording != null
             }
             val direction = if (record.direction == CallDirection.INCOMING) incoming else outgoing
-            matchesFilter && (text.isEmpty() || record.number.orEmpty().contains(text, ignoreCase = true) ||
+            (selectedDirection == null || record.direction == selectedDirection) && matchesFilter && (text.isEmpty() || record.number.orEmpty().contains(text, ignoreCase = true) ||
                 (digits != null && record.number.orEmpty().filter(Char::isDigit).contains(digits)) ||
                 direction.contains(text, ignoreCase = true) || record.result.contains(text, ignoreCase = true) ||
                 record.transcript.any { it.text.contains(text, ignoreCase = true) } ||
@@ -178,6 +180,14 @@ internal fun CallHistorySection(
             Text(stringResource(R.string.flash_audit_summary_total, history.size), style = MikaType.Caption, color = c.ink3)
             Text(stringResource(R.string.flash_audit_summary_open, history.count { !it.handled }), style = MikaType.Caption, color = c.ink3)
             Text(stringResource(R.string.flash_audit_summary_recorded, history.count { it.recording != null }), style = MikaType.Caption, color = c.ink3)
+        }
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(CallDirection.INCOMING to incoming, CallDirection.OUTGOING to outgoing, null to stringResource(R.string.calls_history_all)).forEach { (direction, label) ->
+                FilterChip(selected = selectedDirection == direction,
+                    onClick = { selectedDirection = direction; selectedId = null },
+                    label = { Text(label) }, modifier = Modifier.heightIn(min = 48.dp)
+                        .testTag("call-history-direction-${direction?.name?.lowercase() ?: "all"}"))
+            }
         }
         OutlinedTextField(
             value = query,

@@ -4,12 +4,15 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.view.WindowInsets
+import android.view.inspector.WindowInspector
+import android.view.inputmethod.InputMethodManager
 import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasAnyAncestor
@@ -48,7 +51,7 @@ class CallWorkspaceVisualTest {
     private val compose = createEmptyComposeRule()
     @get:Rule val rules: TestRule = RuleChain.outerRule(WorkspaceEmulatorOnlyRule()).around(ChineseUi()).around(compose)
 
-    @Test fun homeHistoryReceiveEditorsAndRecoveryAreUsableInChinese() {
+    @Test fun dialerHistoryReceiveEditorsAndRecoveryAreUsableInChinese() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as MikaApp
         assumeTrue("Visual review requires an idle, unconfigured disposable emulator",
             app.calls.state.value.phase == CallPhase.IDLE &&
@@ -59,12 +62,28 @@ class CallWorkspaceVisualTest {
 
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
-            compose.onNodeWithTag("call-page-home").assertIsDisplayed()
+            compose.onNodeWithTag("call-page-task").assertIsDisplayed()
             assertWorkspaceNavigationVisible(compose)
-            screenshot("native-home.png")
+            compose.onNodeWithTag("call-task-text-brief").assertDoesNotExist()
+            val display = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
+            if (display.screenWidthDp < 600 && display.screenHeightDp >= 600 && display.fontScale <= 1.1f) {
+                val callButton = compose.onNodeWithTag("call-start-voice").getUnclippedBoundsInRoot()
+                val nav = compose.onNodeWithTag("call-tab-task").getUnclippedBoundsInRoot()
+                assertTrue("The complete green button must remain above navigation without scrolling", callButton.bottom <= nav.top)
+                compose.onNodeWithText("轻点语音交代 · 长按文字交代").assertIsDisplayed()
+                assertTrue("Text alternative must remain completely above navigation",
+                    compose.onNodeWithTag("call-open-text-brief").getUnclippedBoundsInRoot().bottom <= nav.top)
+            }
+            screenshot("native-dialer-home.png")
+            compose.onNodeWithTag("call-open-text-brief").performScrollTo().performClick()
+            compose.onNodeWithTag("call-text-brief-sheet").assertIsDisplayed()
+            compose.onNodeWithTag("call-task-text-brief").assertIsDisplayed()
+            screenshot("native-dialer-text-sheet.png")
+            compose.onNodeWithText("返回拨号键盘").performScrollTo().performClick()
+            compose.onNodeWithTag("call-text-brief-sheet").assertDoesNotExist()
 
-            // This is the actual dashboard-to-records entry. Empty history must remain honest.
-            compose.onNodeWithTag("call-home-history").performScrollTo().performClick()
+            // Records are reached through the actual primary tab. Empty history must remain honest.
+            selectWorkspace("history")
             compose.onNodeWithText(workspaceText(R.string.calls_history_empty)).performScrollTo().assertIsDisplayed()
             assertWorkspaceNavigationVisible(compose)
             screenshot("native-history-empty.png")
@@ -80,6 +99,7 @@ class CallWorkspaceVisualTest {
             compose.onNodeWithText(workspaceText(R.string.calls_cancel)).performClick()
             compose.onNodeWithTag("call-allowlist").assertDoesNotExist()
             hideWorkspaceKeyboard(scenario)
+            compose.onNodeWithTag("call-page-receive").assertIsDisplayed()
             compose.runOnIdle { assertEquals(settingsBefore, app.calls.settings.state.value) }
 
             compose.onNodeWithTag("call-open-instructions").performScrollTo().performClick()
@@ -117,8 +137,8 @@ class CallWorkspaceVisualTest {
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithTag("call-tab-settings").assertIsDisplayed()
             assertWorkspaceNavigationVisible(compose)
-            selectWorkspace("home")
-            compose.onNodeWithTag("call-page-home").assertIsDisplayed()
+            selectWorkspace("task")
+            compose.onNodeWithTag("call-page-task").assertIsDisplayed()
 
             compose.runOnIdle {
                 assertEquals(instructionsBefore, app.calls.instructions.items.value)
@@ -148,7 +168,10 @@ class CallWorkspaceVisualTest {
 internal fun assertWorkspaceNavigationVisible(compose: ComposeTestRule) {
     val tabs = compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
     val count = tabs.fetchSemanticsNodes().size
-    assertTrue("The workspace must expose its navigation", count > 0)
+    assertEquals("The selected workspace exposes 外呼、记录、接听、设置", 4, count)
+    for (route in listOf("task", "history", "receive", "settings")) {
+        compose.onNodeWithTag("call-tab-$route").assertIsDisplayed()
+    }
     for (index in 0 until count) tabs[index].assertIsDisplayed()
     val labels = compose.onAllNodes(
         SemanticsMatcher.keyIsDefined(SemanticsProperties.Text) and
@@ -180,19 +203,40 @@ internal fun workspaceText(@StringRes id: Int): String =
 
 internal fun workspaceImeVisible(scenario: ActivityScenario<MainActivity>): Boolean {
     var visible = false
-    scenario.onActivity { visible = it.window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true }
-    if (visible) return true
-    // A dialog has its own window: the Activity's insets can remain unchanged while its IME is shown.
-    val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("dumpsys input_method")
-    val state = ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
-    return Regex("\\bmInputShown=true\\b|\\bmIsInputViewShown=true\\b").containsMatchIn(state)
+    scenario.onActivity {
+        // Material dialogs and sheets have their own decor windows; Activity insets alone
+        // cannot describe their keyboard. These are the actual windows in this process.
+        visible = WindowInspector.getGlobalWindowViews().any { root ->
+            root.hasWindowFocus() && root.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+        }
+    }
+    return visible
 }
 
 internal fun hideWorkspaceKeyboard(scenario: ActivityScenario<MainActivity>) {
-    scenario.onActivity {
-        it.currentFocus?.clearFocus()
-        it.window.decorView.windowInsetsController?.hide(WindowInsets.Type.ime())
-    }
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val deadline = android.os.SystemClock.uptimeMillis() + 3_000
+    var hiddenSamples = 0
+    do {
+        scenario.onActivity { activity ->
+            val inputMethod = activity.getSystemService(InputMethodManager::class.java)
+            // A cancelled dialog can disappear from semantics before its window transfers
+            // focus. Re-resolve the CURRENT focused window each time; an old token cannot
+            // hide an IME that has just moved back to the Activity. No BACK events are sent.
+            val focused = WindowInspector.getGlobalWindowViews().filter { it.isAttachedToWindow && it.hasWindowFocus() }
+            val visible = focused.any { it.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true }
+            hiddenSamples = if (visible || focused.isEmpty()) 0 else hiddenSamples + 1
+            if (visible) focused.forEach { root ->
+                root.findFocus()?.clearFocus()
+                root.windowInsetsController?.hide(WindowInsets.Type.ime())
+                root.windowToken?.let { inputMethod.hideSoftInputFromWindow(it, 0) }
+            }
+        }
+        if (hiddenSamples >= 2) break
+        android.os.SystemClock.sleep(100)
+    } while (android.os.SystemClock.uptimeMillis() < deadline)
+    instrumentation.waitForIdleSync()
+    assertTrue("The actual focused window's keyboard must close without navigating", hiddenSamples >= 2 && !workspaceImeVisible(scenario))
 }
 
 internal fun captureWorkspaceScreenshot(name: String) {

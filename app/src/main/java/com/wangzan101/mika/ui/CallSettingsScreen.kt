@@ -139,8 +139,8 @@ private fun CallSettingsWorkspace(
     var lastAction by remember { mutableIntStateOf(0) }
     var lastActionWasLockedDial by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<CallActionResult?>(null) }
-    var tab by rememberSaveable { mutableStateOf(CallWorkspaceTab.Home) }
-    var lastDailyTab by rememberSaveable { mutableStateOf(CallWorkspaceTab.Home) }
+    var tab by rememberSaveable { mutableStateOf(CallWorkspaceTab.Task) }
+    var lastDailyTab by rememberSaveable { mutableStateOf(CallWorkspaceTab.Task) }
     val tabStates = rememberSaveableStateHolder()
     var liveNavigation by remember { mutableIntStateOf(0) }
     var handledLiveNavigation by remember { mutableIntStateOf(0) }
@@ -162,17 +162,19 @@ private fun CallSettingsWorkspace(
     val canStartStandby = ready && config.audioVerified && config.autoAnswer && idle && pendingLockedDial == null &&
         device.readiness.standbyNotificationsAllowed && !busy && !controlBusy && !settingsBusy
 
+    LaunchedEffect(tab) { if (tab == CallWorkspaceTab.Home) tab = CallWorkspaceTab.Task }
+
     LaunchedEffect(focusRequest) {
         if (focusRequest > 0 && focusRequest != handledFocusRequest) {
-            tab = CallWorkspaceTab.Home
-            lastDailyTab = CallWorkspaceTab.Home
+            tab = CallWorkspaceTab.Task
+            lastDailyTab = CallWorkspaceTab.Task
             liveNavigation++
             handledFocusRequest = focusRequest
         }
     }
 
-    BackHandler(enabled = tab != CallWorkspaceTab.Home) {
-        tab = if (tab == CallWorkspaceTab.Settings && lastDailyTab != CallWorkspaceTab.Settings) lastDailyTab else CallWorkspaceTab.Home
+    BackHandler(enabled = tab != CallWorkspaceTab.Task) {
+        tab = if (tab == CallWorkspaceTab.Settings && lastDailyTab != CallWorkspaceTab.Settings) lastDailyTab else CallWorkspaceTab.Task
     }
 
     fun selectTab(target: CallWorkspaceTab) {
@@ -249,6 +251,24 @@ private fun CallSettingsWorkspace(
         }
     }
 
+    val localView = androidx.compose.ui.platform.LocalView.current
+    val outerDark = MikaTheme.colors.isDark
+    DisposableEffect(tab, outerDark, localView) {
+        val activity = generateSequence(localView.context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>().firstOrNull()
+        val bars = activity?.let { androidx.core.view.WindowCompat.getInsetsController(it.window, localView) }
+        bars?.isAppearanceLightStatusBars = tab == CallWorkspaceTab.Task || !outerDark
+        onDispose { bars?.isAppearanceLightStatusBars = !outerDark }
+    }
+
+    val voiceBriefing = rememberCallVoiceBriefing(
+        runtime, taskDraft,
+        allowed = tab == CallWorkspaceTab.Task && idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
+        onAuthorized = { submission ->
+            perform { runtime.dial(submission.number, simId = submission.simId, task = submission.brief) }
+        },
+    )
+
     KeyboardDismissArea {
         PageBackground(Modifier.testTag("call-settings")) {
             BoxWithConstraints(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
@@ -264,8 +284,8 @@ private fun CallSettingsWorkspace(
                             onSelect = ::selectTab,
                         )
                     }
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        FlashWorkspaceHeader(
+                    Column(Modifier.weight(1f).fillMaxHeight().then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White).statusBarsPadding() else Modifier)) {
+                        if (tab != CallWorkspaceTab.Task) FlashWorkspaceHeader(
                             title = tab.title(),
                             standalone = standalone,
                             onBack = onBack,
@@ -328,8 +348,8 @@ private fun CallSettingsWorkspace(
                             .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(scroll)
-                            .padding(horizontal = MikaSpace.Page)
-                            .padding(top = 8.dp, bottom = 24.dp)
+                            .padding(horizontal = if (tab == CallWorkspaceTab.Task) 0.dp else MikaSpace.Page)
+                            .padding(top = if (tab == CallWorkspaceTab.Task) 0.dp else 8.dp, bottom = if (tab == CallWorkspaceTab.Task) 0.dp else 24.dp)
                             .testTag("call-page-" + tab.name.lowercase()),
                     ) {
                         val visibleFeedback = feedback?.takeIf {
@@ -383,6 +403,8 @@ private fun CallSettingsWorkspace(
                             )
                             CallWorkspaceTab.Task -> CallTaskScreen(
                                 draft = taskDraft,
+                                onStartVoiceBriefing = voiceBriefing.start,
+                                voiceBusy = voiceBriefing.busy,
                                 config = config,
                                 state = state,
                                 ready = ready,

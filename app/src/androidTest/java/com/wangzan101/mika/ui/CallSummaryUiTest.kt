@@ -145,6 +145,7 @@ class CallSummaryUiTest {
                 }
             }
         }
+        compose.onNodeWithTag("call-history-direction-outgoing").performScrollTo().performClick()
     }
 
     private companion object {

@@ -73,7 +73,7 @@ internal fun FlashWorkspaceNavigation(
     val c = MikaTheme.colors
     val compactRail = rail && LocalConfiguration.current.screenHeightDp < 500
     val content: @Composable (Modifier) -> Unit = { itemModifier ->
-        CallWorkspaceTab.entries.forEach { tab ->
+        listOf(CallWorkspaceTab.Task, CallWorkspaceTab.History, CallWorkspaceTab.Receive, CallWorkspaceTab.Settings).forEach { tab ->
             val active = tab == selected
             val isTask = tab == CallWorkspaceTab.Task
             val shortTitle = when (tab) {
@@ -87,7 +87,7 @@ internal fun FlashWorkspaceNavigation(
             val icon = when (tab) {
                 CallWorkspaceTab.Home -> MikaIcons.Home
                 CallWorkspaceTab.History -> MikaIcons.Doc
-                CallWorkspaceTab.Task -> MikaIcons.Plus
+                CallWorkspaceTab.Task -> MikaIcons.Phone
                 CallWorkspaceTab.Receive -> MikaIcons.Shield
                 CallWorkspaceTab.Settings -> MikaIcons.Gear
             }
@@ -110,11 +110,11 @@ internal fun FlashWorkspaceNavigation(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Box(
-                        Modifier.size(if (isTask && !compactRail) 40.dp else 28.dp)
-                            .background(if (isTask) c.ink else c.surface, RoundedCornerShape(9.dp)),
+                        Modifier.size(if (!compactRail) 36.dp else 28.dp)
+                            .background(if (active) c.fill else c.surface, RoundedCornerShape(18.dp)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(icon, null, Modifier.size(21.dp), tint = if (isTask) c.surface else if (active) c.ink else c.ink3)
+                        Icon(icon, null, Modifier.size(21.dp), tint = if (active) androidx.compose.ui.graphics.Color(0xFF007AFF) else c.ink3)
                     }
                     if (badge != null) {
                         if (badge == "•") {
@@ -128,9 +128,9 @@ internal fun FlashWorkspaceNavigation(
                         }
                     }
                 }
-                if (!isTask || rail) {
+                run {
                     Text(shortTitle, modifier = Modifier.fillMaxWidth(),
-                        color = if (active) c.ink else c.ink3, fontSize = 12.sp,
+                        color = if (active) androidx.compose.ui.graphics.Color(0xFF007AFF) else c.ink3, fontSize = 12.sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                         textAlign = TextAlign.Center,
                         softWrap = true)

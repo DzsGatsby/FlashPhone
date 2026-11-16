@@ -91,7 +91,7 @@ class FlashWorkspaceJourneyTest {
     }
 
     @Test fun consumedHomeRecordLinkDoesNotOverwriteReviewStateAfterLeavingHistoryTab() {
-        val route = mutableStateOf(CallWorkspaceTab.Home)
+        val route = mutableStateOf(CallWorkspaceTab.Task)
         val requestedRecord = mutableStateOf<String?>(null)
         val consumed = AtomicInteger()
         compose.setContent {
@@ -144,7 +144,7 @@ class FlashWorkspaceJourneyTest {
         assertSelectedRecord("15555550456")
 
         // The real navigation removes the history composition; SaveableStateHolder must restore it.
-        compose.onNodeWithTag("call-tab-home").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("call-tab-task").assertIsDisplayed().performClick()
         compose.onNodeWithTag("call-history-detail").assertDoesNotExist()
         compose.onNodeWithTag("call-tab-history").assertIsDisplayed().performClick()
         compose.onNodeWithTag("call-history-filter-open").performScrollTo().assertIsSelected()
@@ -154,7 +154,7 @@ class FlashWorkspaceJourneyTest {
         captureWorkspaceScreenshot("native-history-consumed-link-return.png")
 
         // A new explicit dashboard request for that same ID must take priority over the saved query.
-        compose.onNodeWithTag("call-tab-home").performClick()
+        compose.onNodeWithTag("call-tab-task").performClick()
         compose.onNodeWithTag("fixture-home-record-hours").performClick()
         compose.waitUntil(3_000) { consumed.get() == 2 && requestedRecord.value == null }
         compose.onNodeWithTag("call-history-filter-all").performScrollTo().assertIsSelected()
@@ -206,7 +206,7 @@ class FlashWorkspaceJourneyTest {
         assertEquals(listOf("delivery", "completed"), records.value.map { it.id })
     }
 
-    private fun showHistory() {
+    private fun showHistory(allDirections: Boolean = true) {
         compose.setContent {
             MikaTheme(dark = false, reduceMotion = true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -229,6 +229,23 @@ class FlashWorkspaceJourneyTest {
                 }
             }
         }
+        if (allDirections) compose.onNodeWithTag("call-history-direction-all").performScrollTo().performClick()
+    }
+
+    @Test fun historyStartsWithIncomingAndDirectionsRemainIndependentOfStatus() {
+        showHistory(allDirections = false)
+        compose.onNodeWithTag("call-history-direction-incoming").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("call-history-row-delivery").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("call-history-row-hours").assertDoesNotExist()
+        compose.onNodeWithTag("call-history-direction-outgoing").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-filter-open").performScrollTo().performClick()
+        open("hours")
+        backToList()
+        compose.onNodeWithTag("call-history-direction-outgoing").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("call-history-filter-open").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("call-history-row-completed").assertDoesNotExist()
+        compose.onNodeWithTag("call-history-row-delivery").assertDoesNotExist()
+        assertEquals(emptyList<String>(), opened.toList())
     }
 
     private fun open(id: String) {
