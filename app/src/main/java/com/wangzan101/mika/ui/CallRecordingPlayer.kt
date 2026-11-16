@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -104,12 +104,12 @@ internal fun CallRecordingPlayer(
     }
     val c = MikaTheme.colors
     Column(
-        Modifier.fillMaxWidth().border(0.5.dp, c.edge, RoundedCornerShape(7.dp))
+        Modifier.fillMaxWidth().background(c.fill, RoundedCornerShape(16.dp))
             .padding(16.dp).testTag("call-recording-player"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(MikaIcons.Sound, null, Modifier.size(18.dp), tint = c.ink2)
+            Icon(MikaIcons.Sound, null, Modifier.size(25.dp), tint = c.accent)
             Text(stringResource(R.string.calls_recording_title), style = MaterialTheme.typography.titleSmall, color = c.ink)
         }
         if (recording.partial) Text(

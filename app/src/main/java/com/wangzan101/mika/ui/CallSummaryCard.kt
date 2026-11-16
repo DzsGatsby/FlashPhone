@@ -2,7 +2,6 @@ package com.wangzan101.mika.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -44,17 +43,10 @@ internal fun CallSummaryCard(
     val running = status == CallSummaryStatus.RUNNING
     val empty = record.transcript.none { it.text.isNotBlank() }
     Column(
-        Modifier.fillMaxWidth().border(0.5.dp, c.edge, MikaShapes.Card)
-            .background(c.surface, MikaShapes.Card).padding(16.dp).testTag("call-summary-card"),
+        Modifier.fillMaxWidth().testTag("call-summary-card"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(stringResource(R.string.call_summary_title), style = MikaType.BodyStrong, color = c.ink)
-        Text(stringResource(R.string.call_summary_scope), style = MikaType.Caption, color = c.ink2)
-        Text(stringResource(R.string.call_summary_caution), style = MikaType.Hint, color = c.ink3)
-        if (summary != null) {
-            val generatedAt = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(summary.generatedAtMs))
-            Text(stringResource(R.string.call_summary_generated, generatedAt, summary.model), style = MikaType.Hint, color = c.ink3)
-        }
         val message = when {
             running -> R.string.call_summary_running
             status == CallSummaryStatus.UNCONFIGURED -> R.string.call_summary_unconfigured
@@ -71,29 +63,7 @@ internal fun CallSummaryCard(
         message?.let {
             Text(stringResource(it), style = MikaType.Caption, color = c.ink2, modifier = Modifier.testTag("call-summary-status"))
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (running) {
-                TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-cancel")) {
-                    Text(stringResource(R.string.call_summary_cancel))
-                }
-            } else if (status == CallSummaryStatus.UNCONFIGURED) {
-                OutlinedButton(onClick = onConfigure, shape = MikaShapes.Button,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-configure")) {
-                    Text(stringResource(R.string.call_summary_configure))
-                }
-                TextButton(onClick = onSummarize, enabled = !empty,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-generate")) {
-                    Text(stringResource(if (summary == null) R.string.call_summary_generate else R.string.call_summary_regenerate))
-                }
-            } else {
-                OutlinedButton(onClick = onSummarize, enabled = !empty && status != CallSummaryStatus.EMPTY,
-                    shape = MikaShapes.Button, modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-generate")) {
-                    Text(stringResource(if (summary == null) R.string.call_summary_generate else R.string.call_summary_regenerate))
-                }
-            }
-        }
         if (summary != null) {
-            CallCardDivider()
             // Keep generation controls and the original recording/transcript actions within reach.
             Column(Modifier.fillMaxWidth().heightIn(max = contentHeight).verticalScroll(rememberScrollState())
                 .testTag("call-summary-content"), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -103,6 +73,37 @@ internal fun CallSummaryCard(
                 SummaryGroup(record, "unknowns", R.string.call_summary_unknowns, summary.unknowns)
             }
         }
+        Column(Modifier.fillMaxWidth().background(c.fill, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(stringResource(R.string.call_summary_scope), style = MikaType.Caption, color = c.ink2)
+            Text(stringResource(R.string.call_summary_caution), style = MikaType.Hint, color = c.ink3)
+            if (summary != null) {
+                val generatedAt = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(summary.generatedAtMs))
+                Text(stringResource(R.string.call_summary_generated, generatedAt, summary.model), style = MikaType.Hint, color = c.ink3)
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (running) {
+                TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-cancel")) {
+                    Text(stringResource(R.string.call_summary_cancel))
+                }
+            } else if (status == CallSummaryStatus.UNCONFIGURED) {
+                TextButton(onClick = onConfigure, shape = MikaShapes.Button,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-configure")) {
+                    Text(stringResource(R.string.call_summary_configure))
+                }
+                TextButton(onClick = onSummarize, enabled = !empty,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-generate")) {
+                    Text(stringResource(if (summary == null) R.string.call_summary_generate else R.string.call_summary_regenerate))
+                }
+            } else {
+                TextButton(onClick = onSummarize, enabled = !empty && status != CallSummaryStatus.EMPTY,
+                    shape = MikaShapes.Button, modifier = Modifier.heightIn(min = 48.dp).testTag("call-summary-generate")) {
+                    Text(stringResource(if (summary == null) R.string.call_summary_generate else R.string.call_summary_regenerate))
+                }
+            }
+        }
+
     }
 }
 

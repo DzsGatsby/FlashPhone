@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">Сообщения по входящим и итоги исходящих звонков — в одном месте.</string>
+    <string name="flash_history_manage">Управление записями</string>
+    <string name="flash_history_recent">Недавние звонки</string>
+    <string name="flash_history_all_status">Все статусы</string>
+    <string name="flash_history_search_hint">Поиск по номеру, поручению или расшифровке</string>
+    <string name="flash_design_tagline">Пусть телефон займётся этим.</string>
+    <string name="flash_design_voice_section">Голос и интеллект</string>
+    <string name="flash_design_device_section">Устройства и сервисы</string>
+    <string name="flash_design_voice">Голос для звонков в реальном времени</string>
+    <string name="flash_design_voice_note">Движок звонков, приветствие и голос</string>
+    <string name="flash_design_discussion">Модель для обсуждения поручений</string>
+    <string name="flash_design_discussion_note">Обсуждение и уточнение инструкций</string>
+    <string name="flash_design_device">Устройство и фоновая работа</string>
+    <string name="flash_design_device_note">Разрешения, аудиопомощник и готовность</string>
+    <string name="flash_design_sim_note">Можно изменить перед каждым звонком</string>
+    <string name="flash_design_standby">Занимайтесь своими делами.</string>
+    <string name="flash_design_pause">Приостановить</string>
+    <string name="flash_design_scope">Выбрать, на какие звонки отвечать</string>
+    <string name="flash_design_greeting">Начальное приветствие</string>
+    <string name="flash_design_greeting_note">Первые слова после ответа на звонок</string>
+    <string name="flash_design_instructions_note">Как отвечать в разных ситуациях</string>
+    <string name="flash_design_voice_clone_note">Знакомый голос для естественных ответов</string>
+</resources>

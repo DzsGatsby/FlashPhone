@@ -67,6 +67,8 @@ data class CallRuntimeState(
     val autoAnswerPauseRemainingSeconds: Long? = null,
     val autoAnswerBlockedReason: String? = null,
     val liveTranscript: List<CallTranscriptLine> = emptyList(),
+    /** Immutable instructions belonging to the one currently bound call, never the editable draft. */
+    val activeTask: CallTaskBrief? = null,
     val historyWriteFailed: Boolean = false,
     val historyPlaybackAllowed: Boolean = false,
     val simOptions: List<CallSim> = emptyList(),
@@ -1812,6 +1814,7 @@ class CallRuntime(private val app: MikaApp) {
             autoAnswerPauseRemainingSeconds = pauseSeconds,
             autoAnswerBlockedReason = blocker.takeIf { autoStage == CallAutoAnswerStage.BLOCKED },
             liveTranscript = liveTranscript.toList(),
+            activeTask = active?.takeIf { soleCallId != null && it.track?.id == soleCallId }?.task,
             historyWriteFailed = records.writeFailed.value,
             historyPlaybackAllowed = work == null && lockedDial == null && liveCalls().isEmpty() && managedCallPresent() == false,
             simOptions = sims.map { it.info },

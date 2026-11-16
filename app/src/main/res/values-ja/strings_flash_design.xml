@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">着信メッセージと発信結果を、ひとつの場所に。</string>
+    <string name="flash_history_manage">履歴を管理</string>
+    <string name="flash_history_recent">最近の通話</string>
+    <string name="flash_history_all_status">すべての状態</string>
+    <string name="flash_history_search_hint">電話番号、タスク、文字起こしを検索</string>
+    <string name="flash_design_tagline">電話におまかせ。</string>
+    <string name="flash_design_voice_section">音声とAI</string>
+    <string name="flash_design_device_section">デバイスとサービス</string>
+    <string name="flash_design_voice">リアルタイム通話音声</string>
+    <string name="flash_design_voice_note">通話エンジン、あいさつ、音声</string>
+    <string name="flash_design_discussion">指示の相談用モデル</string>
+    <string name="flash_design_discussion_note">指示を相談して、より明確に</string>
+    <string name="flash_design_device">デバイスとバックグラウンド</string>
+    <string name="flash_design_device_note">権限、音声ヘルパー、準備状況</string>
+    <string name="flash_design_sim_note">通話ごとに発信前の変更も可能</string>
+    <string name="flash_design_standby">安心して、いつもの一日を。</string>
+    <string name="flash_design_pause">一時停止</string>
+    <string name="flash_design_scope">応答する着信の範囲を変更</string>
+    <string name="flash_design_greeting">最初のあいさつ</string>
+    <string name="flash_design_greeting_note">電話に出て最初に話す言葉</string>
+    <string name="flash_design_instructions_note">状況に応じた応答方法</string>
+    <string name="flash_design_voice_clone_note">聞き慣れた声で、自然な応答</string>
+</resources>

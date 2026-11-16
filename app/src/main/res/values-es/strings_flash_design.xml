@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">Los mensajes de llamadas entrantes y los resultados de llamadas salientes, en un solo lugar.</string>
+    <string name="flash_history_manage">Gestionar registros</string>
+    <string name="flash_history_recent">Llamadas recientes</string>
+    <string name="flash_history_all_status">Todos los estados</string>
+    <string name="flash_history_search_hint">Buscar número, tarea o transcripción</string>
+    <string name="flash_design_tagline">Deja que tu teléfono se encargue.</string>
+    <string name="flash_design_voice_section">Voz e inteligencia</string>
+    <string name="flash_design_device_section">Dispositivos y servicios</string>
+    <string name="flash_design_voice">Voz de llamada en tiempo real</string>
+    <string name="flash_design_voice_note">Motor de llamadas, saludo y voz</string>
+    <string name="flash_design_discussion">Modelo para comentar instrucciones</string>
+    <string name="flash_design_discussion_note">Comentar y perfeccionar las instrucciones</string>
+    <string name="flash_design_device">Dispositivo y segundo plano</string>
+    <string name="flash_design_device_note">Permisos, asistente de audio y estado de preparación</string>
+    <string name="flash_design_sim_note">Se puede cambiar antes de cada llamada</string>
+    <string name="flash_design_standby">Sigue con tu día.</string>
+    <string name="flash_design_pause">Pausar temporalmente</string>
+    <string name="flash_design_scope">Ajustar qué llamadas se responden</string>
+    <string name="flash_design_greeting">Saludo inicial</string>
+    <string name="flash_design_greeting_note">Las primeras palabras al responder</string>
+    <string name="flash_design_instructions_note">Cómo responder en distintas situaciones</string>
+    <string name="flash_design_voice_clone_note">Una voz familiar para respuestas naturales</string>
+</resources>

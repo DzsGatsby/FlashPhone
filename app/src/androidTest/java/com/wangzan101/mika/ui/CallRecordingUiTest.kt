@@ -11,17 +11,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
@@ -37,7 +34,7 @@ import com.wangzan101.mika.calls.CallDirection
 import com.wangzan101.mika.calls.CallRecord
 import com.wangzan101.mika.calls.CallRecordingInfo
 import com.wangzan101.mika.calls.CallTranscriptLine
-import com.wangzan101.mika.ui.theme.MikaTheme
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -181,9 +178,11 @@ class CallRecordingUiTest {
 
     @Test fun recordingKeepsHistoryMarkSearchFilterAndDeleteActionsAvailable() {
         showHistory()
-        compose.onNodeWithTag("call-history-filter-recorded").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-status").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-filter-recorded").performClick()
         historyRow("1").assertIsDisplayed()
-        compose.onNodeWithTag("call-history-clear").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("call-history-manage").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-clear").assertIsDisplayed().performClick()
         compose.onNodeWithTag("call-history-clear-confirm").assertIsDisplayed()
         compose.onNodeWithText(text(R.string.calls_cancel)).performClick()
         assertEquals("Cancelling clear-all must preserve every synthetic record", 2, records.value.size)
@@ -192,7 +191,8 @@ class CallRecordingUiTest {
         compose.onNodeWithTag("call-history-mark").performScrollTo().performClick()
         compose.waitUntil(3_000) { marked.toList() == listOf("record-1:true") }
         compose.onNodeWithTag("call-history-back").performScrollTo().performClick()
-        compose.onNodeWithTag("call-history-filter-done").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-status").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-filter-done").performClick()
         compose.onNodeWithTag("call-history-search").performScrollTo().performTextReplacement(number("2"))
         compose.onNodeWithTag("call-recording-player").assertDoesNotExist()
         expand("2")
@@ -229,7 +229,7 @@ class CallRecordingUiTest {
 
     private fun showHistory() {
         compose.setContent {
-            MikaTheme(dark = false, reduceMotion = true) {
+            FlashPhoneTheme(reduceMotion = true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                     if (visible.value) CallHistorySection(
                         records.value, historyWriteFailed = false,
@@ -290,9 +290,12 @@ class CallRecordingUiTest {
     private fun screenshot(name: String) {
         compose.waitForIdle()
         val folder = File(compose.activity.cacheDir, "call-recording-ui-screenshots").apply { mkdirs() }
+        // Modal review owns a second Compose root; capture the actual visible window.
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         File(folder, name).outputStream().use {
-            assertTrue(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
+        bitmap.recycle()
     }
 
     private fun record(index: String, handled: Boolean = false, partial: Boolean = false) = CallRecord(

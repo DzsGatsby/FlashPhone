@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">수신 전화의 메시지와 발신 결과를 한곳에서 확인하세요.</string>
+    <string name="flash_history_manage">기록 관리</string>
+    <string name="flash_history_recent">최근 통화</string>
+    <string name="flash_history_all_status">모든 상태</string>
+    <string name="flash_history_search_hint">번호, 작업 또는 대화 내용 검색</string>
+    <string name="flash_design_tagline">전화가 대신 처리해 드려요.</string>
+    <string name="flash_design_voice_section">음성 및 AI</string>
+    <string name="flash_design_device_section">기기 및 서비스</string>
+    <string name="flash_design_voice">실시간 통화 음성</string>
+    <string name="flash_design_voice_note">통화 엔진, 인사말 및 음성</string>
+    <string name="flash_design_discussion">지시 사항 논의 모델</string>
+    <string name="flash_design_discussion_note">지시 사항을 논의하고 다듬기</string>
+    <string name="flash_design_device">기기 및 백그라운드</string>
+    <string name="flash_design_device_note">권한, 오디오 도우미 및 준비 상태</string>
+    <string name="flash_design_sim_note">매 통화 전에도 변경 가능</string>
+    <string name="flash_design_standby">안심하고 일상을 보내세요.</string>
+    <string name="flash_design_pause">일시 중지</string>
+    <string name="flash_design_scope">응답할 전화 범위 조정</string>
+    <string name="flash_design_greeting">첫 인사말</string>
+    <string name="flash_design_greeting_note">전화를 받은 뒤 처음 하는 말</string>
+    <string name="flash_design_instructions_note">상황별 응답 방법</string>
+    <string name="flash_design_voice_clone_note">익숙한 목소리로 더 자연스럽게</string>
+</resources>

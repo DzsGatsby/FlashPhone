@@ -12,14 +12,18 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -64,6 +68,12 @@ class CallWorkspaceVisualTest {
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
             compose.onNodeWithTag("call-page-task").assertIsDisplayed()
+            try {
+                compose.waitUntil(5_000) { compose.onAllNodesWithTag("call-start-voice").fetchSemanticsNodes().size == 1 }
+            } catch (failure: Throwable) {
+                captureWorkspaceScreenshot("dialer-load-failure.png")
+                throw AssertionError(compose.onRoot(useUnmergedTree = true).printToString(), failure)
+            }
             assertWorkspaceNavigationVisible(compose)
             compose.onNodeWithTag("call-task-text-brief").assertDoesNotExist()
             val display = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
@@ -92,6 +102,7 @@ class CallWorkspaceVisualTest {
             screenshot("native-history-empty.png")
 
             selectWorkspace("receive")
+            screenshot("native-rules-home.png")
             compose.onNodeWithTag("call-rules-scope").performScrollTo().performClick()
             compose.onNodeWithTag("call-allowlist").performScrollTo().performClick()
             compose.onNodeWithTag("call-allowlist").performTextReplacement(NUMBER)
@@ -130,14 +141,16 @@ class CallWorkspaceVisualTest {
             screenshot("native-receive-scrolled.png")
 
             selectWorkspace("settings")
+            screenshot("native-settings-home.png")
+            compose.onNodeWithTag("call-open-device-panel").performScrollTo().performClick()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
-            assertWorkspaceNavigationVisible(compose)
             screenshot("native-settings-recovery.png")
             compose.onNodeWithText(workspaceText(R.string.calls_helper_name)).performScrollTo().performClick()
             compose.onNodeWithText(workspaceText(R.string.calls_helper_setup_title)).assertIsDisplayed()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
             screenshot("native-helper-recovery.png")
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("call-settings-panel-close").performScrollTo().performClick()
             compose.onNodeWithTag("call-tab-settings").assertIsDisplayed()
             assertWorkspaceNavigationVisible(compose)
             selectWorkspace("task")
@@ -169,7 +182,9 @@ class CallWorkspaceVisualTest {
 
 /** Validate the navigation that is currently rendered, including its measured text (not semantics alone). */
 internal fun assertWorkspaceNavigationVisible(compose: ComposeTestRule) {
-    val tabs = compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+    val workspaceTab = listOf("task", "history", "receive", "settings")
+        .map { hasTestTag("call-tab-$it") }.reduce { a, b -> a or b }
+    val tabs = compose.onAllNodes(workspaceTab and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
     val count = tabs.fetchSemanticsNodes().size
     assertEquals("The selected workspace exposes 外呼、记录、规则、设置", 4, count)
     for (route in listOf("task", "history", "receive", "settings")) {
@@ -178,7 +193,7 @@ internal fun assertWorkspaceNavigationVisible(compose: ComposeTestRule) {
     for (index in 0 until count) tabs[index].assertIsDisplayed()
     val labels = compose.onAllNodes(
         SemanticsMatcher.keyIsDefined(SemanticsProperties.Text) and
-            hasAnyAncestor(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)),
+            hasAnyAncestor(workspaceTab),
         useUnmergedTree = true,
     )
     val labelCount = labels.fetchSemanticsNodes().size

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">رسائل المكالمات الواردة ونتائج المكالمات الصادرة، في مكان واحد.</string>
+    <string name="flash_history_manage">إدارة السجلات</string>
+    <string name="flash_history_recent">المكالمات الأخيرة</string>
+    <string name="flash_history_all_status">جميع الحالات</string>
+    <string name="flash_history_search_hint">البحث برقم الهاتف أو المهمة أو نص المحادثة</string>
+    <string name="flash_design_tagline">دع هاتفك يتولى الأمر.</string>
+    <string name="flash_design_voice_section">الصوت والذكاء</string>
+    <string name="flash_design_device_section">الأجهزة والخدمات</string>
+    <string name="flash_design_voice">صوت المكالمات في الوقت الفعلي</string>
+    <string name="flash_design_voice_note">محرك المكالمات والتحية والصوت</string>
+    <string name="flash_design_discussion">نموذج مناقشة تعليمات المكالمة</string>
+    <string name="flash_design_discussion_note">مناقشة التعليمات وتحسينها</string>
+    <string name="flash_design_device">الجهاز والعمل في الخلفية</string>
+    <string name="flash_design_device_note">الأذونات ومساعد الصوت وجاهزية التشغيل</string>
+    <string name="flash_design_sim_note">يمكن تغييره قبل كل مكالمة</string>
+    <string name="flash_design_standby">تابع يومك براحة.</string>
+    <string name="flash_design_pause">إيقاف مؤقت</string>
+    <string name="flash_design_scope">تعديل نطاق الرد</string>
+    <string name="flash_design_greeting">التحية الافتتاحية</string>
+    <string name="flash_design_greeting_note">أول ما يُقال بعد الرد</string>
+    <string name="flash_design_instructions_note">كيفية الرد في المواقف المختلفة</string>
+    <string name="flash_design_voice_clone_note">صوت مألوف لردود طبيعية</string>
+</resources>

@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
@@ -35,7 +36,7 @@ import com.wangzan101.mika.calls.CallRecord
 import com.wangzan101.mika.calls.CallRecordingInfo
 import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.calls.CallTranscriptLine
-import com.wangzan101.mika.ui.theme.MikaTheme
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -62,7 +63,7 @@ class FlashWorkspaceJourneyTest {
 
     @Test fun filteredRecordsOpenInlineSwitchAndReturnWithSearchPreserved() {
         showHistory()
-        compose.onNodeWithTag("call-history-filter-open").performScrollTo().performClick()
+        selectStatus("open")
         compose.onNodeWithTag("call-history-row-completed").assertDoesNotExist()
         open("hours")
         compose.onNodeWithTag("call-history-detail").assertIsDisplayed()
@@ -76,13 +77,13 @@ class FlashWorkspaceJourneyTest {
         compose.onNodeWithTag("call-history-previous").performScrollTo().performClick()
         compose.onNodeWithTag("call-recording-player").performScrollTo().assertIsDisplayed()
         backToList()
-        compose.onNodeWithTag("call-history-filter-open").assertIsSelected()
+        assertStatus("open")
         compose.onNodeWithTag("call-history-search").performScrollTo().performTextReplacement("配送")
         compose.onNodeWithTag("call-history-row-hours").assertDoesNotExist()
         open("delivery")
         backToList()
         compose.onNodeWithTag("call-history-search").assertTextContains("配送")
-        compose.onNodeWithTag("call-history-filter-open").assertIsSelected()
+        assertStatus("open")
         compose.onNodeWithTag("call-history-row-delivery").performScrollTo().assertIsDisplayed()
         captureWorkspaceScreenshot("native-history-filter-return.png")
         assertEquals(3, records.value.size)
@@ -95,7 +96,7 @@ class FlashWorkspaceJourneyTest {
         val requestedRecord = mutableStateOf<String?>(null)
         val consumed = AtomicInteger()
         compose.setContent {
-            MikaTheme(dark = false, reduceMotion = true) {
+            FlashPhoneTheme(reduceMotion = true) {
                 val savedTabs = rememberSaveableStateHolder()
                 Column(Modifier.fillMaxSize()) {
                     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -138,30 +139,34 @@ class FlashWorkspaceJourneyTest {
         compose.waitUntil(3_000) { consumed.get() == 1 && requestedRecord.value == null }
         assertSelectedRecord(NUMBER)
         backToList()
-        compose.onNodeWithTag("call-history-filter-open").performScrollTo().performClick()
+        selectStatus("open")
         compose.onNodeWithTag("call-history-search").performScrollTo().performTextReplacement("配送")
         open("delivery")
         assertSelectedRecord("15555550456")
 
+        // Dismiss the modal detail before switching the workspace underneath it.
+        backToList()
         // The real navigation removes the history composition; SaveableStateHolder must restore it.
         compose.onNodeWithTag("call-tab-task").assertIsDisplayed().performClick()
         compose.onNodeWithTag("call-history-detail").assertDoesNotExist()
         compose.onNodeWithTag("call-tab-history").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("call-history-filter-open").performScrollTo().assertIsSelected()
+        assertStatus("open")
         compose.onNodeWithTag("call-history-search").assertTextContains("配送")
+        open("delivery")
         assertSelectedRecord("15555550456")
         compose.runOnIdle { assertEquals("A consumed target must not open again on re-entry", 1, consumed.get()) }
         captureWorkspaceScreenshot("native-history-consumed-link-return.png")
 
         // A new explicit dashboard request for that same ID must take priority over the saved query.
+        backToList()
         compose.onNodeWithTag("call-tab-task").performClick()
         compose.onNodeWithTag("fixture-home-record-hours").performClick()
         compose.waitUntil(3_000) { consumed.get() == 2 && requestedRecord.value == null }
-        compose.onNodeWithTag("call-history-filter-all").performScrollTo().assertIsSelected()
         assertSelectedRecord(NUMBER)
         backToList()
-        // The bounded record list has its own scroll state inside the workspace scroll.
-        // Reveal that viewport before scrolling individual rows within it.
+        assertStatus("all")
+        // Reveal the list in the page before reviewing the remaining rows.
+        // Desktop master/detail panes may retain an independent list viewport.
         compose.onNodeWithTag("call-history-list").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("call-history-row-delivery").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("call-history-row-completed").performScrollTo().assertIsDisplayed()
@@ -193,7 +198,7 @@ class FlashWorkspaceJourneyTest {
         compose.onNodeWithTag("call-history-mark").performScrollTo().performClick()
         compose.waitUntil(3_000) { marked.toList() == listOf("hours:true") }
         backToList()
-        compose.onNodeWithTag("call-history-filter-done").performScrollTo().performClick()
+        selectStatus("done")
         open("hours")
         compose.onNodeWithTag("call-history-delete").performScrollTo().performClick()
         compose.onNodeWithTag("call-history-delete-confirm").assertIsDisplayed()
@@ -206,22 +211,45 @@ class FlashWorkspaceJourneyTest {
         assertEquals(listOf("delivery", "completed"), records.value.map { it.id })
     }
 
-    private fun showHistory(allDirections: Boolean = true) {
+    @Test fun failedRecordActionsStayVisibleInsideDetailAndKeepTheSelectedRecord() {
+        showHistory(actionFailure = "测试操作失败，记录已保留")
+        compose.onNodeWithTag("call-history-search").performScrollTo().performTextReplacement("营业")
+        compose.onNodeWithTag("call-history-search").assertContentDescriptionEquals(workspaceText(R.string.flash_history_search_hint))
+        open("hours")
+        compose.onNodeWithTag("call-history-mark").performScrollTo().performClick()
+        compose.onNode(hasText("测试操作失败，记录已保留") and hasAnyAncestor(hasTestTag("call-history-sheet-feedback")))
+            .assertIsDisplayed()
+        compose.onNodeWithTag("call-history-detail").assertIsDisplayed()
+        compose.onNodeWithTag("call-history-delete").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-delete-confirm").performClick()
+        compose.onNode(hasText("测试操作失败，记录已保留") and hasAnyAncestor(hasTestTag("call-history-sheet-feedback")))
+            .assertIsDisplayed()
+        assertEquals(3, records.value.size)
+        backToList()
+        compose.onNodeWithTag("call-history-search").assertTextContains("营业")
+        compose.onNodeWithTag("call-history-row-hours").performScrollTo().assertIsDisplayed()
+    }
+
+    private fun showHistory(allDirections: Boolean = true, actionFailure: String? = null) {
         compose.setContent {
-            MikaTheme(dark = false, reduceMotion = true) {
+            FlashPhoneTheme(reduceMotion = true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                     CallHistorySection(
                         history = records.value,
                         historyWriteFailed = false,
                         onMark = { id, handled ->
                             marked += "$id:$handled"
-                            records.value = records.value.map { if (it.id == id) it.copy(handled = handled) else it }
-                            CallActionResult(true, "已更新测试记录")
+                            if (actionFailure == null) {
+                                records.value = records.value.map { if (it.id == id) it.copy(handled = handled) else it }
+                                CallActionResult(true, "已更新测试记录")
+                            } else CallActionResult(false, actionFailure)
                         },
                         onDelete = { id ->
                             deleted += id
-                            records.value = records.value.filterNot { it.id == id }
-                            CallActionResult(true, "已删除测试记录")
+                            if (actionFailure == null) {
+                                records.value = records.value.filterNot { it.id == id }
+                                CallActionResult(true, "已删除测试记录")
+                            } else CallActionResult(false, actionFailure)
                         },
                         onReuseTask = { number, task -> reused += number to task },
                         onOpenRecording = { id -> opened += id; null },
@@ -238,18 +266,33 @@ class FlashWorkspaceJourneyTest {
         compose.onNodeWithTag("call-history-row-delivery").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("call-history-row-hours").assertDoesNotExist()
         compose.onNodeWithTag("call-history-direction-outgoing").performScrollTo().performClick()
-        compose.onNodeWithTag("call-history-filter-open").performScrollTo().performClick()
+        selectStatus("open")
         open("hours")
         backToList()
         compose.onNodeWithTag("call-history-direction-outgoing").performScrollTo().assertIsSelected()
-        compose.onNodeWithTag("call-history-filter-open").performScrollTo().assertIsSelected()
+        assertStatus("open")
         compose.onNodeWithTag("call-history-row-completed").assertDoesNotExist()
         compose.onNodeWithTag("call-history-row-delivery").assertDoesNotExist()
         assertEquals(emptyList<String>(), opened.toList())
     }
 
+    private fun selectStatus(status: String) {
+        compose.onNodeWithTag("call-history-status").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-filter-$status").performClick()
+    }
+
+    private fun assertStatus(status: String) {
+        val label = when (status) {
+            "open" -> R.string.calls_history_open
+            "done" -> R.string.calls_history_done
+            "recorded" -> R.string.flash_audit_filter_recorded
+            else -> R.string.flash_history_all_status
+        }
+        compose.onNodeWithTag("call-history-status").performScrollTo().assertTextContains(compose.activity.getString(label))
+    }
+
     private fun open(id: String) {
-        compose.onNodeWithTag("call-history-row-$id").performScrollTo().performClick()
+        compose.onNodeWithTag("call-history-row-$id").performScrollTo().assertIsDisplayed().performClick()
     }
 
     private fun backToList() {

@@ -43,7 +43,7 @@ class CallDtmfUiTest {
             MikaTheme(dark = false, reduceMotion = true) {
                 Column(Modifier.fillMaxSize()) {
                     CurrentCallCard(
-                        state = state.value, feedback = null, canAnswer = false, canControl = true,
+                        state = state.value, feedback = null, canAnswer = false, canControl = true, expanded = false,
                         onAnswer = { events += "answer" }, onHangup = { events += "hangup" },
                         onTakeover = { events += "takeover" }, onCancelAuto = { events += "cancel-auto" },
                         onTranscript = { events += "transcript" }, onSendDtmf = send,

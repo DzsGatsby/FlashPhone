@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wangzan101.mika.ChineseUi
 import com.wangzan101.mika.calls.*
-import com.wangzan101.mika.ui.theme.MikaTheme
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -130,7 +130,7 @@ class CallSummaryUiTest {
 
     private fun showHistory() {
         compose.setContent {
-            MikaTheme(dark = false, reduceMotion = true) {
+            FlashPhoneTheme(reduceMotion = true) {
                 Column(Modifier.fillMaxSize().navigationBarsPadding().statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
                     CallHistorySection(
                         history = records.value,

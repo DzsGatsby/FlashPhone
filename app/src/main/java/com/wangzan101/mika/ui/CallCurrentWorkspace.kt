@@ -1,0 +1,276 @@
+package com.wangzan101.mika.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.wangzan101.mika.R
+import com.wangzan101.mika.calls.*
+import com.wangzan101.mika.ui.theme.MikaIcons
+
+private val LiveWash = Color(0xFFF3F2F8)
+private val LiveInk = Color(0xFF1A201D)
+private val LiveMuted = Color(0xFF73797A)
+private val LiveGreen = Color(0xFF32CF69)
+private val LiveGreenInk = Color(0xFF123923)
+private val LiveBorder = Color(0xFFE5E5EB)
+
+/** The expanded call owns its remaining viewport; controls never belong to the transcript scroller. */
+@Composable
+internal fun CurrentCallCard(
+    state: CallRuntimeState,
+    feedback: CallActionResult?,
+    canAnswer: Boolean,
+    canControl: Boolean,
+    modifier: Modifier = Modifier,
+    onAnswer: () -> Unit,
+    onHangup: () -> Unit,
+    onTakeover: () -> Unit,
+    onCancelAuto: () -> Unit,
+    onTranscript: () -> Unit,
+    onSendDtmf: (suspend (String, String) -> CallActionResult)? = null,
+    expanded: Boolean = true,
+    onCollapse: (() -> Unit)? = null,
+    task: CallTaskBrief? = null,
+) {
+    val screen = LocalConfiguration.current
+    val compact = screen.screenHeightDp < 500 || screen.fontScale >= 1.5f
+    var transcriptRequest by rememberSaveable(state.callId) { mutableIntStateOf(0) }
+    var keypadCallId by remember { mutableStateOf<String?>(null) }
+    var showTask by rememberSaveable(state.callId) { mutableStateOf(false) }
+    val canUseKeypad = state.phase == CallPhase.ACTIVE && state.canSendDtmf && state.callId != null && onSendDtmf != null
+    LaunchedEffect(state.callId, state.phase, canUseKeypad) {
+        if (!canUseKeypad || keypadCallId != state.callId) keypadCallId = null
+    }
+    if (canUseKeypad && keypadCallId == state.callId) {
+        // Changing calls removes the dialog and cancels any in-flight input for the old identity.
+        key(keypadCallId) {
+            CallDtmfKeypadDialog(
+                callId = checkNotNull(keypadCallId),
+                externallyBusy = state.dtmfBusy,
+                onDismiss = { keypadCallId = null },
+                onSend = checkNotNull(onSendDtmf),
+            )
+        }
+    }
+    if (showTask && task != null) {
+        AlertDialog(
+            onDismissRequest = { showTask = false },
+            title = { Text(stringResource(R.string.calls_record_brief)) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(task.goal)
+                    task.questions.filter(String::isNotBlank).forEach { Text("• $it") }
+                    if (task.context.isNotBlank()) Text(task.context)
+                    if (task.constraints.isNotBlank()) Text(task.constraints)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showTask = false }) { Text(stringResource(R.string.calls_collapse)) } },
+        )
+    }
+    val cancelAuto = state.autoAnswerStage == CallAutoAnswerStage.COUNTDOWN ||
+        state.autoAnswerStage == CallAutoAnswerStage.PREPARING
+    val ringing = state.phase == CallPhase.RINGING && state.autoAnswerStage != CallAutoAnswerStage.ANSWERING
+    val cancelManual = ringing && state.canTakeOver && !cancelAuto
+    val showTakeover = state.canTakeOver && !cancelAuto && !ringing
+    val phase = when (state.autoAnswerStage) {
+        CallAutoAnswerStage.COUNTDOWN -> state.autoAnswerRemainingSeconds?.let {
+            stringResource(R.string.calls_auto_countdown, it)
+        } ?: stringResource(R.string.calls_answer_pending)
+        CallAutoAnswerStage.PREPARING -> stringResource(R.string.calls_auto_preparing)
+        CallAutoAnswerStage.ANSWERING -> stringResource(R.string.calls_auto_answering)
+        else -> if (state.aiActive) stringResource(R.string.calls_ai_active) else phaseLabel(state.phase)
+    }
+    val party = state.number?.takeIf(String::isNotBlank)?.let { "\u2066$it\u2069" }
+        ?: stringResource(R.string.calls_unknown_number)
+    val openTranscript = { transcriptRequest++; onTranscript() }
+    val header: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!compact) Box(Modifier.size(if (expanded) 38.dp else 32.dp).background(LiveGreen, CircleShape),
+                contentAlignment = Alignment.Center) {
+                Icon(DialerIcons.Handset, null, Modifier.size(20.dp), tint = LiveGreenInk)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(party, color = LiveInk, fontSize = if (expanded) 16.sp else 14.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    if (state.phase == CallPhase.ACTIVE) Box(Modifier.size(5.dp).background(Color(0xFF1F8C4D), CircleShape))
+                    Text(listOfNotNull(phase, state.direction?.let { directionLabel(it) }).joinToString(" · "),
+                        color = LiveMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                state.detail?.takeIf { !compact && it.isNotBlank() && it != phase }?.let {
+                    Text(it, color = LiveMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (canUseKeypad) IconButton(
+                onClick = { keypadCallId = state.callId }, enabled = canControl && !state.dtmfBusy,
+                modifier = Modifier.size(48.dp).testTag("call-dtmf-open"),
+            ) { Icon(MikaIcons.Apps, stringResource(R.string.calls_dtmf_open), Modifier.size(20.dp), tint = LiveMuted) }
+            if (!expanded || compact) IconButton(onClick = openTranscript,
+                modifier = Modifier.size(48.dp).testTag("call-current-transcript")) {
+                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(20.dp), tint = Color(0xFF167447))
+            }
+        }
+    }
+    Column(modifier.then(if (expanded) Modifier.fillMaxHeight() else Modifier).testTag("call-current"),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 8.dp)) {
+        if (expanded) {
+            if (onCollapse != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onCollapse, modifier = Modifier.heightIn(min = 40.dp).testTag("call-current-collapse"),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
+                    Icon(MikaIcons.Back, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.calls_collapse), fontSize = 12.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                if (!compact) Text(stringResource(R.string.calls_live_transcript), color = LiveMuted, fontSize = 11.sp)
+            }
+            if (!compact) Column(Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(44.dp).background(Color(0xFFE4EBE5), CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(MikaIcons.Spark, null, Modifier.size(25.dp), tint = Color(0xFF53765C))
+                }
+                Text("您的电话助手", color = LiveInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Column(Modifier.weight(1f).fillMaxWidth().background(LiveWash, RoundedCornerShape(27.dp))
+                .padding(if (compact) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
+                task?.takeIf { it.goal.isNotBlank() }?.let { brief ->
+                    Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp))
+                        .border(1.dp, LiveBorder, RoundedCornerShape(18.dp))
+                        .clickable(role = Role.Button) { showTask = true }.padding(horizontal = 14.dp, vertical = if (compact) 6.dp else 12.dp)
+                        .testTag("call-current-task"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (!compact) Text(stringResource(R.string.calls_record_brief), fontSize = 10.sp, color = LiveMuted)
+                        Text(brief.goal, fontSize = 14.sp, color = LiveInk, fontWeight = FontWeight.Medium,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Column(Modifier.weight(1f).fillMaxWidth().background(Color.White, RoundedCornerShape(23.dp))
+                    .border(1.dp, LiveBorder, RoundedCornerShape(23.dp))
+                    .padding(if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 10.dp)) {
+                    header()
+                    LiveCallTranscript(state.callId, state.liveTranscript, transcriptRequest, compact,
+                        Modifier.weight(1f), showHeading = !compact, fillViewport = true, onExpand = {
+                            transcriptRequest++
+                            onTranscript()
+                        })
+                }
+            }
+        } else {
+            Surface(color = Color(0xFFF2F8F3), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Box(Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.calls_live_transcript),
+                    onClick = openTranscript).padding(horizontal = 12.dp, vertical = 6.dp)) { header() }
+            }
+        }
+        // These controls are siblings of the stage, so long text can only scroll inside its own viewport.
+        if (ringing || showTakeover || cancelAuto || state.canHangUp) {
+            Row(Modifier.fillMaxWidth().testTag("call-current-controls"), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                if (ringing || showTakeover) {
+                    val action = when {
+                        cancelManual -> Triple(R.string.calls_cancel_ai_answer, onTakeover, "call-cancel-ai-answer")
+                        showTakeover -> Triple(R.string.calls_takeover, onTakeover, "call-takeover")
+                        else -> Triple(R.string.calls_answer, onAnswer, "call-answer")
+                    }
+                    Button(onClick = action.second, enabled = if (cancelManual || showTakeover) canControl else canAnswer,
+                        modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag(action.third),
+                        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F4F2), contentColor = Color(0xFF384D40))) {
+                        Text(stringResource(action.first), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    }
+                }
+                if (cancelAuto) Button(onClick = onCancelAuto, enabled = canControl,
+                    modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag("call-cancel-auto"),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F4F2), contentColor = Color(0xFF384D40))) {
+                    Text(stringResource(R.string.calls_auto_cancel), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                }
+                if (state.canHangUp) Button(onClick = onHangup, enabled = canControl,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("call-hangup"),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0EF), contentColor = Color(0xFFBE4843))) {
+                    Text(stringResource(R.string.calls_hangup), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                }
+            }
+        }
+        feedback?.let { result ->
+            Text(result.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 11.sp,
+                color = if (result.ok) LiveMuted else Color(0xFFBE4843), maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+internal fun LiveCallTranscript(
+    callId: String?,
+    lines: List<CallTranscriptLine>,
+    expandRequest: Int = 0,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+    showHeading: Boolean = true,
+    onExpand: (() -> Unit)? = null,
+    fillViewport: Boolean = false,
+) {
+    var expanded by rememberSaveable(callId) { mutableStateOf(false) }
+    LaunchedEffect(callId, expandRequest) { if (expandRequest > 0) expanded = true }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (showHeading) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.calls_live_transcript), color = LiveMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            if (lines.size > 3) TextButton(onClick = { expanded = !expanded },
+                modifier = Modifier.heightIn(min = 32.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+                Text(stringResource(if (expanded) R.string.calls_collapse else R.string.calls_expand), fontSize = 11.sp)
+            }
+            if (onExpand != null) IconButton(onClick = onExpand, modifier = Modifier.size(40.dp).testTag("call-current-transcript")) {
+                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(16.dp), tint = Color(0xFF167447))
+            }
+        }
+        val scroll = rememberScrollState()
+        val visibleLines = if (expanded) lines else lines.takeLast(if (compact) 1 else 3)
+        LaunchedEffect(callId, lines.size, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+        Column(Modifier.then(if (fillViewport) Modifier.weight(1f) else Modifier.heightIn(max = if (compact) 80.dp else 160.dp)).fillMaxWidth()
+            .background(LiveWash, RoundedCornerShape(17.dp)).verticalScroll(scroll)
+            .padding(if (compact) 8.dp else 10.dp).testTag("call-live-transcript"),
+            verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            if (visibleLines.isEmpty()) Text(stringResource(R.string.calls_live_waiting), color = LiveMuted, fontSize = 12.sp,
+                modifier = Modifier.padding(4.dp))
+            visibleLines.forEach { line ->
+                val assistant = line.role == "assistant"
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = if (assistant) Alignment.End else Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(callTranscriptSpeakerLabel(line.role)), color = LiveMuted, fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 3.dp))
+                    Box(Modifier.fillMaxWidth(.91f)
+                        .background(if (assistant) LiveGreen else Color.White,
+                            if (assistant) RoundedCornerShape(16.dp, 16.dp, 5.dp, 16.dp)
+                            else RoundedCornerShape(16.dp, 16.dp, 16.dp, 5.dp))
+                        .padding(horizontal = 13.dp, vertical = 11.dp)) {
+                        Text(line.text, color = if (assistant) LiveGreenInk else LiveInk, fontSize = 14.sp, lineHeight = 23.sp)
+                    }
+                }
+            }
+        }
+    }
+}

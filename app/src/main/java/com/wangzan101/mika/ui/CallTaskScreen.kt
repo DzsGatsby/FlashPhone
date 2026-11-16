@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -44,6 +45,7 @@ import com.wangzan101.mika.ui.components.*
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.MikaTheme
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import com.wangzan101.mika.ui.theme.MikaType
 
 /** A private draft in the workspace, never a saved call profile or background request. */
@@ -158,8 +160,8 @@ internal fun CallTaskScreen(
     onStartVoiceBriefing: ((number: String, simId: String?, simLabel: String) -> Unit)? = null,
     voiceBusy: Boolean = false,
 ) {
-    // The selected dialer reference is deliberately white, including when the rest of the app is dark.
-    MikaTheme(dark = false, reduceMotion = MikaTheme.reduceMotion) {
+    // The dialer and its sheets share the phone design, including system-dark appearance.
+    FlashPhoneTheme {
         val c = MikaTheme.colors
         val palette = dialerPalette()
         val compactDialer = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 700
@@ -188,7 +190,7 @@ internal fun CallTaskScreen(
 
         if (!draft.persistenceLoaded) {
             LinearProgressIndicator(Modifier.fillMaxWidth().testTag("call-draft-loading"))
-            return@MikaTheme
+            return@FlashPhoneTheme
         }
 
         Column(
@@ -356,7 +358,7 @@ internal fun CallTaskScreen(
                         },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag("call-task-review"),
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.callGreen, contentColor = palette.onGreen),
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.blue, contentColor = Color.White),
                     ) { Text(stringResource(R.string.calls_task_review)) }
                     TextButton(onClick = { textOpen = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text("返回拨号键盘")

@@ -44,6 +44,7 @@ import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.MikaSpace
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.MikaType
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,62 +64,68 @@ fun CallSettingsScreen(
     updateAvailable: Boolean = false,
     focusRequest: Int = 0,
 ) {
-    val liveState by runtime.state.collectAsState()
-    var remoteOpen by rememberSaveable { mutableStateOf(false) }
-    var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
-    var instructionsOpen by rememberSaveable { mutableStateOf(false) }
-    var summarySettingsOpen by rememberSaveable { mutableStateOf(false) }
-    var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
-    val workspaceState = rememberSaveableStateHolder()
-    val taskDraft = rememberPersistentCallTaskDraft()
-    LaunchedEffect(liveState.phase, liveState.callId) {
-        if (liveState.phase != CallPhase.IDLE) {
-            remoteOpen = false
-            voiceCloneOpen = false
-            instructionsOpen = false
-            summarySettingsOpen = false
+    FlashPhoneTheme {
+        val liveState by runtime.state.collectAsState()
+        var remoteOpen by rememberSaveable { mutableStateOf(false) }
+        var voiceCloneOpen by rememberSaveable { mutableStateOf(false) }
+        var instructionsOpen by rememberSaveable { mutableStateOf(false) }
+        var instructionModelOpen by rememberSaveable { mutableStateOf(false) }
+        var summarySettingsOpen by rememberSaveable { mutableStateOf(false) }
+        var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
+        val workspaceState = rememberSaveableStateHolder()
+        val taskDraft = rememberPersistentCallTaskDraft()
+        LaunchedEffect(liveState.phase, liveState.callId, remoteOpen, voiceCloneOpen, instructionsOpen, summarySettingsOpen) {
+            if (liveState.phase != CallPhase.IDLE) {
+                remoteOpen = false
+                voiceCloneOpen = false
+                instructionsOpen = false
+                summarySettingsOpen = false
+            }
         }
-    }
-    LaunchedEffect(focusRequest) {
-        if (focusRequest > 0 && focusRequest != handledFocusRequest) {
-            remoteOpen = false
-            voiceCloneOpen = false
-            instructionsOpen = false
-            summarySettingsOpen = false
-            handledFocusRequest = focusRequest
+        LaunchedEffect(focusRequest) {
+            if (focusRequest > 0 && focusRequest != handledFocusRequest) {
+                remoteOpen = false
+                voiceCloneOpen = false
+                instructionsOpen = false
+                summarySettingsOpen = false
+                handledFocusRequest = focusRequest
+            }
         }
-    }
-    when {
-        summarySettingsOpen -> CallSummarySettingsScreen(onBack = { summarySettingsOpen = false })
-        remoteOpen -> com.wangzan101.mika.calls.remote.CallDeviceSettingsScreen { remoteOpen = false }
-        voiceCloneOpen -> VoiceCloneScreen(runtime) { voiceCloneOpen = false }
-        instructionsOpen -> CallInstructionsScreen(runtime) { instructionsOpen = false }
-        else -> workspaceState.SaveableStateProvider("call-workspace") {
-            CallSettingsWorkspace(
-                runtime = runtime,
-                taskDraft = taskDraft,
-                onBack = onBack,
-                onInstructions = onInstructions ?: { instructionsOpen = true },
-                standalone = standalone,
-                onHelperSetup = onHelperSetup,
-                onAbout = onAbout,
-                updateAvailable = updateAvailable,
-                focusRequest = focusRequest,
-                onRemote = { remoteOpen = true },
-                onSummarySettings = { summarySettingsOpen = true },
-            ) {
-                voiceCloneOpen = true
+        when {
+            summarySettingsOpen -> CallSummarySettingsScreen(onBack = { summarySettingsOpen = false })
+            remoteOpen -> com.wangzan101.mika.calls.remote.CallDeviceSettingsScreen { remoteOpen = false }
+            voiceCloneOpen -> VoiceCloneScreen(runtime) { voiceCloneOpen = false }
+            instructionsOpen -> CallInstructionsScreen(runtime, openModelSettings = instructionModelOpen) { instructionsOpen = false }
+            else -> workspaceState.SaveableStateProvider("call-workspace") {
+                CallSettingsWorkspace(
+                    runtime = runtime,
+                    taskDraft = taskDraft,
+                    onBack = onBack,
+                    onInstructions = onInstructions ?: { instructionModelOpen = false; instructionsOpen = true },
+                    onDiscussionModel = { instructionModelOpen = true; instructionsOpen = true },
+                    standalone = standalone,
+                    onHelperSetup = onHelperSetup,
+                    onAbout = onAbout,
+                    updateAvailable = updateAvailable,
+                    focusRequest = focusRequest,
+                    onRemote = { remoteOpen = true },
+                    onSummarySettings = { summarySettingsOpen = true },
+                ) {
+                    voiceCloneOpen = true
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CallSettingsWorkspace(
     runtime: CallRuntime,
     taskDraft: CallTaskDraft,
     onBack: () -> Unit,
     onInstructions: () -> Unit,
+    onDiscussionModel: () -> Unit,
     standalone: Boolean,
     onHelperSetup: () -> Unit,
     onAbout: () -> Unit,
@@ -152,6 +159,9 @@ private fun CallSettingsWorkspace(
     var requestedHistoryId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingReuse by remember { mutableStateOf<Pair<String, CallTaskBrief>?>(null) }
     var dialog by rememberSaveable { mutableStateOf<CallDialog?>(null) }
+    var settingsPanel by rememberSaveable { mutableStateOf<FlashSettingsPanel?>(null) }
+    var liveExpanded by rememberSaveable(state.callId) { mutableStateOf(true) }
+    LaunchedEffect(state.phase) { if (state.phase != CallPhase.IDLE) settingsPanel = null }
     val idle = state.phase == CallPhase.IDLE
     val pendingLockedDial = state.lockedDialRequestId
     val failureText = stringResource(R.string.calls_action_failed)
@@ -173,11 +183,14 @@ private fun CallSettingsWorkspace(
         }
     }
 
-    BackHandler(enabled = tab != CallWorkspaceTab.Task) {
+    BackHandler(enabled = tab != CallWorkspaceTab.Task && (idle || !liveExpanded)) {
         tab = if (tab == CallWorkspaceTab.Settings && lastDailyTab != CallWorkspaceTab.Settings) lastDailyTab else CallWorkspaceTab.Task
     }
 
+    BackHandler(enabled = !idle && liveExpanded) { liveExpanded = false }
+
     fun selectTab(target: CallWorkspaceTab) {
+        if (!idle) liveExpanded = false
         if (target != CallWorkspaceTab.Settings) {
             lastDailyTab = target
         }
@@ -239,6 +252,7 @@ private fun CallSettingsWorkspace(
     fun openDeviceSettings() {
         tab = CallWorkspaceTab.Settings
         deviceNavigation++
+        settingsPanel = FlashSettingsPanel.Device
     }
 
     val openHistoryCount = remember(history) { history.count { !it.handled } }
@@ -249,16 +263,6 @@ private fun CallSettingsWorkspace(
                 startStandby()
             }
         }
-    }
-
-    val localView = androidx.compose.ui.platform.LocalView.current
-    val outerDark = MikaTheme.colors.isDark
-    DisposableEffect(tab, outerDark, localView) {
-        val activity = generateSequence(localView.context) { (it as? android.content.ContextWrapper)?.baseContext }
-            .filterIsInstance<android.app.Activity>().firstOrNull()
-        val bars = activity?.let { androidx.core.view.WindowCompat.getInsetsController(it.window, localView) }
-        bars?.isAppearanceLightStatusBars = tab == CallWorkspaceTab.Task || !outerDark
-        onDispose { bars?.isAppearanceLightStatusBars = !outerDark }
     }
 
     val voiceBriefing = rememberCallVoiceBriefing(
@@ -284,7 +288,7 @@ private fun CallSettingsWorkspace(
                             onSelect = ::selectTab,
                         )
                     }
-                    val showWorkspaceHeader = tab == CallWorkspaceTab.Settings || tab == CallWorkspaceTab.Home
+                    val showWorkspaceHeader = idle && (tab == CallWorkspaceTab.Settings || tab == CallWorkspaceTab.Home)
                     Column(Modifier.weight(1f).fillMaxHeight()
                         .then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White) else Modifier)
                         .then(if (!showWorkspaceHeader) Modifier.statusBarsPadding() else Modifier)) {
@@ -302,7 +306,10 @@ private fun CallSettingsWorkspace(
                         feedback = feedback,
                         canAnswer = ready && !busy && !controlBusy && callId != null && state.canAnswer,
                         canControl = !controlBusy && callId != null,
-                        modifier = Modifier.padding(horizontal = MikaSpace.Page),
+                        modifier = Modifier.padding(horizontal = 13.dp).then(if (liveExpanded) Modifier.weight(1f) else Modifier),
+                        expanded = liveExpanded,
+                        task = state.activeTask,
+                        onCollapse = { liveExpanded = false },
                         onAnswer = { callId?.let { perform { runtime.answer(it) } } },
                         onHangup = { callId?.let { perform(priority = true) { runtime.hangup(it) } } },
                         onTakeover = {
@@ -315,10 +322,7 @@ private fun CallSettingsWorkspace(
                             }
                         },
                         onCancelAuto = { callId?.let { perform(priority = true) { runtime.cancelAutoAnswer(it) } } },
-                        onTranscript = {
-                            selectTab(CallWorkspaceTab.Receive)
-                            liveNavigation++
-                        },
+                        onTranscript = { liveExpanded = true },
                         onSendDtmf = { expectedCallId, digits -> runtime.sendDtmf(expectedCallId, digits) },
                     )
                 }
@@ -328,7 +332,7 @@ private fun CallSettingsWorkspace(
                     }
                 }
 
-                tabStates.SaveableStateProvider(tab.name) {
+                if (idle || !liveExpanded) tabStates.SaveableStateProvider(tab.name) {
                     val scroll = rememberScrollState()
                     LaunchedEffect(tab, liveNavigation, taskNavigation, deviceNavigation) {
                         when (tab) {
@@ -352,7 +356,7 @@ private fun CallSettingsWorkspace(
                             .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(scroll)
-                            .padding(horizontal = if (tab == CallWorkspaceTab.Task) 0.dp else MikaSpace.Page)
+                            .padding(horizontal = if (tab == CallWorkspaceTab.Task) 0.dp else 23.dp)
                             .padding(top = if (tab == CallWorkspaceTab.Task) 0.dp else 8.dp, bottom = if (tab == CallWorkspaceTab.Task) 0.dp else 24.dp)
                             .testTag("call-page-" + tab.name.lowercase()),
                     ) {
@@ -447,23 +451,60 @@ private fun CallSettingsWorkspace(
                                     if (taskDraft.hasContent) pendingReuse = number to brief else reuse(number, brief)
                                 },
                             )
-                            CallWorkspaceTab.Settings -> {
-                                FlashPageIntro(stringResource(R.string.flash_workspace_settings), stringResource(R.string.flash_workspace_device_voice_and_background_operation))
-                                CallSurfaceCard(modifier = Modifier.padding(bottom = 20.dp)) {
-                                    ListRow(icon = MikaIcons.Edit, title = stringResource(R.string.call_summary_title),
-                                        subtitle = stringResource(R.string.call_summary_configure), first = true,
-                                        onClick = onSummarySettings.takeIf { idle && pendingLockedDial == null },
-                                        modifier = Modifier.testTag("call-open-summary-settings")) { RowChevron() }
-                                    CallCardDivider()
-                                    ListRow(icon = MikaIcons.Link, title = stringResource(R.string.flash_workspace_devices_remote_tasks),
-                                        subtitle = stringResource(R.string.flash_workspace_account_device_connection_and_phone_access),
-                                        first = true, onClick = onRemote.takeIf { idle && pendingLockedDial == null }, modifier = Modifier.testTag("call-open-remote")) { RowChevron() }
-                                    CallCardDivider()
-                                    ListRow(icon = MikaIcons.Info, title = stringResource(R.string.flash_workspace_about_updates),
-                                        subtitle = if (updateAvailable) stringResource(R.string.flash_workspace_an_update_is_available) else "Flash phone",
-                                        onClick = onAbout, modifier = Modifier.testTag("call-open-about")) { RowChevron() }
-                                }
-                                FlashSystemCenter(
+                            CallWorkspaceTab.Settings -> FlashSettingsOverview(
+                                canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
+                                updateAvailable = updateAvailable,
+                                simSummary = state.simOptions.firstOrNull { it.id == config.defaultOutgoingSimId }?.label
+                                    ?: stringResource(if (config.defaultOutgoingSimId == null) R.string.calls_sim_ask_each_time else R.string.calls_sim_unavailable),
+                                voiceSummary = if (config.speaker != CallConfig().speaker) stringResource(R.string.flash_guard_voice_custom, config.speaker)
+                                    else stringResource(R.string.flash_design_voice_clone_note),
+                                onPanel = { settingsPanel = it },
+                                onSummary = onSummarySettings,
+                                onDiscussionModel = onDiscussionModel,
+                                onVoiceClone = onVoiceClone,
+                                onRemote = onRemote,
+                                onAbout = onAbout,
+                            )
+                        }
+                    }
+                }
+                        if (!railNavigation) {
+                            FlashWorkspaceNavigation(
+                                selected = tab,
+                                pendingCount = openHistoryCount,
+                                taskHasDraft = taskDraft.hasContent || pendingLockedDial != null,
+                                needsSetup = !ready || !config.audioVerified,
+                                rail = false,
+                                onSelect = ::selectTab,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    settingsPanel?.let { panel ->
+        ModalBottomSheet(
+            onDismissRequest = { settingsPanel = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MikaTheme.colors.surface,
+            modifier = Modifier.testTag("call-settings-panel"),
+        ) {
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
+                .padding(horizontal = 23.dp).padding(bottom = 24.dp).imePadding()) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(when (panel) {
+                        FlashSettingsPanel.Device -> R.string.flash_design_device
+                        FlashSettingsPanel.Voice -> R.string.flash_design_voice
+                        FlashSettingsPanel.Sim -> R.string.calls_default_sim_settings
+                    }), Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+                    IconButton(onClick = { settingsPanel = null }, modifier = Modifier.testTag("call-settings-panel-close")) {
+                        Icon(MikaIcons.Close, stringResource(R.string.calls_cancel))
+                    }
+                }
+                    FlashSystemCenter(
+                                panel = panel,
                                 config = config,
                                 state = state,
                                 ready = ready,
@@ -484,22 +525,6 @@ private fun CallSettingsWorkspace(
                                 },
                                 onDefaultSim = { id -> scope.launch { save { it.copy(defaultOutgoingSimId = id) } } },
                             )
-                            }
-                        }
-                    }
-                }
-                        if (!railNavigation) {
-                            FlashWorkspaceNavigation(
-                                selected = tab,
-                                pendingCount = openHistoryCount,
-                                taskHasDraft = taskDraft.hasContent || pendingLockedDial != null,
-                                needsSetup = !ready || !config.audioVerified,
-                                rail = false,
-                                onSelect = ::selectTab,
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -546,262 +571,6 @@ private fun CallSettingsWorkspace(
 }
 
 private enum class CallDialog { Rules, Bypass, Credentials, Profile }
-
-@Composable
-internal fun CurrentCallCard(
-    state: CallRuntimeState,
-    feedback: CallActionResult?,
-    canAnswer: Boolean,
-    canControl: Boolean,
-    modifier: Modifier = Modifier,
-    onAnswer: () -> Unit,
-    onHangup: () -> Unit,
-    onTakeover: () -> Unit,
-    onCancelAuto: () -> Unit,
-    onTranscript: () -> Unit,
-    onSendDtmf: (suspend (String, String) -> CallActionResult)? = null,
-) {
-    val c = MikaTheme.colors
-    val screen = LocalConfiguration.current
-    val compact = screen.screenHeightDp < 500 || screen.fontScale >= 1.5f
-    var transcriptRequest by rememberSaveable(state.callId) { mutableIntStateOf(0) }
-    var keypadCallId by remember { mutableStateOf<String?>(null) }
-    val canUseKeypad = state.phase == CallPhase.ACTIVE && state.canSendDtmf && state.callId != null && onSendDtmf != null
-    LaunchedEffect(state.callId, state.phase, canUseKeypad) {
-        if (!canUseKeypad || keypadCallId != state.callId) keypadCallId = null
-    }
-    if (canUseKeypad && keypadCallId == state.callId) {
-        // Removing the dialog cancels its coroutine and discards input; it never controls hangup.
-        key(keypadCallId) {
-            CallDtmfKeypadDialog(
-                callId = checkNotNull(keypadCallId),
-                externallyBusy = state.dtmfBusy,
-                onDismiss = { keypadCallId = null },
-                onSend = checkNotNull(onSendDtmf),
-            )
-        }
-    }
-    val cancelAuto = state.autoAnswerStage == CallAutoAnswerStage.COUNTDOWN ||
-        state.autoAnswerStage == CallAutoAnswerStage.PREPARING
-    val ringing = state.phase == CallPhase.RINGING && state.autoAnswerStage != CallAutoAnswerStage.ANSWERING
-    val cancelManual = ringing && state.canTakeOver && !cancelAuto
-    val showTakeover = state.canTakeOver && !cancelAuto && !ringing
-    val phase = when (state.autoAnswerStage) {
-        CallAutoAnswerStage.COUNTDOWN -> state.autoAnswerRemainingSeconds?.let {
-            stringResource(R.string.calls_auto_countdown, it)
-        } ?: stringResource(R.string.calls_answer_pending)
-        CallAutoAnswerStage.PREPARING -> stringResource(R.string.calls_auto_preparing)
-        CallAutoAnswerStage.ANSWERING -> stringResource(R.string.calls_auto_answering)
-        else -> if (state.aiActive) stringResource(R.string.calls_ai_active) else phaseLabel(state.phase)
-    }
-    val cardTone = when {
-        state.aiActive || cancelAuto -> TileTone.Accent
-        ringing -> TileTone.Warn
-        else -> TileTone.Ok
-    }
-    CallSurfaceCard(
-        modifier = modifier.padding(bottom = 8.dp).testTag("call-current"),
-        tone = cardTone,
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (!compact) IconTile(MikaIcons.Phone, cardTone)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(listOfNotNull(phase, state.direction?.let { directionLabel(it) }).joinToString(" · "), style = MikaType.Hint, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val party = state.number?.let { "\u2066$it\u2069" }
-                        ?: stringResource(R.string.calls_unknown_number).takeIf { state.direction == CallDirection.INCOMING }
-                    if (!party.isNullOrBlank()) {
-                        Text(
-                            text = party,
-                            style = MikaType.BodyStrong.copy(fontSize = 17.sp),
-                            color = c.ink,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    state.detail?.takeIf { !compact && it.isNotBlank() && it != phase }?.let { detail ->
-                        Text(
-                            text = detail,
-                            style = MikaType.Caption,
-                            color = c.ink3,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (canUseKeypad) {
-                    TextButton(
-                        onClick = { keypadCallId = state.callId },
-                        enabled = canControl && !state.dtmfBusy,
-                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-dtmf-open"),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    ) { Text(stringResource(R.string.calls_dtmf_open)) }
-                }
-                if (state.aiActive || state.liveTranscript.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            transcriptRequest++
-                            onTranscript()
-                        },
-                        modifier = Modifier
-                            .background(c.accentSoft, CircleShape)
-                            .testTag("call-current-transcript"),
-                    ) {
-                        Icon(
-                            MikaIcons.Message,
-                            contentDescription = stringResource(R.string.calls_live_transcript),
-                            tint = c.accent,
-                        )
-                    }
-                }
-            }
-
-            if (ringing || showTakeover || cancelAuto || state.canHangUp) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (ringing || showTakeover) {
-                        val action = when {
-                            cancelManual -> Triple(R.string.calls_cancel_ai_answer, onTakeover, "call-cancel-ai-answer")
-                            showTakeover -> Triple(R.string.calls_takeover, onTakeover, "call-takeover")
-                            else -> Triple(R.string.calls_answer, onAnswer, "call-answer")
-                        }
-                        Button(
-                            onClick = action.second,
-                            enabled = if (cancelManual || showTakeover) canControl else canAnswer,
-                            modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag(action.third),
-                            shape = MikaShapes.Button,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = c.accent,
-                                contentColor = c.onAccent,
-                            ),
-                        ) {
-                            Text(
-                                text = stringResource(action.first),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            )
-                        }
-                    }
-                    if (cancelAuto) {
-                        OutlinedButton(
-                            onClick = onCancelAuto,
-                            enabled = canControl,
-                            modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag("call-cancel-auto"),
-                            shape = MikaShapes.Button,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        ) {
-                            Text(stringResource(R.string.calls_auto_cancel), textAlign = TextAlign.Center)
-                        }
-                    }
-                    if (state.canHangUp) {
-                        TextButton(
-                            onClick = onHangup,
-                            enabled = canControl,
-                            modifier = Modifier
-                                .weight(0.95f)
-                                .heightIn(min = 48.dp)
-                                .background(if (canControl) c.badSoft else c.fill, MikaShapes.Button)
-                                .testTag("call-hangup"),
-                            shape = MikaShapes.Button,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.calls_hangup),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = if (canControl) MaterialTheme.colorScheme.error else c.ink3,
-                            )
-                        }
-                    }
-                }
-            }
-            if (state.aiActive || state.liveTranscript.isNotEmpty()) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(c.fill, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    LiveCallTranscript(state.callId, state.liveTranscript, transcriptRequest, compact = compact)
-                }
-            }
-
-            feedback?.let {
-                Text(
-                    text = it.message,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (it.ok) c.ink3 else MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LiveCallTranscript(callId: String?, lines: List<CallTranscriptLine>, expandRequest: Int = 0, compact: Boolean = false) {
-    var expanded by rememberSaveable(callId) { mutableStateOf(false) }
-    LaunchedEffect(callId, expandRequest) {
-        if (expandRequest > 0) expanded = true
-    }
-    if (!compact) Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(MikaIcons.Message, null, Modifier.size(16.dp), tint = MikaTheme.colors.accent)
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.calls_live_transcript), style = MikaType.BodyStrong)
-            Text(
-                text = if (lines.isEmpty()) stringResource(R.string.calls_live_waiting)
-                else stringResource(R.string.flash_audit_turns_count, lines.size),
-                style = MikaType.Hint,
-                color = MikaTheme.colors.ink3,
-            )
-        }
-        if (lines.size > 3) {
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(stringResource(if (expanded) R.string.calls_collapse else R.string.calls_expand))
-            }
-        }
-    }
-    if (lines.isEmpty()) {
-        Text(
-            text = stringResource(R.string.calls_live_waiting),
-            style = MaterialTheme.typography.bodySmall,
-            color = MikaTheme.colors.ink3,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-    } else {
-        val visibleLines = if (expanded) lines else lines.takeLast(if (compact) 1 else 3)
-        val offset = if (expanded) 0 else (lines.size - visibleLines.size).coerceAtLeast(0)
-        Column(
-            Modifier
-                .heightIn(max = if (compact) 56.dp else 120.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp)
-                .testTag("call-live-transcript"),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            visibleLines.forEachIndexed { idx, line ->
-                CallTranscriptText(line, turnNumber = offset + idx + 1)
-            }
-        }
-    }
-}
 
 @Composable
 private fun FlashPageIntro(title: String, subtitle: String, action: (@Composable () -> Unit)? = null) {
@@ -961,75 +730,91 @@ private fun FlashGuardWorkspace(
     onStartStandby: () -> Unit,
 ) {
     val c = MikaTheme.colors
-    FlashPageIntro(stringResource(R.string.flash_workspace_answering), stringResource(R.string.flash_workspace_choose_which_calls_ai_answers_and_what_it_needs_to_know))
-    FlashStandbySummary(config, state, ready, controlsEnabled, onToggle, onSetup)
-    Spacer(Modifier.height(16.dp))
-    if (state.phase == CallPhase.IDLE && (state.aiActive || state.liveTranscript.isNotEmpty())) {
-        CallSurfaceCard(modifier = Modifier.padding(bottom = 16.dp)) {
-            Column(Modifier.fillMaxWidth().padding(14.dp)) { LiveCallTranscript(state.callId, state.liveTranscript) }
-        }
+    val actuallyStandingBy = ready && config.audioVerified && config.autoAnswer && state.backgroundStandbyRunning &&
+        state.autoAnswerStage == CallAutoAnswerStage.STANDBY
+    val canTurnOn = ready && config.audioVerified && state.phase == CallPhase.IDLE && state.lockedDialRequestId == null &&
+        (config.allowAllIncoming || config.allowedIncomingNumbers.isNotEmpty())
+    val autoLabel = stringResource(R.string.calls_auto_answer)
+    val title = when {
+        state.phase != CallPhase.IDLE -> stringResource(R.string.flash_workspace_call_in_progress)
+        actuallyStandingBy -> stringResource(R.string.flash_design_standby)
+        state.autoAnswerStage == CallAutoAnswerStage.PAUSED -> stringResource(R.string.flash_workspace_answering_paused)
+        !ready || !config.audioVerified -> stringResource(R.string.flash_workspace_finish_setup_to_stand_by)
+        !config.autoAnswer -> stringResource(R.string.flash_workspace_automatic_answering_is_off)
+        state.backgroundStandbyStarting -> stringResource(R.string.flash_workspace_starting_standby)
+        else -> stringResource(R.string.flash_workspace_background_standby_is_stopped)
     }
-    if (config.autoAnswer || state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
-        FlowRow(Modifier.fillMaxWidth().testTag("call-rules-pause"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
-                OutlinedButton(onResume, enabled = controlsEnabled, modifier = Modifier.testTag("call-rules-resume")) {
-                    Text(stringResource(R.string.calls_auto_resume))
-                }
-            } else {
-                OutlinedButton({ onPause(15) }, enabled = controlsEnabled) {
-                    Text(stringResource(R.string.flash_workspace_pause_15_min))
-                }
-                OutlinedButton({ onPause(60) }, enabled = controlsEnabled) {
-                    Text(stringResource(R.string.flash_workspace_pause_1_hour))
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.flash_workspace_answering), Modifier.weight(1f), fontSize = 28.sp,
+            lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
+        MikaSwitch(config.autoAnswer, onCheckedChange = onToggle,
+            enabled = controlsEnabled && (config.autoAnswer || canTurnOn),
+            modifier = Modifier.testTag("call-auto-answer").semantics { contentDescription = autoLabel })
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 26.dp).testTag("call-home-standby"),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(76.dp).background(c.accentSoft, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(MikaIcons.Shield, null, Modifier.size(30.dp), tint = c.accent)
+        }
+        Text(title, Modifier.padding(top = 18.dp, bottom = 8.dp), fontSize = 23.sp, lineHeight = 30.sp,
+            fontWeight = FontWeight.SemiBold, color = c.ink, textAlign = TextAlign.Center)
+        Text(if (actuallyStandingBy) "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}"
+            else autoAnswerSummary(config, state), fontSize = 12.sp, lineHeight = 18.sp, color = c.ink3, textAlign = TextAlign.Center)
+        FlowRow(Modifier.padding(top = 14.dp).testTag("call-rules-pause"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+            if (config.autoAnswer || state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
+                if (state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
+                    TextButton(onResume, enabled = controlsEnabled, modifier = Modifier.testTag("call-rules-resume"),
+                        colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
+                        Text(stringResource(R.string.calls_auto_resume), fontSize = 12.sp)
+                    }
+                } else {
+                    var pauseMenu by remember { mutableStateOf(false) }
+                    Box {
+                        TextButton({ pauseMenu = true }, enabled = controlsEnabled,
+                            colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
+                            Text(stringResource(R.string.flash_design_pause), fontSize = 12.sp)
+                        }
+                        DropdownMenu(pauseMenu, { pauseMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.flash_workspace_pause_15_min)) },
+                                onClick = { pauseMenu = false; onPause(15) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.flash_workspace_pause_1_hour)) },
+                                onClick = { pauseMenu = false; onPause(60) })
+                        }
+                    }
                 }
             }
+            TextButton(onRules, enabled = canConfigure, modifier = Modifier.testTag("call-rules-scope"),
+                colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
+                Text(stringResource(R.string.flash_design_scope), fontSize = 12.sp)
+            }
         }
+    }
+    Column(Modifier.testTag("call-incoming-rules")) {
+        FlashSettingsRow(MikaIcons.Heart, stringResource(R.string.calls_bypass_title),
+            if (config.bypassIncomingNumbers.isEmpty()) stringResource(R.string.calls_bypass_empty)
+            else stringResource(R.string.calls_bypass_count, config.bypassIncomingNumbers.size),
+            "call-rules-important", canConfigure, onBypass)
+        FlashSettingsRow(MikaIcons.Doc, stringResource(R.string.flash_workspace_answering_instructions),
+            stringResource(R.string.flash_design_instructions_note), "call-open-instructions", canConfigure, onInstructions)
+        FlashSettingsRow(MikaIcons.Sound, stringResource(R.string.flash_design_greeting),
+            config.greeting.takeIf { it.isNotBlank() } ?: stringResource(R.string.flash_guard_greeting_blank),
+            "call-open-profile", canConfigure, onProfile)
+    }
+    if (!ready || !config.audioVerified || (config.autoAnswer && !state.backgroundStandbyRunning && !state.backgroundStandbyStarting)) {
+        Spacer(Modifier.height(20.dp))
+        FlashSettingsRow(MikaIcons.Gear, stringResource(R.string.flash_workspace_complete_device_setup),
+            stringResource(R.string.flash_design_device_note), "call-receive-device", true, onSetup)
+    }
+    if (config.autoAnswer && !actuallyStandingBy) {
         Spacer(Modifier.height(12.dp))
+        CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby, onSetup.takeIf { standbyNeedsSetup })
     }
-    CallSectionHeader(title = stringResource(R.string.flash_workspace_who_ai_answers))
-    CallSurfaceCard(modifier = Modifier.padding(bottom = 20.dp).testTag("call-incoming-rules")) {
-        ListRow(icon = MikaIcons.Phone, title = stringResource(R.string.calls_rule_scope),
-            subtitle = "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}",
-            first = true, onClick = onRules.takeIf { canConfigure }, modifier = Modifier.testTag("call-rules-scope")) { RowChevron() }
-        CallCardDivider()
-        ListRow(icon = MikaIcons.Heart, title = stringResource(R.string.calls_bypass_title),
-            subtitle = if (config.bypassIncomingNumbers.isEmpty()) stringResource(R.string.calls_bypass_empty)
-                else stringResource(R.string.calls_bypass_count, config.bypassIncomingNumbers.size),
-            onClick = onBypass.takeIf { canConfigure }, modifier = Modifier.testTag("call-rules-important")) { RowChevron() }
-    }
-    CallSectionHeader(title = stringResource(R.string.flash_workspace_how_ai_responds))
-    CallSurfaceCard(modifier = Modifier.padding(bottom = 20.dp)) {
-        ListRow(icon = MikaIcons.Doc, title = stringResource(R.string.flash_workspace_answering_instructions),
-            subtitle = stringResource(R.string.flash_workspace_manage_context_questions_and_limits_for_each_situation),
-            first = true, onClick = onInstructions.takeIf { canConfigure }, modifier = Modifier.testTag("call-open-instructions")) { RowChevron() }
-        CallCardDivider()
-        ListRow(icon = MikaIcons.Message, title = stringResource(R.string.calls_profile),
-            subtitle = config.greeting.takeIf { it.isNotBlank() } ?: stringResource(R.string.flash_guard_greeting_blank),
-            onClick = onProfile.takeIf { canConfigure }, modifier = Modifier.testTag("call-open-profile")) { RowChevron() }
-        CallCardDivider()
-        ListRow(icon = MikaIcons.Mic, title = stringResource(R.string.voice_clone_title),
-            subtitle = if (config.speaker != CallConfig().speaker) stringResource(R.string.flash_guard_voice_custom, config.speaker)
-                else stringResource(R.string.flash_guard_voice_default),
-            onClick = onVoiceClone.takeIf { canConfigure }) { RowChevron() }
-    }
-    if (config.autoAnswer) {
-        CallSurfaceCard(modifier = Modifier.padding(bottom = 16.dp)) {
-            CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby, onSetup.takeIf { standbyNeedsSetup })
-        }
-    }
-    if (!ready || !config.audioVerified) {
-        CallSurfaceCard(modifier = Modifier.padding(bottom = 16.dp)) {
-            ListRow(icon = MikaIcons.Gear, title = stringResource(R.string.flash_workspace_complete_device_setup),
-                subtitle = stringResource(R.string.calls_verify_note), first = true, onClick = onSetup,
-                modifier = Modifier.testTag("call-receive-device")) { RowChevron() }
-        }
-    }
-    FooterNote(stringResource(R.string.flash_privacy_recording_note))
-
 }
 
 @Composable
 private fun FlashSystemCenter(
+    panel: FlashSettingsPanel,
     config: CallConfig,
     state: CallRuntimeState,
     ready: Boolean,
@@ -1050,6 +835,7 @@ private fun FlashSystemCenter(
 ) {
     val c = MikaTheme.colors
 
+    if (panel == FlashSettingsPanel.Device) {
     // Pillar 1: Call Companion & 2-Way Audio Verification (Always expanded & actionable)
     val deviceTone = when {
         !config.enabled -> TileTone.Neutral
@@ -1152,6 +938,8 @@ private fun FlashSystemCenter(
         }
     }
 
+    }
+    if (panel == FlashSettingsPanel.Voice) {
     // Pillar 4: Realtime Voice Model Credentials & Default Outgoing SIM
     val voiceTone = if (config.credentialsConfigured) TileTone.Ok else TileTone.Warn
     CallSectionHeader(
@@ -1188,6 +976,8 @@ private fun FlashSystemCenter(
         ) { RowChevron() }
     }
 
+    }
+    if (panel == FlashSettingsPanel.Sim) {
     val preferred = config.defaultOutgoingSimId
     val selected = state.simOptions.firstOrNull { it.id == preferred }
     val simUnavailable = preferred != null && selected == null
@@ -1221,6 +1011,7 @@ private fun FlashSystemCenter(
                 subtitle = if (sim.isDefault) stringResource(R.string.calls_default) else null,
             )
         }
+    }
     }
 }
 
@@ -1349,7 +1140,7 @@ internal fun directionLabel(direction: CallDirection): String = stringResource(
 )
 
 @Composable
-private fun phaseLabel(phase: CallPhase): String = stringResource(
+internal fun phaseLabel(phase: CallPhase): String = stringResource(
     when (phase) {
         CallPhase.DIALING -> R.string.calls_dialing
         CallPhase.RINGING -> R.string.calls_ringing

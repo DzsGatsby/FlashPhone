@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">來電留言與外撥結果，都留在這裡。</string>
+    <string name="flash_history_manage">記錄管理</string>
+    <string name="flash_history_recent">最近通話</string>
+    <string name="flash_history_all_status">全部狀態</string>
+    <string name="flash_history_search_hint">搜尋號碼、任務或原文</string>
+    <string name="flash_design_tagline">讓電話，替您辦事。</string>
+    <string name="flash_design_voice_section">聲音與智慧</string>
+    <string name="flash_design_device_section">裝置與服務</string>
+    <string name="flash_design_voice">即時通話語音</string>
+    <string name="flash_design_voice_note">通話引擎、開場白與聲音</string>
+    <string name="flash_design_discussion">交代討論模型</string>
+    <string name="flash_design_discussion_note">用於討論、完善交代</string>
+    <string name="flash_design_device">裝置與背景執行</string>
+    <string name="flash_design_device_note">權限、音訊助手與執行狀態</string>
+    <string name="flash_design_sim_note">每次撥出前仍可選擇</string>
+    <string name="flash_design_standby">放心去忙。</string>
+    <string name="flash_design_pause">臨時暫停</string>
+    <string name="flash_design_scope">調整接聽範圍</string>
+    <string name="flash_design_greeting">開場白</string>
+    <string name="flash_design_greeting_note">接起電話後的第一句話</string>
+    <string name="flash_design_instructions_note">讓助手知道不同場合怎麼回應</string>
+    <string name="flash_design_voice_clone_note">熟悉的聲音，更自然的回應</string>
+</resources>

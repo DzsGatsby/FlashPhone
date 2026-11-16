@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">Incoming messages and outgoing results, all in one place.</string>
+    <string name="flash_history_manage">Manage records</string>
+    <string name="flash_history_recent">Recent calls</string>
+    <string name="flash_history_all_status">All statuses</string>
+    <string name="flash_history_search_hint">Search number, task or transcript</string>
+    <string name="flash_design_tagline">Let your phone take care of it.</string>
+    <string name="flash_design_voice_section">Voice and intelligence</string>
+    <string name="flash_design_device_section">Devices and services</string>
+    <string name="flash_design_voice">Real-time call voice</string>
+    <string name="flash_design_voice_note">Call engine, greeting and voice</string>
+    <string name="flash_design_discussion">Briefing discussion model</string>
+    <string name="flash_design_discussion_note">Discuss and refine instructions</string>
+    <string name="flash_design_device">Device and background</string>
+    <string name="flash_design_device_note">Permissions, audio helper and readiness</string>
+    <string name="flash_design_sim_note">Can still be changed before each call</string>
+    <string name="flash_design_standby">Go about your day.</string>
+    <string name="flash_design_pause">Pause temporarily</string>
+    <string name="flash_design_scope">Adjust answering scope</string>
+    <string name="flash_design_greeting">Opening greeting</string>
+    <string name="flash_design_greeting_note">The first words after answering</string>
+    <string name="flash_design_instructions_note">How to respond in different situations</string>
+    <string name="flash_design_voice_clone_note">A familiar voice for natural replies</string>
+</resources>

@@ -29,12 +29,21 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.draw.rotate
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallActionResult
 import com.wangzan101.mika.calls.CallDirection
@@ -42,7 +51,6 @@ import com.wangzan101.mika.calls.CallRecord
 import com.wangzan101.mika.calls.CallSummaryStatus
 import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.ui.components.keepsKeyboard
-import com.wangzan101.mika.ui.components.TileTone
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.MikaTheme
@@ -63,7 +71,7 @@ private enum class HistoryFilter(@StringRes val label: Int) {
 }
 
 /** Review is entirely local: selecting a record never opens its audio or repeats its call. */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun CallHistorySection(
     history: List<CallRecord>,
@@ -93,6 +101,8 @@ internal fun CallHistorySection(
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingClearAll by rememberSaveable { mutableStateOf(false) }
+    var showManagement by remember { mutableStateOf(false) }
+    var showStatus by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<CallActionResult?>(null) }
     var exportPayload by rememberSaveable { mutableStateOf<String?>(null) }
@@ -104,6 +114,7 @@ internal fun CallHistorySection(
     val incoming = directionLabel(CallDirection.INCOMING)
     val outgoing = directionLabel(CallDirection.OUTGOING)
     val exportFailed = stringResource(R.string.flash_history_export_failed)
+    val searchHint = stringResource(R.string.flash_history_search_hint)
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         val payload = exportPayload
         exportPayload = null
@@ -168,57 +179,86 @@ internal fun CallHistorySection(
             finally { busy = false }
         }
     }
-    CallSectionHeader(stringResource(R.string.flash_hub_audit), badge = "${results.size} / ${history.size}")
-    if (historyWriteFailed) CallFeedback(CallActionResult(false, stringResource(R.string.calls_history_write_failed)))
-    feedback?.let { CallFeedback(it) }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(stringResource(R.string.flash_audit_summary_total, history.size), style = MikaType.Caption, color = c.ink3)
-            Text(stringResource(R.string.flash_audit_summary_open, history.count { !it.handled }), style = MikaType.Caption, color = c.ink3)
-            Text(stringResource(R.string.flash_audit_summary_recorded, history.count { it.recording != null }), style = MikaType.Caption, color = c.ink3)
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.flash_workspace_call_history), style = MikaType.Title.copy(fontSize = 27.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold), color = c.ink)
+            Text(stringResource(R.string.flash_history_subtitle), style = MikaType.Caption, color = c.ink3)
         }
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(CallDirection.INCOMING to incoming, CallDirection.OUTGOING to outgoing, null to stringResource(R.string.calls_history_all)).forEach { (direction, label) ->
-                FilterChip(selected = selectedDirection == direction,
-                    onClick = { selectedDirection = direction; selectedId = null },
-                    label = { Text(label) }, modifier = Modifier.heightIn(min = 48.dp)
-                        .testTag("call-history-direction-${direction?.name?.lowercase() ?: "all"}"))
+        Box {
+            IconButton(onClick = { showManagement = true }, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-manage")) {
+                Icon(MikaIcons.More, stringResource(R.string.flash_history_manage), tint = c.ink2)
+            }
+            DropdownMenu(expanded = showManagement, onDismissRequest = { showManagement = false }) {
+                Text(stringResource(R.string.flash_audit_summary_total, history.size), style = MikaType.Caption, color = c.ink3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Text(stringResource(R.string.flash_audit_summary_open, history.count { !it.handled }), style = MikaType.Caption, color = c.ink3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Text(stringResource(R.string.flash_audit_summary_recorded, history.count { it.recording != null }), style = MikaType.Caption, color = c.ink3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.flash_history_export)) },
+                    onClick = {
+                        showManagement = false
+                        exportPayload = history.joinToString("\n\n────────\n\n") { historyExport(context, it) }
+                        try { export.launch("Flash-phone-history.txt") }
+                        catch (_: Exception) { exportPayload = null; feedback = CallActionResult(false, exportFailed) }
+                    }, enabled = history.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-export-all"),
+                )
+                if (onClearAll != null) DropdownMenuItem(
+                    text = { Text(stringResource(R.string.flash_audit_clear_all), color = MaterialTheme.colorScheme.error) },
+                    onClick = { showManagement = false; pendingClearAll = true },
+                    enabled = history.isNotEmpty() && !busy && playbackEnabled,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-clear"),
+                )
             }
         }
-        OutlinedTextField(
+    }
+    if (historyWriteFailed) CallFeedback(CallActionResult(false, stringResource(R.string.calls_history_write_failed)))
+    feedback?.let { CallFeedback(it) }
+    Column(Modifier.fillMaxWidth()) {
+        TextField(
             value = query,
             onValueChange = { query = it; selectedId = null },
             singleLine = true,
-            shape = RoundedCornerShape(7.dp),
-            label = { Text(stringResource(R.string.calls_history_search)) },
-            leadingIcon = { Icon(MikaIcons.Search, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-history-search"),
+            shape = RoundedCornerShape(12.dp),
+            placeholder = { Text(searchHint, style = MikaType.Caption) },
+            leadingIcon = { Icon(MikaIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = c.fill, unfocusedContainerColor = c.fill,
+                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = c.ink, unfocusedTextColor = c.ink,
+                focusedPlaceholderColor = c.ink3, unfocusedPlaceholderColor = c.ink3,
+            ),
+            textStyle = MikaType.Body,
+            modifier = Modifier.fillMaxWidth().keepsKeyboard().semantics { contentDescription = searchHint }.testTag("call-history-search"),
         )
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            HistoryFilter.entries.forEach { choice ->
-                FilterChip(
-                    selected = filter == choice,
-                    onClick = { filter = choice; selectedId = null },
-                    label = { Text(stringResource(choice.label)) },
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-filter-${choice.name.lowercase()}"),
-                )
+        FlowRow(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            listOf(CallDirection.INCOMING to incoming, CallDirection.OUTGOING to outgoing, null to stringResource(R.string.calls_history_all)).forEach { (direction, label) ->
+                HistoryTab(label, selectedDirection == direction, "call-history-direction-${direction?.name?.lowercase() ?: "all"}") {
+                    selectedDirection = direction; selectedId = null
+                }
             }
-            if (onClearAll != null && history.isNotEmpty()) TextButton(
-                onClick = { pendingClearAll = true },
-                enabled = !busy && playbackEnabled,
-                modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-clear"),
-            ) { Text(stringResource(R.string.flash_audit_clear_all), color = MaterialTheme.colorScheme.error) }
         }
-        CallCardDivider()
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.flash_history_recent), style = MikaType.Hint, color = c.ink3, modifier = Modifier.weight(1f))
+            Box {
+                TextButton(onClick = { showStatus = true }, shape = RoundedCornerShape(9.dp),
+                    colors = ButtonDefaults.textButtonColors(containerColor = c.fill, contentColor = c.ink2),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-status")) {
+                    Text(stringResource(if (filter == HistoryFilter.ALL) R.string.flash_history_all_status else filter.label), style = MikaType.Caption)
+                    Spacer(Modifier.width(6.dp))
+                    Icon(MikaIcons.Chevron, null, Modifier.size(14.dp).rotate(90f))
+                }
+                DropdownMenu(expanded = showStatus, onDismissRequest = { showStatus = false }) {
+                    HistoryFilter.entries.forEach { choice ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (choice == HistoryFilter.ALL) R.string.flash_history_all_status else choice.label)) },
+                            trailingIcon = { if (filter == choice) Icon(MikaIcons.Check, null, Modifier.size(16.dp), tint = c.accent) },
+                            onClick = { filter = choice; selectedId = null; showStatus = false },
+                            modifier = Modifier.heightIn(min = 48.dp).semantics { selected = filter == choice }.testTag("call-history-filter-${choice.name.lowercase()}"),
+                        )
+                    }
+                }
+            }
+        }
         when {
             history.isEmpty() -> HistoryEmpty(stringResource(R.string.calls_history_empty), stringResource(R.string.flash_privacy_recording_note))
             results.isEmpty() -> HistoryEmpty(stringResource(R.string.calls_history_no_match))
@@ -227,7 +267,11 @@ internal fun CallHistorySection(
                 val split = maxWidth >= 760.dp && LocalDensity.current.fontScale < 1.5f
                 BackHandler(enabled = selectedRecord != null) { selectedId = null }
                 val list: @Composable () -> Unit = {
-                    Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(listScroll).testTag("call-history-list")) {
+                    // A phone page has one scroll surface. A second tall viewport can strand
+                    // rows below the fold in short landscapes and makes returning to them awkward.
+                    // Only the desktop master pane needs an independently bounded record list.
+                    val listModifier = if (split) Modifier.heightIn(max = 560.dp).verticalScroll(listScroll) else Modifier
+                    Column(Modifier.fillMaxWidth().then(listModifier).testTag("call-history-list")) {
                         results.forEach { record ->
                             key(record.id) {
                                 HistoryRow(record, selectedId == record.id) { focus.clearFocus(); selectedId = record.id }
@@ -271,10 +315,29 @@ internal fun CallHistorySection(
                 }
                 if (split) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Column(Modifier.weight(1f)) { list() }
-                    Column(Modifier.weight(1.15f).border(0.5.dp, c.edge, RoundedCornerShape(7.dp)).padding(16.dp)) {
+                    Column(Modifier.weight(1.15f).background(c.surface, RoundedCornerShape(22.dp)).border(0.5.dp, c.edge, RoundedCornerShape(22.dp)).padding(20.dp)) {
                         if (selectedRecord != null) detail(selectedRecord) else HistoryEmpty(stringResource(R.string.flash_history_select))
                     }
-                } else if (selectedRecord != null) detail(selectedRecord) else list()
+                } else {
+                    list()
+                    if (selectedRecord != null) ModalBottomSheet(
+                        onDismissRequest = { selectedId = null },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        containerColor = c.surface,
+                        contentColor = c.ink,
+                        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                            // Action failures must stay visible above the review scroll, inside the modal.
+                            Column(Modifier.fillMaxWidth().testTag("call-history-sheet-feedback")) {
+                                if (historyWriteFailed) CallFeedback(CallActionResult(false, stringResource(R.string.calls_history_write_failed)))
+                                feedback?.let { CallFeedback(it) }
+                            }
+                            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
+                                .padding(bottom = 24.dp)) { detail(selectedRecord) }
+                        }
+                    }
+                }
             }
         }
     }
@@ -324,39 +387,53 @@ private fun HistoryEmpty(title: String, subtitle: String? = null) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HistoryTab(label: String, active: Boolean, tag: String, onClick: () -> Unit) {
+    val c = MikaTheme.colors
+    Column(Modifier.width(IntrinsicSize.Min).widthIn(min = 48.dp).clickable(role = Role.Tab, onClick = onClick)
+        .semantics { selected = active }.testTag(tag), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.heightIn(min = 46.dp).padding(horizontal = 3.dp), contentAlignment = Alignment.Center) {
+            Text(label, style = MikaType.Caption.copy(fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal), color = if (active) c.ink else c.ink3)
+        }
+        Box(Modifier.fillMaxWidth().height(2.dp).background(if (active) c.accent else Color.Transparent))
+    }
+}
+
+private val HistoryHandset = ImageVector.Builder("history-handset", 24.dp, 24.dp, 24f, 24f).apply {
+    addPath(addPathNodes("M5 3 3 6c-.5 6 9 15 15 15l3-3-5-4-2 2c-3-1-5-3-6-6l2-2Z"),
+        stroke = SolidColor(Color.Black), strokeLineWidth = 1.7f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+}.build()
+
 @Composable
 private fun HistoryRow(record: CallRecord, selected: Boolean, onSelect: () -> Unit) {
     val c = MikaTheme.colors
     val locale = LocalContext.current.resources.configuration.locales[0]
-    val date = remember(locale) { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale) }
+    val date = remember(locale) { DateFormat.getDateInstance(DateFormat.SHORT, locale) }
+    val time = remember(locale) { DateFormat.getTimeInstance(DateFormat.SHORT, locale) }
     val name = record.number?.let { "\u2066$it\u2069" } ?: stringResource(R.string.calls_unknown_number)
+    val title = record.task?.goal?.takeIf { it.isNotBlank() }
+        ?: record.summary?.highlights?.firstOrNull()?.text?.takeIf { it.isNotBlank() } ?: name
     Row(
         Modifier.fillMaxWidth().background(if (selected) c.fill else c.surface)
             .clickable(role = Role.Button, onClick = onSelect).semantics { this.selected = selected }
-            .heightIn(min = 92.dp).testTag("call-history-row-${record.id}").padding(horizontal = 10.dp, vertical = 15.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .heightIn(min = 92.dp).testTag("call-history-row-${record.id}").padding(vertical = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(34.dp).background(c.fill, RoundedCornerShape(6.dp)).border(0.5.dp, c.edge, RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) { Icon(if (record.direction == CallDirection.INCOMING) MikaIcons.Phone else MikaIcons.Doc, null, Modifier.size(17.dp), tint = c.ink2) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(record.task?.goal?.takeIf { it.isNotBlank() } ?: name, style = MikaType.Body.copy(fontWeight = FontWeight.SemiBold), color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(if (record.task != null) "$name · ${record.result}" else record.result, style = MikaType.Caption, color = c.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("${directionLabel(record.direction)} · ${date.format(Date(record.startedAtMs))}", style = MikaType.Hint, color = c.ink3)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CallStatusBadge(stringResource(if (record.handled) R.string.calls_history_done else R.string.calls_history_open), if (record.handled) TileTone.Neutral else TileTone.Warn)
-                Text(
-                    stringResource(when {
-                        record.recording != null -> R.string.flash_history_recorded
-                        record.recordingPending -> R.string.calls_recording_saving
-                        else -> R.string.calls_recording_missing
-                    }), style = MikaType.Hint, color = c.ink3, modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
+        Box(Modifier.size(42.dp).background(c.fill, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            Icon(HistoryHandset, null, Modifier.size(21.dp), tint = c.ink2)
         }
-        Icon(MikaIcons.Chevron, null, Modifier.padding(top = 2.dp).size(16.dp), tint = c.ink3)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MikaType.Body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(name.takeIf { title != name }, directionLabel(record.direction), record.result).joinToString(" · "), style = MikaType.Hint, color = c.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (record.recording != null) Text(stringResource(R.string.flash_history_recorded), style = MikaType.Hint, color = c.ink3)
+            else if (record.recordingPending) Icon(MikaIcons.Clock, stringResource(R.string.calls_recording_saving), Modifier.size(14.dp), tint = c.ink3)
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(time.format(Date(record.startedAtMs)), style = MikaType.Hint, color = c.ink3)
+            Text(date.format(Date(record.startedAtMs)), style = MikaType.Hint, color = c.ink3)
+            Text(stringResource(if (record.handled) R.string.calls_history_done else R.string.calls_history_open),
+                style = MikaType.Hint, color = if (record.handled) c.ink3 else c.warn)
+        }
     }
 }
 
@@ -383,35 +460,38 @@ private fun HistoryDetail(
     val locale = context.resources.configuration.locales[0]
     val formatter = remember(locale) { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale) }
     Column(Modifier.fillMaxWidth().testTag("call-history-detail"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(Modifier.fillMaxWidth().bringIntoViewRequester(header), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-back")) {
-                Icon(MikaIcons.Close, stringResource(R.string.flash_history_back), tint = c.ink2)
+        Column(Modifier.fillMaxWidth().bringIntoViewRequester(header)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.flash_history_detail), style = MikaType.Title.copy(fontSize = 21.sp, lineHeight = 28.sp), color = c.ink, modifier = Modifier.weight(1f))
+                IconButton(onClick = onBack, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-back")) {
+                    Icon(MikaIcons.Close, stringResource(R.string.flash_history_back), tint = c.ink2)
+                }
             }
-            Text(stringResource(R.string.flash_history_detail), style = MikaType.Body.copy(fontWeight = FontWeight.SemiBold), color = c.ink, modifier = Modifier.weight(1f))
-            Text("${index + 1} / $count", style = MikaType.Hint, color = c.ink3)
-            IconButton(onClick = onPrevious, enabled = index > 0, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-previous")) {
-                Icon(MikaIcons.Back, stringResource(R.string.flash_history_previous))
-            }
-            IconButton(onClick = onNext, enabled = index < count - 1, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-next")) {
-                Icon(MikaIcons.Chevron, stringResource(R.string.flash_history_next))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("${index + 1} / $count", style = MikaType.Hint, color = c.ink3, modifier = Modifier.weight(1f))
+                IconButton(onClick = onPrevious, enabled = index > 0, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-previous")) {
+                    Icon(MikaIcons.Back, stringResource(R.string.flash_history_previous))
+                }
+                IconButton(onClick = onNext, enabled = index < count - 1, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("call-history-next")) {
+                    Icon(MikaIcons.Chevron, stringResource(R.string.flash_history_next))
+                }
             }
         }
         CallCardDivider()
         SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(record.task?.goal?.takeIf { it.isNotBlank() } ?: record.number ?: stringResource(R.string.calls_unknown_number), style = MaterialTheme.typography.titleLarge, color = c.ink)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(record.task?.goal?.takeIf { it.isNotBlank() } ?: record.number ?: stringResource(R.string.calls_unknown_number), style = MikaType.Title.copy(fontSize = 22.sp, lineHeight = 30.sp), color = c.ink)
                 if (record.task != null) Text(record.number ?: stringResource(R.string.calls_unknown_number), style = MikaType.Caption, color = c.ink3)
+                Text("${directionLabel(record.direction)} · ${historyDuration(record)}", style = MikaType.Caption, color = c.ink3)
+                Text(stringResource(if (record.handled) R.string.calls_history_done else R.string.calls_history_open), style = MikaType.Caption, color = if (record.handled) c.ink3 else c.warn)
             }
         }
-        CallStatusBadge(stringResource(if (record.handled) R.string.calls_history_done else R.string.calls_history_open), if (record.handled) TileTone.Neutral else TileTone.Warn)
         CallSummaryCard(record, summaryStatus, onSummarize, onCancelSummary, onConfigureSummary)
-        HistoryProperty(stringResource(R.string.flash_history_direction), directionLabel(record.direction))
-        HistoryProperty(stringResource(R.string.flash_history_duration), historyDuration(record))
         Text(
             stringResource(R.string.calls_history_period, formatter.format(Date(record.startedAtMs)), formatter.format(Date(record.endedAtMs))),
             style = MikaType.Caption, color = c.ink3,
         )
-        Column(Modifier.fillMaxWidth().background(c.fill, RoundedCornerShape(7.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().background(c.fill, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.flash_history_result), style = MikaType.Caption.copy(fontWeight = FontWeight.Medium), color = c.ink2)
             SelectionContainer { Text(record.result, style = MikaType.Body, color = c.ink) }
             if (record.task != null) Text(stringResource(R.string.calls_record_result_unconfirmed), style = MikaType.Caption, color = c.ink3)
@@ -419,29 +499,25 @@ private fun HistoryDetail(
         record.recording?.let { recording ->
             CallRecordingPlayer(recording, onOpenRecording, onCloseRecording, playbackEnabled)
         } ?: Row(
-            Modifier.fillMaxWidth().border(0.5.dp, c.edge, RoundedCornerShape(7.dp)).padding(16.dp),
+            Modifier.fillMaxWidth().background(c.fill, RoundedCornerShape(16.dp)).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(if (record.recordingPending) MikaIcons.Clock else MikaIcons.Mute, null, Modifier.size(22.dp), tint = c.ink3)
             Text(stringResource(if (record.recordingPending) R.string.calls_recording_saving else R.string.calls_recording_missing), style = MikaType.Caption, color = c.ink3)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            FilterChip(selected = !showTask, onClick = { showTask = false }, label = { Text(stringResource(R.string.calls_original_transcript)) }, modifier = Modifier.heightIn(min = 48.dp).testTag("call-record-transcript-toggle"))
-            if (record.task != null) FilterChip(selected = showTask, onClick = { showTask = true }, label = { Text(stringResource(R.string.calls_record_brief)) }, modifier = Modifier.heightIn(min = 48.dp).testTag("call-record-task-toggle"))
+            HistoryTab(stringResource(R.string.calls_original_transcript), !showTask, "call-record-transcript-toggle") { showTask = false }
+            if (record.task != null) HistoryTab(stringResource(R.string.calls_record_brief), showTask, "call-record-task-toggle") { showTask = true }
         }
         CallCardDivider()
         if (showTask && record.task != null) HistoryTask(record.task) else {
             if (record.transcript.isEmpty()) Text(stringResource(R.string.calls_no_transcript), style = MikaType.Body, color = c.ink3)
             else SelectionContainer {
                 // Bound long transcripts; actions remain reachable without traversing every turn.
-                Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("call-history-transcript")) {
-                    record.transcript.forEachIndexed { i, line ->
-                        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text("${i + 1} · ${stringResource(callTranscriptSpeakerLabel(line.role))}", style = MikaType.Hint.copy(fontWeight = FontWeight.SemiBold), color = if (line.role == "user") c.accent else c.ink2)
-                            Text(line.text, style = MikaType.Body, color = c.ink)
-                        }
-                        CallCardDivider()
-                    }
+                Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                    .background(c.fill, RoundedCornerShape(17.dp)).padding(12.dp).testTag("call-history-transcript"),
+                    verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                    record.transcript.forEachIndexed { i, line -> CallTranscriptText(line, turnNumber = i + 1) }
                 }
             }
         }
@@ -459,27 +535,26 @@ private fun HistoryDetail(
             }
         }
         CallCardDivider()
-        // Flow rather than fixed equal-width buttons also works at 200% font size.
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onMark, enabled = !busy, shape = MikaShapes.Button, modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-mark")) {
-                Text(stringResource(if (record.handled) R.string.calls_history_reopen else R.string.calls_history_mark_done))
-            }
-            if (onReuse != null) OutlinedButton(onClick = onReuse, enabled = !busy, shape = MikaShapes.Button, modifier = Modifier.heightIn(min = 48.dp).testTag("call-record-reuse")) {
-                Text(stringResource(R.string.calls_record_reuse))
-            }
-            TextButton(onClick = onDelete, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp).testTag("call-history-delete")) {
-                Text(stringResource(R.string.calls_history_delete), color = MaterialTheme.colorScheme.error)
-            }
-        }
+        HistoryActionRow(stringResource(if (record.handled) R.string.calls_history_reopen else R.string.calls_history_mark_done), "call-history-mark", enabled = !busy, onClick = onMark)
+        if (onReuse != null) HistoryActionRow(stringResource(R.string.calls_record_reuse), "call-record-reuse", enabled = !busy, onClick = onReuse)
+        HistoryActionRow(stringResource(R.string.calls_history_delete), "call-history-delete", enabled = !busy, destructive = true, onClick = onDelete)
     }
 }
 
 @Composable
-private fun HistoryProperty(label: String, value: String) {
+private fun HistoryActionRow(label: String, tag: String, enabled: Boolean = true, destructive: Boolean = false, onClick: () -> Unit) {
     val c = MikaTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, style = MikaType.Hint, color = c.ink3)
-        Text(value, style = MikaType.Caption, color = c.ink2)
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .heightIn(min = 56.dp).padding(vertical = 12.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MikaType.Body, color = when {
+                !enabled -> c.ink3
+                destructive -> MaterialTheme.colorScheme.error
+                else -> c.ink
+            }, modifier = Modifier.weight(1f))
+            Icon(MikaIcons.Chevron, null, Modifier.size(16.dp), tint = c.ink3)
+        }
+        CallCardDivider()
     }
 }
 

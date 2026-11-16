@@ -38,6 +38,7 @@ import com.wangzan101.mika.settings.SystemStatusMonitor
 import com.wangzan101.mika.ui.theme.MikaTheme
 import com.wangzan101.mika.ui.theme.animationsOff
 import com.wangzan101.mika.ui.theme.systemBarsFor
+import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import kotlinx.coroutines.launch
 
 /** The public Flash phone entry point exposes only the call workspace, pairing and updates. */
@@ -64,48 +65,56 @@ class MainActivity : ComponentActivity() {
         callFocusRequest = savedInstanceState?.getInt(FOCUS_KEY) ?: 0
         takeRoute(intent)
         setContent {
-            val dark = appearanceDark()
+            val dark = false
             LaunchedEffect(dark) { systemBarsFor(dark) }
             MikaTheme(dark = dark, reduceMotion = animationsOff(this)) {
-                KeyboardDismissArea(Modifier.fillMaxSize()) {
-                    val nav = rememberNavStack(root = Route.Calls)
-                    val states = rememberSaveableStateHolder()
-                    val status by monitor.status.collectAsState()
-                    val update by app.updates.state.collectAsState()
-                    LaunchedEffect(pendingRoute) {
-                        when (pendingRoute) {
-                            Route.About -> nav.push(Route.About)
-                            Route.Calls -> { nav.reset(); callFocusRequest++ }
-                            else -> Unit
+                FlashPhoneTheme {
+                    KeyboardDismissArea(Modifier.fillMaxSize()) {
+                        val nav = rememberNavStack(root = Route.Calls)
+                        val states = rememberSaveableStateHolder()
+                        val status by monitor.status.collectAsState()
+                        val update by app.updates.state.collectAsState()
+                        val phoneState by app.calls.state.collectAsState()
+                        LaunchedEffect(phoneState.phase, phoneState.callId, nav.current) {
+                            if (phoneState.phase != com.wangzan101.mika.calls.CallPhase.IDLE && nav.current != Route.Calls) {
+                                nav.reset()
+                            }
                         }
-                        pendingRoute = null
-                    }
-                    BackHandler(enabled = nav.canGoBack) { nav.back() }
-                    val back: () -> Unit = { nav.back() }
-                    when (nav.current) {
-                        Route.PhoneSetup -> PhoneSetupScreen(status, repair = false, onFix = ::perform,
-                            callOnly = true, onClose = back)
-                        Route.About -> AboutScreen(
-                            BuildConfig.VERSION_NAME, BuildConfig.GIT_HASH, BuildConfig.BETA, update,
-                            issueUrl = remember {
-                                MikaLinks.issueUrl(MikaLinks.Device(Build.MANUFACTURER, Build.MODEL,
-                                    Build.VERSION.RELEASE, Build.VERSION.SDK_INT, BuildConfig.VERSION_NAME,
-                                    BuildConfig.GIT_HASH))
-                            },
-                            onCheck = app.updates::checkInBackground,
-                            onOpenUrl = { openInBrowser(this, it) },
-                            onOpenLicense = { nav.push(Route.License) },
-                            onBack = back,
-                            diagnostics = {
-                                val calls = app.calls.state.value
-                                "Flash phone ${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_HASH})\nAndroid ${Build.VERSION.RELEASE}\nTelecom: ${calls.prepared}; helper: ${calls.shellConnected}; audio: ${calls.audioReady}; notifications: ${calls.notificationsAvailable}"
-                            },
-                        )
-                        Route.License -> LicensesScreen(onBack = back)
-                        else -> states.SaveableStateProvider(Route.Calls.name) {
-                            CallSettingsScreen(app.calls, onBack = back, standalone = true,
-                                onHelperSetup = { nav.push(Route.PhoneSetup) }, onAbout = { nav.push(Route.About) },
-                                updateAvailable = update.hasUpdate, focusRequest = callFocusRequest)
+                        LaunchedEffect(pendingRoute) {
+                            when (pendingRoute) {
+                                Route.About -> nav.push(Route.About)
+                                Route.Calls -> { nav.reset(); callFocusRequest++ }
+                                else -> Unit
+                            }
+                            pendingRoute = null
+                        }
+                        BackHandler(enabled = nav.canGoBack) { nav.back() }
+                        val back: () -> Unit = { nav.back() }
+                        when (nav.current) {
+                            Route.PhoneSetup -> PhoneSetupScreen(status, repair = false, onFix = ::perform,
+                                callOnly = true, onClose = back)
+                            Route.About -> AboutScreen(
+                                BuildConfig.VERSION_NAME, BuildConfig.GIT_HASH, BuildConfig.BETA, update,
+                                issueUrl = remember {
+                                    MikaLinks.issueUrl(MikaLinks.Device(Build.MANUFACTURER, Build.MODEL,
+                                        Build.VERSION.RELEASE, Build.VERSION.SDK_INT, BuildConfig.VERSION_NAME,
+                                        BuildConfig.GIT_HASH))
+                                },
+                                onCheck = app.updates::checkInBackground,
+                                onOpenUrl = { openInBrowser(this, it) },
+                                onOpenLicense = { nav.push(Route.License) },
+                                onBack = back,
+                                diagnostics = {
+                                    val calls = app.calls.state.value
+                                    "Flash phone ${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_HASH})\nAndroid ${Build.VERSION.RELEASE}\nTelecom: ${calls.prepared}; helper: ${calls.shellConnected}; audio: ${calls.audioReady}; notifications: ${calls.notificationsAvailable}"
+                                },
+                            )
+                            Route.License -> LicensesScreen(onBack = back)
+                            else -> states.SaveableStateProvider(Route.Calls.name) {
+                                CallSettingsScreen(app.calls, onBack = back, standalone = true,
+                                    onHelperSetup = { nav.push(Route.PhoneSetup) }, onAbout = { nav.push(Route.About) },
+                                    updateAvailable = update.hasUpdate, focusRequest = callFocusRequest)
+                            }
                         }
                     }
                 }

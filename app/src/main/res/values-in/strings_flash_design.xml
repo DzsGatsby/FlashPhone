@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flash_history_subtitle">Pesan panggilan masuk dan hasil panggilan keluar, semuanya di satu tempat.</string>
+    <string name="flash_history_manage">Kelola riwayat</string>
+    <string name="flash_history_recent">Panggilan terbaru</string>
+    <string name="flash_history_all_status">Semua status</string>
+    <string name="flash_history_search_hint">Cari nomor, tugas, atau transkrip</string>
+    <string name="flash_design_tagline">Biarkan telepon Anda mengurusnya.</string>
+    <string name="flash_design_voice_section">Suara dan kecerdasan</string>
+    <string name="flash_design_device_section">Perangkat dan layanan</string>
+    <string name="flash_design_voice">Suara panggilan waktu nyata</string>
+    <string name="flash_design_voice_note">Mesin panggilan, salam pembuka, dan suara</string>
+    <string name="flash_design_discussion">Model diskusi instruksi</string>
+    <string name="flash_design_discussion_note">Diskusikan dan sempurnakan instruksi</string>
+    <string name="flash_design_device">Perangkat dan latar belakang</string>
+    <string name="flash_design_device_note">Izin, asisten audio, dan kesiapan</string>
+    <string name="flash_design_sim_note">Tetap dapat diubah sebelum setiap panggilan</string>
+    <string name="flash_design_standby">Silakan lanjutkan aktivitas Anda.</string>
+    <string name="flash_design_pause">Jeda sementara</string>
+    <string name="flash_design_scope">Atur panggilan yang dijawab</string>
+    <string name="flash_design_greeting">Salam pembuka</string>
+    <string name="flash_design_greeting_note">Ucapan pertama setelah menjawab</string>
+    <string name="flash_design_instructions_note">Cara merespons dalam berbagai situasi</string>
+    <string name="flash_design_voice_clone_note">Suara yang akrab untuk respons alami</string>
+</resources>

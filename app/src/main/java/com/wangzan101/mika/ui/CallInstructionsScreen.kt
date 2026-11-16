@@ -48,7 +48,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
-internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
+internal fun CallInstructionsScreen(runtime: CallRuntime, openModelSettings: Boolean = false, onBack: () -> Unit) {
     KeyboardDismissArea {
         PageScaffold(
             title = stringResource(R.string.call_instructions_title),
@@ -58,6 +58,7 @@ internal fun CallInstructionsScreen(runtime: CallRuntime, onBack: () -> Unit) {
             CallPlaybookSection(
                 runtime = runtime,
                 standalone = true,
+                openModelSettings = openModelSettings,
                 onBack = onBack,
             )
         }
@@ -70,6 +71,7 @@ internal fun CallPlaybookSection(
     runtime: CallRuntime,
     modifier: Modifier = Modifier,
     standalone: Boolean = false,
+    openModelSettings: Boolean = false,
     onBack: (() -> Unit)? = null,
 ) {
     val c = MikaTheme.colors
@@ -83,7 +85,7 @@ internal fun CallPlaybookSection(
     val messages by owner.messages.collectAsState()
     val configuredProviders by providers.providers.collectAsState()
     val scope = rememberCoroutineScope()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(if (openModelSettings) 1 else 0) }
     var search by rememberSaveable { mutableStateOf("") }
     var expandedRuleId by rememberSaveable { mutableStateOf<String?>(null) }
     var templatesOpen by rememberSaveable { mutableStateOf(false) }
@@ -94,7 +96,7 @@ internal fun CallPlaybookSection(
     var input by rememberSaveable { mutableStateOf("") }
     var key by remember { mutableStateOf("") }
     var model by rememberSaveable { mutableStateOf("") }
-    var showConnection by rememberSaveable { mutableStateOf(false) }
+    var showConnection by rememberSaveable { mutableStateOf(openModelSettings) }
     var savingConnection by remember { mutableStateOf(false) }
     val busy = savingConnection || engine.phase in setOf(
         CodexOwnerPhase.STARTING,
