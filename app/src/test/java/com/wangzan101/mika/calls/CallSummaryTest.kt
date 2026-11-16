@@ -139,6 +139,19 @@ class CallSummaryTest {
         assertNotEquals(fingerprint, CallSummaryEngine.sourceFingerprint(source.copy(transcript = source.transcript.reversed())))
     }
 
+    @Test fun acceptedRemoteTaskBoundsRemainSummarizableWithoutTruncatingTheSavedBrief() {
+        val task = CallTaskBrief("目".repeat(2_000), List(20) { "问".repeat(500) },
+            "背".repeat(4_000), "界".repeat(2_000))
+        val source = record().copy(task = task)
+        val prompt = CallSummaryEngine.buildPrompt(source)
+        assertTrue(prompt.user.contains(task.goal))
+        assertTrue(prompt.user.contains(task.context))
+        assertTrue(prompt.user.contains(task.constraints))
+        assertEquals(CallSummaryEngine.sourceFingerprint(source), parse(source = source).sourceFingerprint)
+        rejects(valid, source.copy(task = task.copy(goal = task.goal + "目")))
+        rejects(valid, source.copy(task = task.copy(questions = task.questions + "额外问题")))
+    }
+
     private class MemoryStorage(var records: List<CallRecord>) : CallHistory.Storage {
         var failWrite = false
         var failRead = false

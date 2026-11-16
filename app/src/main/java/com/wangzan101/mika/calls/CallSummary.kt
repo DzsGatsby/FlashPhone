@@ -1,5 +1,6 @@
 package com.wangzan101.mika.calls
 
+import com.wangzan101.mika.calls.remote.validatedDeviceTask
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -140,7 +141,8 @@ internal object CallSummaryEngine {
         require(record.transcript.all {
             it.text.length <= CallHistory.MAX_LINE_LENGTH && it.role in setOf("caller", "user", "assistant", "system")
         })
-        record.task?.validatedSnapshot()
+        // Saved remote briefs have a wider accepted envelope than the local dial form.
+        record.task?.let(::validatedDeviceTask)
     }
 
     /** Strict decoding still coerces quoted numeric primitives into Int, so enforce wire types first. */

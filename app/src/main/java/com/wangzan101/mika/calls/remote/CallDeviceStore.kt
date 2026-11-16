@@ -90,13 +90,36 @@ internal class CallDeviceStore(private val file: File, private val cipher: KeyCi
         val receipts = ledger.receipts.filter { it.expiresAt > now }
         check(receipts.size < 256) { "远程命令过多" }
         val tasks = if (command.action == "dial") {
-            (ledger.tasks + DeviceTask(command.task_id)).takeLast(200)
+            val retained = if (ledger.tasks.size >= 200) {
+                // A result remains deliverable and ACK-able until the server confirms receipt.
+                val evict = ledger.tasks.indexOfFirst { task ->
+                    task.terminal && ledger.pending.none { it.task_id == task.id }
+                }
+                check(evict >= 0) { "远程结果待确认队列已满" }
+                ledger.tasks.filterIndexed { index, _ -> index != evict }
+            } else ledger.tasks
+            retained + DeviceTask(command.task_id)
         } else ledger.tasks
         commit(ledger.copy(receipts = receipts + CommandReceipt(command.command_id, command.task_id, digest, command.expires_at), tasks = tasks))
         true
     }
     suspend fun event(taskId: String, phase: String, carrierEnded: Boolean = false, aiActive: Boolean = false,
         workId: String? = null, callId: String? = null, result: JsonObject? = null): DeviceEvent = io { ledger ->
+        appendEvent(ledger, taskId, phase, carrierEnded, aiActive, workId, callId, result)
+    }
+
+    /** Retry after an ambiguous/canceled local commit cannot enqueue a second terminal result. */
+    suspend fun complete(taskId: String, snapshot: RemoteCallSnapshot, result: JsonObject): Unit = io { ledger ->
+        require(snapshot.terminal && snapshot.workFinished)
+        if (!ledger.tasks.single { it.id == taskId }.terminal) {
+            appendEvent(ledger, taskId, snapshot.phase, snapshot.carrierEnded, snapshot.aiActive,
+                snapshot.workId, snapshot.callId, result)
+        }
+        Unit
+    }
+
+    private fun appendEvent(ledger: DeviceLedger, taskId: String, phase: String, carrierEnded: Boolean,
+        aiActive: Boolean, workId: String?, callId: String?, result: JsonObject?): DeviceEvent {
         val task = ledger.tasks.single { it.id == taskId }
         val terminal = phase in setOf("ended", "failed", "canceled", "interrupted")
         val event = DeviceEvent(task_id = taskId, sequence = task.sequence + 1, phase = phase,
@@ -110,7 +133,7 @@ internal class CallDeviceStore(private val file: File, private val cipher: KeyCi
         if (!terminal && phase != "recording_ready") pending = pending.filterNot { it.task_id == taskId && it.phase == phase }
         check(pending.size < 256) { "远程结果待发送队列已满" }
         commit(ledger.copy(tasks = ledger.tasks.map { if (it.id == taskId) updated else it }, pending = pending + event))
-        event
+        return event
     }
     suspend fun ack(taskId: String, sequence: Long) = io { ledger ->
         val task = ledger.tasks.find { it.id == taskId } ?: return@io

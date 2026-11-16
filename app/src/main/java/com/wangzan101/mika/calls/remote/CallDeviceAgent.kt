@@ -51,6 +51,8 @@ class CallDeviceAgent(private val app: MikaApp) {
     private var identity: DeviceIdentity? = null
     private var sessionGeneration = 0L
     private val handles = mutableMapOf<String, RemoteCallHandle>()
+    private val pendingResults = mutableMapOf<String, PendingDeviceCallResult>()
+    private val resultJobs = mutableMapOf<String, Job>()
 
     init {
         scope.launch { app.foreground.visible.collect { if (it) restoreAuthorizedConnection() } }
@@ -79,8 +81,8 @@ class CallDeviceAgent(private val app: MikaApp) {
         if (code.trim().length !in 4..128 || name.trim().length !in 1..64) {
             mutable.value = mutable.value.copy(detail = "请输入有效的一次性连接码和设备名称"); return false
         }
-        if (mutable.value.enabled || handles.values.any { !it.state.value.terminal }) {
-            mutable.value = mutable.value.copy(detail = "请先关闭远程任务并结束已有电话"); return false
+        if (mutable.value.enabled || handles.isNotEmpty()) {
+            mutable.value = mutable.value.copy(detail = "请先关闭远程任务，结束已有电话并等待结果保存"); return false
         }
         mutable.value = mutable.value.copy(busy = true)
         return try {
@@ -118,6 +120,13 @@ class CallDeviceAgent(private val app: MikaApp) {
                 store.enabled(enabled)
                 if (enabled) {
                     mutable.value = mutable.value.copy(enabled = true, detail = "正在启动远程电话任务连接")
+                    // Only this UI action replenishes the budget; restore/reconnect cannot loop it.
+                    for (taskId in pendingResults.keys.toList()) {
+                        resultJobs[taskId]?.join()
+                        val pending = pendingResults[taskId] ?: continue
+                        pending.resetForExplicitEnable()
+                        handles[taskId]?.let { scheduleResultDelivery(it, checkNotNull(identity)) }
+                    }
                     requestStart()
                 }
                 true
@@ -132,8 +141,8 @@ class CallDeviceAgent(private val app: MikaApp) {
     }
     suspend fun disconnectAccount(): Boolean {
         if (!setEnabled(false)) return false
-        if (handles.values.any { !it.state.value.terminal }) {
-            mutable.value = mutable.value.copy(detail = "AI 已交还系统，请结束该电话后再断开账号"); return false
+        if (handles.isNotEmpty()) {
+            mutable.value = mutable.value.copy(detail = "请结束该电话并等待本地结果保存后再断开账号"); return false
         }
         return runCatching {
             store.forget(); identity = null; mutable.value = State(detail = "设备账号已断开"); true
@@ -251,6 +260,9 @@ class CallDeviceAgent(private val app: MikaApp) {
             if (!exchanged || !helloConfirmed) return@coroutineScope
             mutable.value = mutable.value.copy(connected = true, detail = "设备已在线，等待本账号电话任务")
             sendPending(ws)
+            pendingResults.keys.toList().forEach { taskId ->
+                handles[taskId]?.let { scheduleResultDelivery(it, enrolled) }
+            }
             scheduleUpload(enrolled)
             for (message in incoming) when (message) {
                 Incoming.Revoked -> { revoke(); break }
@@ -282,7 +294,8 @@ class CallDeviceAgent(private val app: MikaApp) {
         val local = app.calls.state.value
         val config = app.calls.settings.state.value
         val ready = mutable.value.enabled && service?.leaseAvailable == true && config.enabled && local.prepared &&
-            local.shellConnected && local.audioReady && local.notificationsAvailable && config.credentialsConfigured && local.phase == CallPhase.IDLE
+            local.shellConnected && local.audioReady && local.notificationsAvailable && config.credentialsConfigured &&
+            local.phase == CallPhase.IDLE && handles.isEmpty()
         val message = buildJsonObject {
             put("v", 1); put("type", "hello")
             putJsonArray("capabilities") { CallDeviceProtocol.capabilities.forEach { add(it) } }
@@ -336,8 +349,7 @@ class CallDeviceAgent(private val app: MikaApp) {
     }
     private suspend fun observe(handle: RemoteCallHandle, enrolled: DeviceIdentity) {
         var lastPhase: String? = null
-        try {
-            observeDeviceCall(handle.state,
+        observeDeviceCall(handle.state,
                 onProgress = { snapshot ->
                     if (snapshot.phase != lastPhase) {
                         emit(handle.taskId, snapshot.phase, snapshot, snapshot.reason?.let { buildJsonObject { put("reason", it) } })
@@ -353,24 +365,47 @@ class CallDeviceAgent(private val app: MikaApp) {
                             if (text.isNotEmpty()) { add(buildJsonObject { put("role", line.role); put("text", text) }); budget -= text.toByteArray().size }
                         }
                     }
-                    emit(handle.taskId, snapshot.phase, snapshot, buildJsonObject {
+                    val result = buildJsonObject {
                         put("reason", snapshot.reason ?: record?.result ?: "任务已结束")
                         put("outcome", "needs_review")
                         put("summary", if (snapshot.carrierEnded) "Android 已确认电话结束；任务办理结果请核对转写" else "AI 任务已结束，运营商通话结束未确认")
                         put("transcript", transcript)
-                    })
-                    scheduleUpload(enrolled)
+                    }
+                    pendingResults[handle.taskId] = PendingDeviceCallResult(snapshot, result)
+                    scheduleResultDelivery(handle, enrolled)
                 },
                 onFailure = {
                     mutable.value = mutable.value.copy(detail = "本地任务结果暂未送达，保留已有状态且不重新拨号")
                 },
             )
-        } finally {
-            if (handle.state.value.terminal) {
-                app.calls.releaseRemoteHandle(handle.taskId)
-                handles.remove(handle.taskId)
+    }
+
+    private fun scheduleResultDelivery(handle: RemoteCallHandle, enrolled: DeviceIdentity) {
+        val pending = pendingResults[handle.taskId] ?: return
+        if (resultJobs[handle.taskId]?.isActive == true) return
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                if (pending.deliver { snapshot, result -> store.complete(handle.taskId, snapshot, result) }) {
+                    // A local commit owns the result before either runtime handle is released.
+                    withContext(NonCancellable) {
+                        app.calls.releaseRemoteHandle(handle.taskId)
+                        handles.remove(handle.taskId)
+                        pendingResults.remove(handle.taskId)
+                    }
+                    socket?.let { sendHello(it); sendPending(it) }
+                    scheduleUpload(enrolled)
+                } else {
+                    mutable.value = mutable.value.copy(detail = "电话结果保存失败，已保留且不会重拨；请恢复本机存储后重新开启远程任务")
+                }
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: Exception) {
+                mutable.value = mutable.value.copy(detail = "本地电话结果等待发送，不会重新拨号")
+            } finally {
+                if (resultJobs[handle.taskId] === currentCoroutineContext()[Job]) resultJobs.remove(handle.taskId)
             }
         }
+        resultJobs[handle.taskId] = job
+        job.start()
     }
 
     private fun scheduleUpload(enrolled: DeviceIdentity) {

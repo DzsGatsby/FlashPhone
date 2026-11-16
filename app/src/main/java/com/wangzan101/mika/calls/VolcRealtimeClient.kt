@@ -70,6 +70,8 @@ sealed interface VolcRealtimeEvent {
         val isCompleteFinal: Boolean = isFinal,
         /** A late identified final is history, never control of the current speaking turn. */
         val isCurrentTurn: Boolean = true,
+        /** Earlier captured instructions have not received a final or failure yet. */
+        val hasUnresolvedPriorTurn: Boolean = false,
     ) : VolcRealtimeEvent
     data object UserSpeechEnded : VolcRealtimeEvent
     /** Provider observations only; these do not start, stop, or retry a turn. */
@@ -153,6 +155,7 @@ class VolcRealtimeSession internal constructor(
     private var userText = StringBuilder()
     private var userTextTruncated = false
     private var userTurnActive = false
+    private var unresolvedAnonymousTurn = false
     private class UserItemState {
         val text = StringBuilder()
         var truncated = false
@@ -315,6 +318,11 @@ class VolcRealtimeSession internal constructor(
                 val item = itemId?.let(::userItem)
                 if (item?.ended == true || item?.started == true) return
                 item?.started = true
+                // An anonymous partial cannot be recovered by item identity once replaced.
+                // Keep that uncertainty for the session instead of silently dropping a restriction.
+                if (currentUserItem == null && userTurnActive) {
+                    unresolvedAnonymousTurn = true
+                }
                 currentUserItem = itemId
                 userText = item?.text ?: StringBuilder()
                 userTextTruncated = item?.truncated ?: false
@@ -370,6 +378,9 @@ class VolcRealtimeSession internal constructor(
                     isCompleteFinal = if (explicitFinal != null) explicitFinal.length <= MAX_TRANSCRIPT_CHARS
                         else !hasFinalText && !(item?.truncated ?: userTextTruncated),
                     isCurrentTurn = isCurrent,
+                    hasUnresolvedPriorTurn = unresolvedAnonymousTurn || userItems.any { (id, prior) ->
+                        id != (itemId ?: currentUserItem) && !prior.ended && (prior.started || prior.text.isNotBlank())
+                    },
                 ))
                 (item ?: currentUserItem?.let(userItems::get))?.let {
                     it.ended = true
@@ -513,7 +524,9 @@ class VolcRealtimeSession internal constructor(
         userItems[id]?.let { return it }
         if (userItems.size >= MAX_TRACKED_USER_ITEMS) {
             val oldest = userItems.keys.firstOrNull { it != currentUserItem } ?: userItems.keys.first()
-            userItems.remove(oldest)
+            userItems.remove(oldest)?.let { evicted ->
+                if (!evicted.ended && (evicted.started || evicted.text.isNotBlank())) unresolvedAnonymousTurn = true
+            }
         }
         return UserItemState().also { userItems[id] = it }
     }

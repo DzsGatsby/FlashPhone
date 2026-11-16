@@ -29,6 +29,9 @@ internal class VoiceBriefingConversation(initialBrief: CallTaskBrief?) {
         // a late correction by arrival time, or silently lose it by discarding it.
         if (!event.isCurrentTurn) throw VoiceBriefingFailure("口述定稿顺序发生变化，未拨号；请重新完整交代")
         if (VoiceBriefingAuthorization.matches(event)) {
+            if (event.hasUnresolvedPriorTurn) {
+                throw VoiceBriefingFailure("之前的交代尚未完整识别，未拨号；请重新完整交代")
+            }
             val brief = snapshot()
             terminal = true
             return brief

@@ -7,6 +7,7 @@ import com.wangzan101.mika.calls.VolcRealtimeEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.advanceTimeBy
@@ -53,6 +54,43 @@ class VoiceBriefingControllerTest {
         override suspend fun close() { closed = true }
     }
     private val credentials = VolcRealtimeCredentials(apiKey = "fake-test-only")
+
+    @Test fun `cancel before scheduled session body releases operation and permits retry`() = runTest {
+        val connection = Connection().also { it.allowClose.complete(Unit) }
+        var connects = 0
+        val controller = VoiceBriefingController(this, { _, _ -> connects++; connection }, { Audio() }, { true })
+        assertTrue(controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) {})
+        controller.cancel()
+        runCurrent()
+        assertEquals(0, connects)
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+        assertTrue(controller.start("target", credentials, VolcRealtimeConfig(), canContinue = { true }) {})
+        runCurrent()
+        assertEquals(1, connects)
+        controller.cancel()
+        runCurrent()
+        assertTrue(connection.closed)
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+    }
+
+    @Test fun `owner scope canceled during noncancellable shutdown cannot authorize`() = runTest {
+        val owner = Job(coroutineContext[Job])
+        val ownerScope = CoroutineScope(coroutineContext + owner)
+        val connection = Connection()
+        var dials = 0
+        val controller = VoiceBriefingController(ownerScope, { _, _ -> connection }, { Audio() }, { true })
+        controller.start("target", credentials, VolcRealtimeConfig(), CallTaskBrief("问价格"), { true }) { dials++ }
+        runCurrent()
+        connection.final("我说完了，你去打")
+        runCurrent()
+        assertTrue(connection.closeStarted)
+        owner.cancel()
+        connection.allowClose.complete(Unit)
+        runCurrent()
+        assertTrue(connection.closed)
+        assertEquals(0, dials)
+        assertEquals(VoiceBriefingActivity.IDLE, controller.state.value.activity)
+    }
 
     @Test fun `precall conversation strips phone tools even from a reused call config`() = runTest {
         val connection = Connection().also { it.allowClose.complete(Unit) }

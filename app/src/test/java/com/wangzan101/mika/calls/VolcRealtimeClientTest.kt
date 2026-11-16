@@ -481,6 +481,38 @@ class VolcRealtimeClientTest {
         assertEquals(1, observed.count { it == VolcRealtimeEvent.UserSpeechEnded })
     }
 
+    @Test fun authorizationCannotSkipAnOlderUnfinishedRestriction() = runBlocking {
+        for (identified in listOf(true, false)) for (hasPartial in listOf(true, false)) {
+            val id = if (identified) ",\"item_id\":\"restriction\"" else ""
+            val frames = mutableListOf("""{"type":"conversation.item.input_audio_transcription.started"$id}""")
+            if (hasPartial) frames += """{"type":"conversation.item.input_audio_transcription.delta"$id,"delta":"不要同意任何付费项目"}"""
+            frames += """{"type":"conversation.item.input_audio_transcription.started","item_id":"authorization"}"""
+            frames += """{"type":"conversation.item.input_audio_transcription.completed","item_id":"authorization","text":"我说完了，你去打"}"""
+            val observed = observeFrames(frames)
+            val authorization = observed.filterIsInstance<VolcRealtimeEvent.UserTranscript>().single { it.isFinal }
+            val conversation = com.wangzan101.mika.calls.briefing.VoiceBriefingConversation(
+                CallTaskBrief(goal = "询问服务价格"),
+            )
+            assertTrue("Unfinished restriction must prevent dialing; identified=$identified partial=$hasPartial",
+                runCatching { conversation.accept(authorization) }.isFailure)
+        }
+    }
+
+    @Test fun finalizedOrEmptyEarlierTurnDoesNotBlockLaterAuthorization() = runBlocking {
+        for (text in listOf("不要同意任何付费项目", "")) {
+            val observed = observeFrames(listOf(
+                """{"type":"conversation.item.input_audio_transcription.started","item_id":"restriction"}""",
+                """{"type":"conversation.item.input_audio_transcription.completed","item_id":"restriction","text":"$text"}""",
+                """{"type":"conversation.item.input_audio_transcription.started","item_id":"authorization"}""",
+                """{"type":"conversation.item.input_audio_transcription.completed","item_id":"authorization","text":"我说完了，你去打"}""",
+            ))
+            val authorization = observed.filterIsInstance<VolcRealtimeEvent.UserTranscript>().last()
+            assertFalse(authorization.hasUnresolvedPriorTurn)
+            val conversation = com.wangzan101.mika.calls.briefing.VoiceBriefingConversation(CallTaskBrief(goal = "询问服务价格"))
+            assertNotNull(conversation.accept(authorization))
+        }
+    }
+
     private suspend fun observeFrames(frames: List<String>): List<VolcRealtimeEvent> {
         var result = emptyList<VolcRealtimeEvent>()
         withServer { server, http ->

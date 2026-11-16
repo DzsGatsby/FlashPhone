@@ -39,6 +39,19 @@ class VoiceBriefingConversationTest {
         } catch (_: VoiceBriefingFailure) { }
     }
 
+    @Test fun `authorization cannot omit an unfinished earlier owner instruction`() {
+        val conversation = VoiceBriefingConversation(CallTaskBrief("问价格"))
+        // Ordinary completed content is retained while a different item is unfinished.
+        assertNull(conversation.accept(final("还要问是否含税").copy(hasUnresolvedPriorTurn = true)))
+        assertEquals("还要问是否含税", conversation.ownerTranscript)
+        try {
+            conversation.accept(final("我说完了，你去打").copy(hasUnresolvedPriorTurn = true))
+            fail("must not authorize with an unresolved earlier restriction")
+        } catch (failure: VoiceBriefingFailure) {
+            assertEquals("之前的交代尚未完整识别，未拨号；请重新完整交代", failure.safeMessage)
+        }
+    }
+
     @Test fun `duplicate consecutive instruction finals do not duplicate immutable task`() {
         val conversation = VoiceBriefingConversation(null)
         conversation.accept(final("问营业时间"))

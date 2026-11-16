@@ -132,7 +132,7 @@ internal class CallPcmBridge(
                             is VolcRealtimeEvent.UserTranscript -> {
                                 if (event.isCurrentTurn) cancelFarewellWaiter()
                                 if (event.isFinal) {
-                                    if (event.isCurrentTurn) farewell.callerFinal(event.text, event.isCompleteFinal)
+                                    if (event.isCurrentTurn) farewell.callerFinal(event.text, event.isCompleteFinal && !event.hasUnresolvedPriorTurn)
                                     onTranscript("caller", event.text)
                                     onFinalTranscript("caller", event.text)
                                 } else if (event.isCurrentTurn) farewell.cancelCandidate()

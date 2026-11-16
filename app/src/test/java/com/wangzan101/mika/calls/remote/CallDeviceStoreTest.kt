@@ -4,6 +4,8 @@ import com.wangzan101.mika.settings.KeyCipher
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -118,6 +120,74 @@ class CallDeviceStoreTest {
             val store = CallDeviceStore(file, TestCipher())
             assertTrue(runCatching { store.claim(command(), 1_000_001L) }.isFailure)
             assertArrayEquals(before, file.readBytes())
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun taskRetentionKeepsUnacknowledgedResultsAckableWhenANewDialIsClaimed() = runTest {
+        val directory = Files.createTempDirectory("device-retention-test").toFile()
+        try {
+            val file = File(directory, "ledger.enc"); val cipher = TestCipher()
+            val tasks = (1..200).map { DeviceTask(java.util.UUID(0, it.toLong()).toString(),
+                sequence = 1, phase = "ended", terminal = true) }
+            val result = DeviceEvent(task_id = tasks.first().id, sequence = 1, phase = "ended", carrier_ended = true)
+            file.writeBytes(cipher.encrypt(CallDeviceProtocol.json.encodeToString(
+                DeviceLedger(identity = device, tasks = tasks, pending = listOf(result))).toByteArray()))
+            val store = CallDeviceStore(file, cipher)
+            val next = command(task = java.util.UUID(0, 201L).toString())
+            assertTrue(store.claim(next, 1_000_001L))
+            assertEquals(200, store.read().tasks.size)
+            assertTrue(store.read().tasks.any { it.id == tasks.first().id })
+            assertFalse(store.read().tasks.any { it.id == tasks[1].id })
+            // Also prove the ACK can clear this event after process restart.
+            val reloaded = CallDeviceStore(file, cipher)
+            reloaded.ack(result.task_id, result.sequence)
+            assertTrue(reloaded.read().pending.isEmpty())
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun fullUnacknowledgedTaskLedgerRejectsAnotherDialBeforeReservingIt() = runTest {
+        val directory = Files.createTempDirectory("device-full-results-test").toFile()
+        try {
+            val file = File(directory, "ledger.enc"); val cipher = TestCipher()
+            val tasks = (1..200).map { DeviceTask(java.util.UUID(0, it.toLong()).toString(),
+                sequence = 1, phase = "ended", terminal = true) }
+            val pending = tasks.map { DeviceEvent(task_id = it.id, sequence = 1, phase = "ended", carrier_ended = true) }
+            file.writeBytes(cipher.encrypt(CallDeviceProtocol.json.encodeToString(
+                DeviceLedger(identity = device, tasks = tasks, pending = pending)).toByteArray()))
+            val original = file.readBytes()
+            val store = CallDeviceStore(file, cipher)
+            val next = command(task = java.util.UUID(0, 201L).toString())
+            assertTrue(runCatching { store.claim(next, 1_000_001L) }.isFailure)
+            assertArrayEquals(original, file.readBytes())
+            assertTrue(store.read().receipts.isEmpty())
+            assertEquals(200, store.read().pending.size)
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun finalCompletionCommitRemainsIdempotentAfterCancellationAndServerAck() = runTest {
+        val directory = Files.createTempDirectory("device-final-result-test").toFile()
+        try {
+            val file = File(directory, "ledger.enc"); val cipher = TestCipher()
+            val store = CallDeviceStore(file, cipher)
+            val command = command()
+            store.enroll(device); store.claim(command, 1_000_001L)
+            val snapshot = RemoteCallSnapshot("ended", "work", "call", carrierEnded = true, workFinished = true)
+            val result = buildJsonObject { put("transcript", "synthetic saved result") }
+            val pending = PendingDeviceCallResult(snapshot, result)
+            assertTrue(runCatching {
+                pending.deliver { observed, facts ->
+                    store.complete(command.task_id, observed, facts)
+                    throw CancellationException("synthetic cancellation after durable commit")
+                }
+            }.exceptionOrNull() is CancellationException)
+            assertFalse(pending.delivered)
+            assertEquals(result, store.read().pending.single().result)
+            store.ack(command.task_id, 1)
+            val reloaded = CallDeviceStore(file, cipher)
+            assertTrue(pending.deliver { observed, facts -> reloaded.complete(command.task_id, observed, facts) })
+            assertTrue(reloaded.read().pending.isEmpty())
+            assertEquals(1L, reloaded.read().tasks.single().sequence)
+            assertTrue(reloaded.read().tasks.single().terminal)
         } finally { directory.deleteRecursively() }
     }
 }

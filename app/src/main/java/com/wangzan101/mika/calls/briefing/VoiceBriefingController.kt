@@ -18,12 +18,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -211,11 +213,10 @@ class VoiceBriefingController internal constructor(
                     cleanlyClosed = audioClosed && providerClosed
                 }
                 if (audio === localAudio) audio = null
-                operation = null
             }
             if (token != generation || closed) return@launch
             val brief = authorized
-            if (brief != null && cleanlyClosed && failure == null && valid()) {
+            if (brief != null && cleanlyClosed && failure == null && currentCoroutineContext().isActive && valid()) {
                 // Invalidate callbacks/events from this session before entering the ordinary dial path.
                 generation++
                 mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.AUTHORIZED, ownerPartial = "")
@@ -226,6 +227,17 @@ class VoiceBriefingController internal constructor(
             }
         }
         operation = job
+        // Cancellation can win before a LAZY job ever enters its body. In that case its
+        // finally block cannot release the operation, so completion must own that fallback.
+        job.invokeOnCompletion {
+            if (operation === job) {
+                operation = null
+                if (job.isCancelled) mutable.value = mutable.value.copy(
+                    activity = VoiceBriefingActivity.IDLE,
+                    message = mutable.value.message ?: "语音交代已取消，未拨号",
+                )
+            }
+        }
         job.start()
         return true
     }
@@ -236,12 +248,7 @@ class VoiceBriefingController internal constructor(
         operation?.cancel()
         mutable.value = mutable.value.copy(activity = if (operation != null) VoiceBriefingActivity.CLOSING else VoiceBriefingActivity.IDLE,
             ownerPartial = "", message = message)
-        // A new session cannot start until cleanup releases the old operation.
-        operation?.invokeOnCompletion {
-            if (!closed && operation == null && mutable.value.activity == VoiceBriefingActivity.CLOSING) {
-                mutable.value = mutable.value.copy(activity = VoiceBriefingActivity.IDLE)
-            }
-        }
+        // A new session cannot start until cleanup (or pre-start completion) releases it.
     }
 
     override fun close() { closed = true; cancel() }
