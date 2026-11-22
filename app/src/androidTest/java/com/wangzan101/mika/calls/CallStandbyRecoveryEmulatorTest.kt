@@ -1,7 +1,9 @@
 package com.wangzan101.mika.calls
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.ActivityManager
 import android.app.Instrumentation
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.job.JobInfo
 import android.app.job.JobScheduler
@@ -9,9 +11,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Rect
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.UserManager
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wangzan101.mika.MikaApp
@@ -28,12 +36,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Exercises Android's real job and foreground service in a disposable emulator without an Activity or a call. */
+/** Exercises Android's real standby job, foreground service and notification on a disposable emulator. */
 @RunWith(AndroidJUnit4::class)
 class CallStandbyRecoveryEmulatorTest {
+    @get:Rule val compose = createEmptyComposeRule()
+
     @Test fun periodicJobStartsRestoresAndStopsWithSavedStandby() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assumeTrue(InstrumentationRegistry.getArguments().getString("standbyRecoveryEmulator") == "true")
@@ -120,6 +131,14 @@ class CallStandbyRecoveryEmulatorTest {
             assertTrue(restored.activeSince > first.activeSince)
             assertFalse(app.foreground.visible.value)
 
+            // With no audio helper, the service posts the actual blocked notification as soon as
+            // the fixture's pause ends. The synthetic approved number remains the only allowed one.
+            withContext(Dispatchers.Main.immediate) {
+                assertFalse(runtime.state.value.shellConnected)
+                runtime.settings.save(runtime.settings.state.value.copy(autoAnswerPausedUntilMs = null))
+            }
+            tapBlockedStandbyNotification(instrumentation, notifications)
+
             withContext(Dispatchers.Main.immediate) {
                 runtime.settings.save(runtime.settings.state.value.copy(autoAnswer = false))
             }
@@ -151,6 +170,51 @@ class CallStandbyRecoveryEmulatorTest {
                 }
                 assertNull(findJob(scheduler, jobComponent))
             }
+        }
+    }
+
+    private suspend fun tapBlockedStandbyNotification(
+        instrumentation: Instrumentation,
+        notifications: NotificationManager,
+    ) {
+        val message = "后台待命暂不可用，打开查看"
+        await("The foreground service did not post its standby failure notification") {
+            notifications.activeNotifications.firstOrNull {
+                it.notification.channelId == CallStandbyService.CHANNEL &&
+                    it.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() == message
+            }
+        }
+        val automation = instrumentation.uiAutomation
+        val accessibility = automation.serviceInfo
+        val originalFlags = accessibility.flags
+        try {
+            accessibility.flags = originalFlags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            automation.serviceInfo = accessibility
+            shell(instrumentation, "cmd statusbar expand-notifications")
+            val target = await("The standby failure notification was not accessible in the system shade") {
+                (listOfNotNull(automation.rootInActiveWindow) + automation.windows.mapNotNull { it.root })
+                    .asSequence().filter { it.packageName == "com.android.systemui" }
+                    .firstNotNullOfOrNull { noticeBounds(it, message) }
+            }
+            shell(instrumentation, "input tap ${target.centerX()} ${target.centerY()}")
+            compose.waitUntil(7_000) {
+                compose.onAllNodes(hasTestTag("call-settings-device")).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("call-settings-device").assertIsDisplayed()
+        } finally {
+            shell(instrumentation, "cmd statusbar collapse")
+            accessibility.flags = originalFlags
+            automation.serviceInfo = accessibility
+        }
+    }
+
+    private fun noticeBounds(node: AccessibilityNodeInfo, message: String): Rect? {
+        if (node.isVisibleToUser && node.text?.toString()?.contains(message) == true) {
+            return Rect().also(node::getBoundsInScreen).takeUnless { it.isEmpty }
+        }
+        return (0 until node.childCount).firstNotNullOfOrNull { index ->
+            node.getChild(index)?.let { noticeBounds(it, message) }
         }
     }
 

@@ -22,6 +22,7 @@ import android.util.Log
 import androidx.annotation.MainThread
 import com.wangzan101.mika.BuildConfig
 import com.wangzan101.mika.MikaApp
+import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.remote.validatedDeviceTask
 import com.wangzan101.mika.calls.remote.RemoteCallHandle
 import com.wangzan101.mika.calls.remote.RemoteCallSnapshot
@@ -1715,6 +1716,8 @@ class CallRuntime(private val app: MikaApp) {
     private fun autoAnswerBlocker(config: CallConfig, notificationReady: Boolean? = null): String? = when {
         !config.audioVerified -> "请先确认当前模式的双向通话音频"
         !config.allowAllIncoming && config.allowedIncomingNumbers.isEmpty() -> "自动接听名单为空"
+        config.enabled && CallStandbyPolicy.needsHelperBeforePreparing(shell != null, configuring) ->
+            app.getString(R.string.calls_setup_shell)
         else -> prerequisite(ignoreWork = true, notificationReady = notificationReady)
             ?: if (!audioReady) audioDetail ?: "设备通话音频尚未准备好" else null
     }

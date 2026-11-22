@@ -64,6 +64,7 @@ fun CallSettingsScreen(
     onAbout: () -> Unit = {},
     updateAvailable: Boolean = false,
     focusRequest: Int = 0,
+    focusDeviceReadiness: Boolean = false,
 ) {
     FlashPhoneTheme {
         val liveState by runtime.state.collectAsState()
@@ -109,6 +110,7 @@ fun CallSettingsScreen(
                     onAbout = onAbout,
                     updateAvailable = updateAvailable,
                     focusRequest = focusRequest,
+                    focusDeviceReadiness = focusDeviceReadiness,
                     onRemote = { remoteOpen = true },
                     onSummarySettings = { summarySettingsOpen = true },
                 ) {
@@ -132,6 +134,7 @@ private fun CallSettingsWorkspace(
     onAbout: () -> Unit,
     updateAvailable: Boolean,
     focusRequest: Int,
+    focusDeviceReadiness: Boolean,
     onRemote: () -> Unit,
     onSummarySettings: () -> Unit,
     onVoiceClone: () -> Unit,
@@ -174,15 +177,6 @@ private fun CallSettingsWorkspace(
         device.readiness.standbyNotificationsAllowed && !busy && !controlBusy && !settingsBusy
 
     LaunchedEffect(tab) { if (tab == CallWorkspaceTab.Home) tab = CallWorkspaceTab.Task }
-
-    LaunchedEffect(focusRequest) {
-        if (focusRequest > 0 && focusRequest != handledFocusRequest) {
-            tab = CallWorkspaceTab.Task
-            lastDailyTab = CallWorkspaceTab.Task
-            liveNavigation++
-            handledFocusRequest = focusRequest
-        }
-    }
 
     BackHandler(enabled = tab != CallWorkspaceTab.Task && (idle || !liveExpanded)) {
         tab = if (tab == CallWorkspaceTab.Settings && lastDailyTab != CallWorkspaceTab.Settings) lastDailyTab else CallWorkspaceTab.Task
@@ -254,6 +248,21 @@ private fun CallSettingsWorkspace(
         tab = CallWorkspaceTab.Settings
         deviceNavigation++
         settingsPanel = FlashSettingsPanel.Device
+    }
+
+    LaunchedEffect(focusRequest) {
+        if (focusRequest <= 0 || focusRequest == handledFocusRequest) return@LaunchedEffect
+        handledFocusRequest = focusRequest
+        if (focusDeviceReadiness && idle) {
+            dialog = null
+            pendingReuse = null
+            openDeviceSettings()
+        } else {
+            settingsPanel = null
+            tab = CallWorkspaceTab.Task
+            lastDailyTab = CallWorkspaceTab.Task
+            liveNavigation++
+        }
     }
 
     val openHistoryCount = remember(history) { history.count { !it.handled } }
@@ -493,13 +502,17 @@ private fun CallSettingsWorkspace(
             modifier = Modifier.testTag("call-settings-panel"),
         ) {
             FlashPhoneSheetSystemBars()
-            FlashSettingsPanelContent(panel, feedback, onDismiss = { settingsPanel = null }) {
+            FlashSettingsPanelContent(
+                panel, feedback, onDismiss = { settingsPanel = null },
+                standbyBlockedReason = state.backgroundStandbyBlockedReason.takeIf {
+                    panel == FlashSettingsPanel.Device && !state.backgroundStandbyStarting
+                },
+            ) {
                 FlashSystemCenter(
                     panel = panel,
                     config = config,
                     state = state,
                     ready = ready,
-                    openDeviceRequest = deviceNavigation,
                     canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
                     stopBusy = controlBusy || settingsBusy,
                     device = device,
@@ -809,7 +822,6 @@ private fun FlashSystemCenter(
     config: CallConfig,
     state: CallRuntimeState,
     ready: Boolean,
-    openDeviceRequest: Int,
     canConfigure: Boolean,
     stopBusy: Boolean,
     device: CallDeviceControls,
@@ -912,9 +924,6 @@ private fun FlashSystemCenter(
         tone = bgTone,
     ) {
         CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby)
-        if (!state.backgroundStandbyStarting) {
-            state.backgroundStandbyBlockedReason?.let { FooterNote(it) }
-        }
         CallCardDivider()
         CallBatterySettingsRow(device, canConfigure)
         FooterNote(stringResource(R.string.calls_background_lock_screen_note))

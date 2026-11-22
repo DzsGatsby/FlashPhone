@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallActionResult
+import com.wangzan101.mika.ui.components.FooterNote
 import com.wangzan101.mika.ui.theme.MikaIcons
 
 /** The result stays in the active sheet while its device controls can scroll. */
@@ -22,6 +23,7 @@ internal fun ColumnScope.FlashSettingsPanelContent(
     panel: FlashSettingsPanel,
     feedback: CallActionResult?,
     onDismiss: () -> Unit,
+    standbyBlockedReason: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 23.dp).imePadding()) {
@@ -36,7 +38,8 @@ internal fun ColumnScope.FlashSettingsPanelContent(
             }
         }
         Column(Modifier.fillMaxWidth().testTag("call-settings-panel-feedback")) {
-            feedback?.let { CallFeedback(it) }
+            standbyBlockedReason?.let { FooterNote(it, Modifier.testTag("call-standby-blocked-reason")) }
+            feedback?.takeUnless { it.message == standbyBlockedReason }?.let { CallFeedback(it) }
         }
         Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp).testTag("call-settings-panel-controls"), content = content)

@@ -21,6 +21,10 @@ internal object CallStandbyPolicy {
     fun allowsAutomaticAnswer(userUnlocked: Boolean, interactiveForeground: Boolean, serviceRunning: Boolean, notificationsAllowed: Boolean): Boolean =
         userUnlocked && (interactiveForeground || serviceRunning && notificationsAllowed)
 
+    /** The standby repair screen can prepare Telecom only after the audio helper connects. */
+    fun needsHelperBeforePreparing(helperConnected: Boolean, configuring: Boolean): Boolean =
+        !helperConnected && !configuring
+
     fun activeWakeBudgetMs(maxCallSeconds: Int): Long = maxCallSeconds.coerceIn(15, CallPolicy.MAX_SECONDS) * 1_000L + 10_000L
 }
 

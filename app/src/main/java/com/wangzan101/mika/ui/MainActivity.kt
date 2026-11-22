@@ -46,7 +46,8 @@ class MainActivity : ComponentActivity() {
     private val app get() = application as MikaApp
     private lateinit var monitor: SystemStatusMonitor
     private var callFocusRequest by mutableIntStateOf(0)
-    private var pendingRoute by mutableStateOf<Route?>(null)
+    private var focusDeviceReadiness by mutableStateOf(false)
+    private var pendingRoute by mutableStateOf<NotificationRoute?>(null)
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
             open(appNotificationSettings())
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         monitor = SystemStatusMonitor(this, app.phone.shellControl, callsOnly = true)
         callFocusRequest = savedInstanceState?.getInt(FOCUS_KEY) ?: 0
+        focusDeviceReadiness = savedInstanceState?.getBoolean(DEVICE_READINESS_KEY) ?: false
         takeRoute(intent)
         setContent {
             val dark = false
@@ -81,10 +83,14 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         LaunchedEffect(pendingRoute) {
-                            when (pendingRoute) {
-                                Route.About -> nav.push(Route.About)
-                                Route.Calls -> { nav.reset(); callFocusRequest++ }
-                                else -> Unit
+                            when (val route = pendingRoute) {
+                                NotificationRoute.Updates -> nav.push(Route.About)
+                                NotificationRoute.Calls, NotificationRoute.DeviceReadiness -> {
+                                    nav.reset()
+                                    focusDeviceReadiness = route == NotificationRoute.DeviceReadiness
+                                    callFocusRequest++
+                                }
+                                null -> Unit
                             }
                             pendingRoute = null
                         }
@@ -113,7 +119,8 @@ class MainActivity : ComponentActivity() {
                             else -> states.SaveableStateProvider(Route.Calls.name) {
                                 CallSettingsScreen(app.calls, onBack = back, standalone = true,
                                     onHelperSetup = { nav.push(Route.PhoneSetup) }, onAbout = { nav.push(Route.About) },
-                                    updateAvailable = update.hasUpdate, focusRequest = callFocusRequest)
+                                    updateAvailable = update.hasUpdate, focusRequest = callFocusRequest,
+                                    focusDeviceReadiness = focusDeviceReadiness)
                             }
                         }
                     }
@@ -124,6 +131,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt(FOCUS_KEY, callFocusRequest)
+        outState.putBoolean(DEVICE_READINESS_KEY, focusDeviceReadiness)
         super.onSaveInstanceState(outState)
     }
 
@@ -135,11 +143,13 @@ class MainActivity : ComponentActivity() {
 
     private fun takeRoute(intent: Intent) {
         pendingRoute = when {
-            intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false) -> Route.About
-            intent.getBooleanExtra(EXTRA_OPEN_CALLS, false) -> Route.Calls
+            intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false) -> NotificationRoute.Updates
+            intent.getBooleanExtra(EXTRA_OPEN_CALL_DEVICE_READINESS, false) -> NotificationRoute.DeviceReadiness
+            intent.getBooleanExtra(EXTRA_OPEN_CALLS, false) -> NotificationRoute.Calls
             else -> pendingRoute
         }
         intent.removeExtra(EXTRA_OPEN_UPDATES)
+        intent.removeExtra(EXTRA_OPEN_CALL_DEVICE_READINESS)
         intent.removeExtra(EXTRA_OPEN_CALLS)
     }
 
@@ -201,6 +211,8 @@ class MainActivity : ComponentActivity() {
         false
     }
 
+    private enum class NotificationRoute { Updates, Calls, DeviceReadiness }
+
     companion object {
         // Constants retained for source compatibility with components excluded from this APK's manifest.
         const val EXTRA_OPEN_CONVERSATION = "open_conversation"
@@ -208,7 +220,9 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_TEACH_GOAL = "teach_goal"
         const val EXTRA_OPEN_UPDATES = "open_updates"
         const val EXTRA_OPEN_CALLS = "open_calls"
+        internal const val EXTRA_OPEN_CALL_DEVICE_READINESS = "open_call_device_readiness"
         private const val FOCUS_KEY = "callFocusRequest"
+        private const val DEVICE_READINESS_KEY = "focusDeviceReadiness"
     }
 }
 

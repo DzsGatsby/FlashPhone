@@ -7,6 +7,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CallStandbyPolicyTest {
+    @Test fun standbyPointsToAudioHelperUntilItConnects() {
+        assertTrue(CallStandbyPolicy.needsHelperBeforePreparing(helperConnected = false, configuring = false))
+        assertFalse(CallStandbyPolicy.needsHelperBeforePreparing(helperConnected = true, configuring = false))
+        assertFalse(CallStandbyPolicy.needsHelperBeforePreparing(helperConnected = false, configuring = true))
+    }
+
     @Test fun ordinaryOutgoingRetainsLeaseWhenActivityLosesForegroundAndIncomingIsDisabled() {
         val config = CallConfig(enabled = true, autoAnswer = false)
         assertFalse(CallStandbyPolicy.optedIn(config, userUnlocked = true))

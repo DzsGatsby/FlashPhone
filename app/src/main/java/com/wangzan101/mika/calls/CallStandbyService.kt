@@ -80,16 +80,16 @@ class CallStandbyService : Service() {
                 val outgoing = calls.hasOutgoingForegroundWork()
                 val receive = stickyAutoAnswer && calls.hasAuthorizedIncomingStandby()
                 if ((!receive && !outgoing) || !notificationsAvailable(this@CallStandbyService)) return@map null
-                Notice(when {
-                    state.lockedDialPreparing -> "正在准备锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒"
-                    state.lockedDialRequestId != null -> "等待锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒"
-                    outgoing && state.aiActive -> "AI 外呼已接通，正在通话"
-                    outgoing -> "正在准备 AI 外呼"
-                    state.autoAnswerStage == CallAutoAnswerStage.PAUSED -> "自动接听已暂停"
-                    state.backgroundStandbyBlockedReason != null -> "后台待命暂不可用，打开查看"
-                    state.aiActive -> "后台待命已开启，AI 正在通话"
-                    else -> "后台待命已开启，可在电话设置中关闭"
-                }, state.lockedDialRequestId)
+                when {
+                    state.lockedDialPreparing -> Notice("正在准备锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒", state.lockedDialRequestId)
+                    state.lockedDialRequestId != null -> Notice("等待锁屏拨出 · 剩余 ${state.lockedDialRemainingSeconds ?: 0} 秒", state.lockedDialRequestId)
+                    outgoing && state.aiActive -> Notice("AI 外呼已接通，正在通话")
+                    outgoing -> Notice("正在准备 AI 外呼")
+                    state.autoAnswerStage == CallAutoAnswerStage.PAUSED -> Notice("自动接听已暂停")
+                    state.backgroundStandbyBlockedReason != null -> Notice("后台待命暂不可用，打开查看", opensDeviceReadiness = true)
+                    state.aiActive -> Notice("后台待命已开启，AI 正在通话")
+                    else -> Notice("后台待命已开启，可在电话设置中关闭")
+                }
             }.distinctUntilChanged().collect { notice ->
                 if (notice == null) requestStop()
                 else if (runCatching {
@@ -117,17 +117,14 @@ class CallStandbyService : Service() {
         super.onDestroy()
     }
 
-    private data class Notice(val summary: String, val requestId: String?)
+    private data class Notice(val summary: String, val requestId: String? = null, val opensDeviceReadiness: Boolean = false)
 
     private fun notification(notice: Notice): Notification {
-        val open = PendingIntent.getActivity(this, NOTIFICATION_ID, Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(MainActivity.EXTRA_OPEN_CALLS, true), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(notice.summary)
-            .setContentIntent(open)
+            .setContentIntent(notificationContentIntent(this, notice.opensDeviceReadiness))
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(if (notice.requestId == null) Notification.VISIBILITY_PRIVATE else Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
@@ -150,6 +147,14 @@ class CallStandbyService : Service() {
         private const val ACTION_START = "com.wangzan101.mika.calls.START_STANDBY"
         private const val EXTRA_REQUEST_ID = "standby_start_id"
         private const val NOTIFICATION_ID = 90_118
+        private const val DEVICE_READINESS_REQUEST_CODE = 90_120
+
+        internal fun notificationContentIntent(context: Context, opensDeviceReadiness: Boolean): PendingIntent {
+            val extra = if (opensDeviceReadiness) MainActivity.EXTRA_OPEN_CALL_DEVICE_READINESS else MainActivity.EXTRA_OPEN_CALLS
+            val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(extra, true)
+            val requestCode = if (opensDeviceReadiness) DEVICE_READINESS_REQUEST_CODE else NOTIFICATION_ID
+            return PendingIntent.getActivity(context, requestCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        }
 
         internal fun startIntent(context: Context, requestId: String? = null): Intent =
             Intent(context, CallStandbyService::class.java).setAction(ACTION_START).putExtra(EXTRA_REQUEST_ID, requestId)

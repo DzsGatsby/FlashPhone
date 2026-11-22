@@ -52,4 +52,27 @@ class FlashSettingsFeedbackUiTest {
         compose.onNodeWithText(failed).assertDoesNotExist()
         compose.onNodeWithTag("call-settings-panel-close").assertIsDisplayed()
     }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun currentStandbyBlockerStaysVisibleAndClearsWhenReadinessReturns() {
+        val blocker = mutableStateOf<String?>("Flash phone 内置助手未连接")
+        compose.setContent {
+            FlashPhoneTheme {
+                ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+                    FlashSettingsPanelContent(FlashSettingsPanel.Device, feedback = null, onDismiss = {}, standbyBlockedReason = blocker.value) {
+                        repeat(24) { Text("合成设置项 $it", Modifier.height(56.dp)) }
+                        Text("合成的底部设置", Modifier.testTag("review-device-bottom"))
+                    }
+                }
+            }
+        }
+        val reason = compose.onNodeWithTag("call-standby-blocked-reason")
+        reason.assertTextEquals("Flash phone 内置助手未连接").assertIsDisplayed()
+        compose.onNodeWithTag("review-device-bottom").performScrollTo().assertIsDisplayed()
+        reason.assertIsDisplayed()
+        compose.runOnIdle { blocker.value = "请允许 AI 电话通知，以便取消或接管" }
+        reason.assertTextEquals("请允许 AI 电话通知，以便取消或接管").assertIsDisplayed()
+        compose.runOnIdle { blocker.value = null }
+        reason.assertDoesNotExist()
+    }
 }
