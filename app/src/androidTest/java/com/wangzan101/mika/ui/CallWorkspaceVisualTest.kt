@@ -113,6 +113,13 @@ class CallWorkspaceVisualTest {
             assertTrue("The text entry must expose its measured layout", labelLayouts.isNotEmpty())
             for (layout in labelLayouts) {
                 assertTrue("The text entry label must fit vertically", !layout.didOverflowHeight)
+                for (line in 0 until layout.lineCount) {
+                    val left = layout.getLineLeft(line)
+                    val right = layout.getLineRight(line)
+                    // Glyphs are shaped in fractional pixels while the layout width is integral.
+                    assertTrue("Text entry line ${line + 1} spans $left to $right in ${layout.size.width}px",
+                        left >= -1f && right <= layout.size.width + 1f)
+                }
                 assertTrue("The text entry label must not be ellipsized",
                     (0 until layout.lineCount).none(layout::isLineEllipsized))
             }
