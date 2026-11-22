@@ -1050,6 +1050,7 @@ private fun FlashSystemCenter(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlashDeviceSectionHeader(title: String, badge: String? = null, badgeTone: TileTone = TileTone.Neutral) {
     FlowRow(
