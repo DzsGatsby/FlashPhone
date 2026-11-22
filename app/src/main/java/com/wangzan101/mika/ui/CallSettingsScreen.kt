@@ -1056,7 +1056,6 @@ private fun FlashDeviceSectionHeader(title: String, badge: String? = null, badge
         Modifier.fillMaxWidth().padding(top = 15.dp, bottom = 8.dp, start = 2.dp, end = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, Modifier.semantics { heading() }, fontSize = 16.sp, lineHeight = 22.sp,
             fontWeight = FontWeight.Bold, color = FlashPhoneColors.Forest)
