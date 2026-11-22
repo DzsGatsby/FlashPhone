@@ -27,6 +27,7 @@ import com.wangzan101.mika.calls.remote.validatedDeviceTask
 import com.wangzan101.mika.calls.remote.RemoteCallHandle
 import com.wangzan101.mika.calls.remote.RemoteCallSnapshot
 import com.wangzan101.mika.calls.instructions.CallInstructionStore
+import com.wangzan101.mika.i18n.tr
 import com.wangzan101.mika.settings.FeatureFlags
 import com.wangzan101.mika.shell.IMikaShell
 import kotlinx.coroutines.CancellationException
@@ -1717,7 +1718,7 @@ class CallRuntime(private val app: MikaApp) {
         !config.audioVerified -> "请先确认当前模式的双向通话音频"
         !config.allowAllIncoming && config.allowedIncomingNumbers.isEmpty() -> "自动接听名单为空"
         config.enabled && CallStandbyPolicy.needsHelperBeforePreparing(shell != null, configuring) ->
-            app.getString(R.string.calls_setup_shell)
+            tr(R.string.calls_setup_shell)
         else -> prerequisite(ignoreWork = true, notificationReady = notificationReady)
             ?: if (!audioReady) audioDetail ?: "设备通话音频尚未准备好" else null
     }
