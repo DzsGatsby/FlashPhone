@@ -11,8 +11,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +34,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wangzan101.mika.R
@@ -51,7 +48,6 @@ import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.FlashPhoneSheetSystemBars
 import com.wangzan101.mika.ui.theme.MikaTheme
-import com.wangzan101.mika.ui.theme.FlashPhoneColors
 import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import com.wangzan101.mika.ui.theme.MikaType
 
@@ -231,97 +227,48 @@ internal fun CallTaskScreen(
             Modifier.fillMaxWidth().background(palette.background).padding(horizontal = 20.dp).testTag("call-task-fields"),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(FlashPhoneColors.Forest),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = { showSims = true },
+                    enabled = canEdit,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-sim"),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    shape = RoundedCornerShape(9.dp),
+                    colors = ButtonDefaults.textButtonColors(containerColor = if (currentSim != null) palette.blue else androidx.compose.ui.graphics.Color.Transparent),
                 ) {
-                    TextButton(
-                        onClick = { showSims = true },
-                        enabled = canEdit,
-                        modifier = Modifier.widthIn(max = 152.dp).heightIn(min = 48.dp).testTag("call-task-sim"),
-                        contentPadding = PaddingValues(horizontal = 10.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        colors = ButtonDefaults.textButtonColors(
-                            containerColor = if (currentSim != null) FlashPhoneColors.Lime else Color.Transparent,
-                            contentColor = if (currentSim != null) FlashPhoneColors.Forest else FlashPhoneColors.Lime,
-                            disabledContentColor = FlashPhoneColors.OnForest.copy(alpha = 0.72f),
-                        ),
-                    ) {
-                        Text(currentSim?.label ?: missingSim, style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        Icon(MikaIcons.Chevron, null, Modifier.padding(start = 4.dp).size(14.dp))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (draft.hasContent) {
-                        TextButton(
-                            onClick = {
-                                clearedDraft = draft.snapshotFields()
-                                tapMessage = null
-                                draft.clear()
-                            },
-                            enabled = canEdit,
-                            modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-clear"),
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = FlashPhoneColors.OnForest,
-                                disabledContentColor = FlashPhoneColors.OnForest.copy(alpha = 0.72f),
-                            ),
-                        ) {
-                            Text(stringResource(R.string.flash_dial_clear_draft), style = MikaType.Caption)
-                        }
-                    } else if (canUndoClear) {
-                        TextButton(
-                            onClick = {
-                                if (draft.snapshotFields().all(String::isEmpty)) clearedDraft?.let(draft::restoreFields)
-                                clearedDraft = null
-                            },
-                            enabled = canEdit,
-                            shape = RoundedCornerShape(6.dp),
-                            colors = ButtonDefaults.textButtonColors(
-                                containerColor = FlashPhoneColors.OnForest.copy(alpha = 0.14f),
-                                contentColor = FlashPhoneColors.Lime,
-                                disabledContentColor = FlashPhoneColors.OnForest.copy(alpha = 0.72f),
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp),
-                            modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-undo-clear"),
-                        ) {
-                            Text(stringResource(R.string.undo), style = MikaType.Caption)
-                        }
-                    }
+                    Text(currentSim?.label ?: missingSim, color = if (currentSim != null) androidx.compose.ui.graphics.Color.White else if (canEdit) palette.blue else c.ink3,
+                        style = MaterialTheme.typography.titleSmall)
+                    Icon(MikaIcons.Chevron, null, Modifier.padding(start = 4.dp).size(14.dp), tint = if (currentSim != null) androidx.compose.ui.graphics.Color.White else c.ink3)
                 }
-                HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = FlashPhoneColors.OnForest.copy(alpha = 0.24f))
-                Box(
-                    Modifier.fillMaxWidth().heightIn(min = if (compactDialer) 51.dp else 83.dp)
-                        .padding(horizontal = 8.dp, vertical = if (compactDialer) 6.dp else 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CompositionLocalProvider(LocalTextSelectionColors provides TextSelectionColors(
-                        handleColor = FlashPhoneColors.Lime,
-                        backgroundColor = FlashPhoneColors.Lime.copy(alpha = 0.28f),
-                    )) {
-                        BasicTextField(
-                            value = draft.numberInput,
-                            onValueChange = { draft.numberInput = it },
-                            enabled = canEdit,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            textStyle = TextStyle(color = FlashPhoneColors.OnForest, fontSize = 34.sp,
-                                fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum",
-                                textAlign = TextAlign.Center, textDirection = TextDirection.Ltr),
-                            cursorBrush = SolidColor(FlashPhoneColors.Lime),
-                            modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-number")
-                                .semantics { contentDescription = "电话号码" },
-                            decorationBox = { inner ->
-                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    if (draft.number.isEmpty()) Text("输入号码",
-                                        color = FlashPhoneColors.OnForest.copy(alpha = 0.72f), fontSize = 27.sp)
-                                    inner()
-                                }
-                            },
-                        )
+                Spacer(Modifier.weight(1f))
+                if (draft.hasContent) {
+                    TextButton(
+                        onClick = {
+                            clearedDraft = draft.snapshotFields()
+                            tapMessage = null
+                            draft.clear()
+                        },
+                        enabled = canEdit,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-clear"),
+                    ) {
+                        Text(stringResource(R.string.flash_dial_clear_draft), style = MikaType.Caption, color = c.ink3)
+                    }
+                } else if (canUndoClear) {
+                    TextButton(
+                        onClick = {
+                            if (draft.snapshotFields().all(String::isEmpty)) clearedDraft?.let(draft::restoreFields)
+                            clearedDraft = null
+                        },
+                        enabled = canEdit,
+                        shape = RoundedCornerShape(9.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = palette.blue.copy(alpha = 0.12f),
+                            contentColor = palette.blue,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-undo-clear"),
+                    ) {
+                        Text(stringResource(R.string.undo), style = MikaType.Caption)
                     }
                 }
             }
@@ -333,11 +280,30 @@ internal fun CallTaskScreen(
                     Text(stringResource(R.string.calls_device_and_permissions), style = MikaType.Caption)
                 }
             }
+            Box(Modifier.fillMaxWidth().heightIn(min = if (compactDialer) 52.dp else 84.dp).padding(vertical = if (compactDialer) 6.dp else 12.dp), contentAlignment = Alignment.Center) {
+                BasicTextField(
+                    value = draft.numberInput,
+                    onValueChange = { draft.numberInput = it },
+                    enabled = canEdit,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    textStyle = TextStyle(color = c.ink, fontSize = 34.sp, fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center, textDirection = TextDirection.Ltr),
+                    cursorBrush = SolidColor(palette.blue),
+                    modifier = Modifier.fillMaxWidth().keepsKeyboard().testTag("call-number")
+                        .semantics { contentDescription = "电话号码" },
+                    decorationBox = { inner ->
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            if (draft.number.isEmpty()) Text("输入号码", color = c.ink3, fontSize = 27.sp)
+                            inner()
+                        }
+                    },
+                )
+            }
             if (draft.number.isNotBlank() && number == null) {
                 Text(stringResource(R.string.calls_task_number_hint), color = c.bad, style = MikaType.Caption,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp).testTag("call-number-error"))
+                    modifier = Modifier.padding(bottom = 8.dp).testTag("call-number-error"))
             }
-            Spacer(Modifier.height(if (compactDialer) 6.dp else 10.dp))
             // Keep the number field focused when tapping a key so the selection stays active.
             Box(Modifier.fillMaxWidth().keepsKeyboard()) {
                 DialerKeypad(
@@ -346,7 +312,7 @@ internal fun CallTaskScreen(
                     onPlus = { if (draft.number.isEmpty()) draft.number = "+" },
                 )
             }
-            Spacer(Modifier.height(if (compactDialer) 6.dp else 8.dp))
+            Spacer(Modifier.height(if (compactDialer) 12.dp else 18.dp))
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val buttonSize = dialerKeySize(maxWidth)
                 TextButton(
@@ -364,7 +330,7 @@ internal fun CallTaskScreen(
                 }
                 Box(
                     Modifier.size(buttonSize).clip(CircleShape)
-                        .background(if (canStartVoice) palette.callGreen else c.fill)
+                        .background(if (canStartVoice) palette.callGreen else palette.callGreen.copy(alpha = 0.42f))
                         .testTag("call-start-voice")
                         .combinedClickable(
                             enabled = canEdit,
@@ -397,7 +363,7 @@ internal fun CallTaskScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (voiceBusy) CircularProgressIndicator(Modifier.size(28.dp), color = palette.onGreen, strokeWidth = 2.dp)
-                    else Icon(DialerIcons.Handset, null, Modifier.size(32.dp), tint = if (canStartVoice) palette.onGreen else c.ink3)
+                    else Icon(DialerIcons.Handset, null, Modifier.size(32.dp), tint = palette.onGreen)
                 }
                 IconButton(
                     onClick = draft::deleteNumberAtSelection,

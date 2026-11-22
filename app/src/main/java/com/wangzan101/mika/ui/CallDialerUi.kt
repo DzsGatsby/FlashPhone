@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.wangzan101.mika.ui.theme.FlashPhoneColors
 import com.wangzan101.mika.ui.theme.MikaTheme
 
 /** Local tokens for the owner's selected white iPhone keypad; shared app navigation is unaffected. */
@@ -37,8 +36,9 @@ internal data class DialerPalette(
 @Composable
 internal fun dialerPalette(): DialerPalette {
     val c = MikaTheme.colors
-    return DialerPalette(c.bg, FlashPhoneColors.Paper, c.edge,
-        FlashPhoneColors.Forest, FlashPhoneColors.Lime, c.accent)
+    return DialerPalette(c.bg, c.fill, c.edge,
+        if (c.isDark) Color(0xFF30C85A) else Color(0xFF178248), Color.White,
+        if (c.isDark) Color(0xFF63AEFF) else c.accent)
 }
 
 @Composable

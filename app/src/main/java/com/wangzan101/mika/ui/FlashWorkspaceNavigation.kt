@@ -90,9 +90,9 @@ internal fun FlashWorkspaceNavigation(
     val c = MikaTheme.colors
     val configuration = LocalConfiguration.current
     val compactRail = rail && configuration.screenHeightDp < 500
-    val selectedColor = FlashPhoneColors.Forest
-    val selectedFill = FlashPhoneColors.Lime
-    val itemShape = RoundedCornerShape(9.dp)
+    val selectedColor = c.accent
+    val selectedFill = c.accentSoft
+    val itemShape = RoundedCornerShape(14.dp)
     val content: @Composable (Modifier) -> Unit = { itemModifier ->
         listOf(CallWorkspaceTab.Task, CallWorkspaceTab.History, CallWorkspaceTab.Receive, CallWorkspaceTab.Settings).forEach { tab ->
             val active = tab == selected
@@ -135,22 +135,22 @@ internal fun FlashWorkspaceNavigation(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, null, Modifier.size(if (compactRail) 20.dp else 23.dp),
-                        tint = if (active) selectedColor else FlashPhoneColors.OnForest)
+                        tint = if (active) selectedColor else c.ink3)
                     if (badge != null) {
                         if (badge == "•") {
                             Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-2).dp)
-                                .size(6.dp).background(if (active) selectedColor else selectedFill, CircleShape))
+                                .size(6.dp).background(c.accent, CircleShape))
                         } else {
                             Text(badge, Modifier.align(Alignment.TopEnd).offset(x = 14.dp, y = (-5).dp)
-                                .background(if (active) selectedColor else selectedFill, RoundedCornerShape(10.dp)).widthIn(min = 19.dp)
+                                .background(c.accent, RoundedCornerShape(10.dp)).widthIn(min = 19.dp)
                                 .padding(horizontal = 4.dp),
-                                fontSize = 10.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, color = if (active) selectedFill else selectedColor)
+                                fontSize = 10.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, color = c.onAccent)
                         }
                     }
                 }
                 Spacer(Modifier.height(3.dp))
                 Text(shortTitle, modifier = Modifier.fillMaxWidth(),
-                    color = if (active) selectedColor else FlashPhoneColors.OnForest,
+                    color = if (active) selectedColor else c.ink3,
                     fontSize = 12.sp, lineHeight = 16.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -161,13 +161,13 @@ internal fun FlashWorkspaceNavigation(
     if (rail) {
         Column(
             Modifier.width(if (configuration.fontScale > 1.3f) 112.dp else 92.dp)
-                .fillMaxHeight().background(FlashPhoneColors.Forest).statusBarsPadding()
+                .fillMaxHeight().background(c.surface).statusBarsPadding()
                 .border(0.5.dp, c.edge).verticalScroll(rememberScrollState())
                 .padding(horizontal = 7.dp, vertical = if (compactRail) 4.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (compactRail) 0.dp else 8.dp),
         ) { content(Modifier.fillMaxWidth()) }
     } else {
-        val dockShape = RoundedCornerShape(13.dp)
+        val dockShape = RoundedCornerShape(19.dp)
         val narrow = configuration.screenWidthDp < 360 || configuration.fontScale > 1.3f
         Box(Modifier.fillMaxWidth().background(c.bg).padding(
             start = if (narrow) 12.dp else 16.dp,
@@ -176,8 +176,8 @@ internal fun FlashWorkspaceNavigation(
         )) {
             Row(
                 Modifier.fillMaxWidth()
-                    .background(FlashPhoneColors.Forest, dockShape)
-                    .border(1.dp, FlashPhoneColors.Forest, dockShape)
+                    .background(FlashPhoneColors.Dock, dockShape)
+                    .border(1.dp, c.edge, dockShape)
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically,
