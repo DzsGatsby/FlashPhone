@@ -1,6 +1,7 @@
 package com.wangzan101.mika.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.*
 import com.wangzan101.mika.ui.components.*
+import com.wangzan101.mika.ui.theme.FlashPhoneColors
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaShapes
 import com.wangzan101.mika.ui.theme.MikaSpace
@@ -300,7 +302,7 @@ private fun CallSettingsWorkspace(
                     }
                     val showWorkspaceHeader = idle && (tab == CallWorkspaceTab.Settings || tab == CallWorkspaceTab.Home)
                     Column(Modifier.weight(1f).fillMaxHeight()
-                        .then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White) else Modifier)
+                        .then(if (tab == CallWorkspaceTab.Task) Modifier.background(MikaTheme.colors.bg) else Modifier)
                         .then(if (!showWorkspaceHeader) Modifier.statusBarsPadding() else Modifier)) {
                         if (showWorkspaceHeader) FlashWorkspaceHeader(
                             showPageTitle = tab == CallWorkspaceTab.Settings,
@@ -753,48 +755,62 @@ private fun FlashGuardWorkspace(
     val needsSetup = !ready || !config.audioVerified ||
         (config.autoAnswer && !state.backgroundStandbyRunning && !state.backgroundStandbyStarting)
     val paused = state.autoAnswerStage == CallAutoAnswerStage.PAUSED
-    val statusBackground = when {
-        actuallyStandingBy -> c.okSoft
-        paused || needsSetup -> c.warnSoft
-        else -> c.fill
+    val blockingDetail = state.backgroundStandbyBlockedReason
+    val standbyDetail = when {
+        actuallyStandingBy -> "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}"
+        needsSetup && blockingDetail != null && state.autoAnswerStage == CallAutoAnswerStage.BLOCKED ->
+            stringResource(R.string.calls_system_default)
+        else -> autoAnswerSummary(config, state)
     }
-    val statusTint = when {
-        actuallyStandingBy -> c.ok
-        paused || needsSetup -> c.warn
-        else -> c.ink2
-    }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.flash_workspace_answering), Modifier.weight(1f).semantics { heading() }, fontSize = 28.sp,
-            lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
-        MikaSwitch(config.autoAnswer, onCheckedChange = onToggle,
-            enabled = controlsEnabled && (config.autoAnswer || canTurnOn),
-            modifier = Modifier.testTag("call-auto-answer").semantics { contentDescription = autoLabel })
-    }
-    Surface(color = statusBackground, shape = RoundedCornerShape(14.dp),
+    Text(stringResource(R.string.flash_workspace_answering),
+        Modifier.padding(top = 6.dp, bottom = 14.dp).semantics { heading() },
+        fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
+    Surface(color = FlashPhoneColors.Forest, contentColor = FlashPhoneColors.Paper, shape = RoundedCornerShape(17.dp),
         modifier = Modifier.fillMaxWidth().testTag("call-home-standby")) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(MikaIcons.Shield, null, Modifier.padding(top = 2.dp).size(22.dp), tint = statusTint)
-                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {
-                    if (!paused) liveRegion = LiveRegionMode.Polite
-                }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
-                    Text(if (actuallyStandingBy) "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}"
-                        else autoAnswerSummary(config, state), fontSize = 14.sp, lineHeight = 20.sp, color = c.ink2)
-                }
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(MikaIcons.Shield, null, Modifier.size(21.dp), tint = FlashPhoneColors.Lime)
+                Text(autoLabel, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp,
+                    fontWeight = FontWeight.SemiBold, color = FlashPhoneColors.Lime)
+                Switch(config.autoAnswer, onCheckedChange = onToggle,
+                    enabled = controlsEnabled && (config.autoAnswer || canTurnOn),
+                    modifier = Modifier.testTag("call-auto-answer").semantics { contentDescription = autoLabel },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = FlashPhoneColors.Forest,
+                        checkedTrackColor = FlashPhoneColors.Lime,
+                        uncheckedThumbColor = FlashPhoneColors.OnForest,
+                        uncheckedTrackColor = FlashPhoneColors.Forest,
+                        uncheckedBorderColor = FlashPhoneColors.OnForest,
+                        disabledUncheckedThumbColor = FlashPhoneColors.OnForest.copy(alpha = 0.65f),
+                        disabledUncheckedTrackColor = FlashPhoneColors.Forest,
+                        disabledUncheckedBorderColor = FlashPhoneColors.OnForest.copy(alpha = 0.65f),
+                    ))
+            }
+            HorizontalDivider(color = FlashPhoneColors.OnForest.copy(alpha = 0.24f))
+            Column(Modifier.semantics(mergeDescendants = true) {
+                if (!paused) liveRegion = LiveRegionMode.Polite
+            }, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(title, fontSize = 21.sp, lineHeight = 27.sp, fontWeight = FontWeight.SemiBold,
+                    color = FlashPhoneColors.Paper)
+                Text(standbyDetail, fontSize = 14.sp, lineHeight = 20.sp, color = FlashPhoneColors.OnForest)
             }
             if (config.autoAnswer || paused) {
                 Box(Modifier.testTag("call-rules-pause")) {
+                    val buttonColors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = FlashPhoneColors.Lime,
+                        disabledContentColor = FlashPhoneColors.OnForest.copy(alpha = 0.65f),
+                    )
+                    val border = BorderStroke(1.dp, FlashPhoneColors.OnForest.copy(alpha = if (controlsEnabled) 0.75f else 0.3f))
                     if (paused) {
                         OutlinedButton(onResume, enabled = controlsEnabled,
-                            modifier = Modifier.heightIn(min = 48.dp).testTag("call-rules-resume")) {
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("call-rules-resume"),
+                            colors = buttonColors, border = border) {
                             Text(stringResource(R.string.calls_auto_resume))
                         }
                     } else {
                         var pauseMenu by remember { mutableStateOf(false) }
                         OutlinedButton({ pauseMenu = true }, enabled = controlsEnabled,
-                            modifier = Modifier.heightIn(min = 48.dp)) {
+                            modifier = Modifier.heightIn(min = 48.dp), colors = buttonColors, border = border) {
                             Text(stringResource(R.string.flash_design_pause))
                         }
                         DropdownMenu(pauseMenu, { pauseMenu = false }) {
@@ -810,8 +826,8 @@ private fun FlashGuardWorkspace(
     }
     if (needsSetup) {
         Spacer(Modifier.height(10.dp))
-        FlashSettingsRow(MikaIcons.Gear, stringResource(R.string.flash_workspace_complete_device_setup),
-            stringResource(R.string.flash_design_device_note), "call-receive-device", prominent = true, onClick = onSetup)
+        FlashSettingsRow(MikaIcons.Info, stringResource(R.string.flash_workspace_complete_device_setup),
+            blockingDetail ?: stringResource(R.string.flash_design_device_note), "call-receive-device", warning = true, onClick = onSetup)
     }
     if (config.autoAnswer && !actuallyStandingBy) {
         Spacer(Modifier.height(10.dp))
@@ -864,7 +880,7 @@ private fun FlashSystemCenter(
         !ready || !config.audioVerified -> TileTone.Warn
         else -> TileTone.Ok
     }
-    CallSectionHeader(
+    FlashDeviceSectionHeader(
         title = stringResource(R.string.flash_system_section_core),
         badge = stringResource(readinessSummary(config, ready)),
         badgeTone = deviceTone,
@@ -924,7 +940,7 @@ private fun FlashSystemCenter(
     }
 
     // Pillar 2: Wireless Debugging & Background Auto-Recovery (First-class visibility!)
-    CallSectionHeader(title = stringResource(R.string.flash_system_section_recovery))
+    FlashDeviceSectionHeader(title = stringResource(R.string.flash_system_section_recovery))
     PhoneCallRecoverySection()
 
     // Pillar 3: Background Standby & Lock-Screen Reliability
@@ -933,7 +949,7 @@ private fun FlashSystemCenter(
         config.autoAnswer -> TileTone.Warn
         else -> TileTone.Neutral
     }
-    CallSectionHeader(
+    FlashDeviceSectionHeader(
         title = stringResource(R.string.flash_system_section_permissions),
         badge = stringResource(backgroundStandbyStatus(config, state)),
         badgeTone = bgTone,
@@ -961,7 +977,7 @@ private fun FlashSystemCenter(
     if (panel == FlashSettingsPanel.Voice) {
     // Pillar 4: Realtime Voice Model Credentials & Default Outgoing SIM
     val voiceTone = if (config.credentialsConfigured) TileTone.Ok else TileTone.Warn
-    CallSectionHeader(
+    FlashDeviceSectionHeader(
         title = stringResource(R.string.flash_system_section_cloud),
         badge = stringResource(if (config.credentialsConfigured) R.string.calls_key_saved else R.string.calls_key_missing),
         badgeTone = voiceTone,
@@ -1005,7 +1021,7 @@ private fun FlashSystemCenter(
         preferred != null -> stringResource(R.string.calls_sim_unavailable)
         else -> stringResource(R.string.calls_sim_ask_each_time)
     }
-    CallSectionHeader(
+    FlashDeviceSectionHeader(
         title = stringResource(R.string.calls_default_sim_settings),
         badge = simSummary,
         badgeTone = if (simUnavailable) TileTone.Warn else TileTone.Neutral,
@@ -1031,6 +1047,20 @@ private fun FlashSystemCenter(
             )
         }
     }
+    }
+}
+
+@Composable
+private fun FlashDeviceSectionHeader(title: String, badge: String? = null, badgeTone: TileTone = TileTone.Neutral) {
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 15.dp, bottom = 8.dp, start = 2.dp, end = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, Modifier.semantics { heading() }, fontSize = 16.sp, lineHeight = 22.sp,
+            fontWeight = FontWeight.Bold, color = FlashPhoneColors.Forest)
+        if (badge != null) CallStatusBadge(badge, badgeTone)
     }
 }
 

@@ -25,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.wangzan101.mika.calls.*
 import com.wangzan101.mika.calls.briefing.*
+import com.wangzan101.mika.ui.theme.FlashPhoneColors
 import com.wangzan101.mika.ui.theme.MikaIcons
 import com.wangzan101.mika.ui.theme.MikaTheme
 import kotlinx.coroutines.Dispatchers
@@ -133,15 +134,11 @@ internal fun CallVoiceBriefingDialog(
     val message = detail ?: voice.message
     val interrupted = voice.message != null
     val listening = voice.activity == VoiceBriefingActivity.LISTENING
-    val statusBackground = when {
-        interrupted -> colors.warnSoft
-        listening -> colors.okSoft
-        else -> colors.fill
-    }
+    val statusBackground = if (interrupted) colors.warnSoft else FlashPhoneColors.Forest
     val statusForeground = when {
         interrupted -> colors.warn
-        listening -> colors.ok
-        else -> colors.ink
+        listening -> FlashPhoneColors.Lime
+        else -> FlashPhoneColors.OnForest
     }
     val status = when {
         starting || voice.activity == VoiceBriefingActivity.CONNECTING -> "正在连接豆包…"
@@ -163,6 +160,7 @@ internal fun CallVoiceBriefingDialog(
             Column(Modifier.fillMaxWidth().heightIn(max = 400.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(
                     color = statusBackground,
+                    contentColor = if (interrupted) colors.ink else FlashPhoneColors.OnForest,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().testTag("call-voice-status")
                         .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
@@ -170,7 +168,7 @@ internal fun CallVoiceBriefingDialog(
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(status, style = MaterialTheme.typography.titleSmall,
                             color = statusForeground)
-                        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.ink) }
+                        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     }
                 }
                 Column(
@@ -184,12 +182,12 @@ internal fun CallVoiceBriefingDialog(
                             style = MaterialTheme.typography.bodyMedium, color = colors.ink2)
                     }
                     if (voice.assistantTranscript.isNotBlank()) {
-                        BriefingTranscript("豆包", voice.assistantTranscript, colors.fill)
+                        BriefingTranscript("豆包", voice.assistantTranscript, FlashPhoneColors.Paper)
                     }
                     val instructions = listOf(voice.ownerTranscript, voice.ownerPartial)
                         .filter(String::isNotBlank).joinToString("\n")
                     if (instructions.isNotBlank()) {
-                        BriefingTranscript("本次交代", instructions, colors.okSoft)
+                        BriefingTranscript("本次交代", instructions, FlashPhoneColors.GreenSoft)
                     }
                 }
             }

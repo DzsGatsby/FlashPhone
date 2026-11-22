@@ -12,29 +12,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 
-/** Colors from the accepted phone preview, scoped to the phone workspace. */
+/** Print-inspired colors scoped to the phone workspace. */
 object FlashPhoneColors {
+    val Forest = Color(0xFF123B35)
+    val Lime = Color(0xFFD8EE91)
+    val Paper = Color(0xFFF7F8F2)
+    val OnForest = Color(0xFFF2F5E8)
     val White = Color.White
     val Ink = Color(0xFF1A201D)
     val Secondary = Color(0xFF4D5754)
     val Muted = Color(0xFF626B68)
-    val Line = Color(0xFFDCE2DE)
-    val Fill = Color(0xFFF3F5F4)
-    val Green = Color(0xFF167447)
-    val GreenSoft = Color(0xFFE4F2E9)
+    val Line = Color(0xFFCBD2C4)
+    val Fill = Color(0xFFECEFE5)
+    val Green = Color(0xFF1A5A46)
+    val GreenSoft = Color(0xFFE6EECF)
     val CallGreen = Color(0xFF2DCC59)
-    val ConversationGreen = Color(0xFF32CF69)
-    val ConversationInk = Color(0xFF123421)
-    val ConversationBackdrop = Color(0xFFF3F2F8)
+    val ConversationGreen = Color(0xFFE5ECCB)
+    val ConversationInk = Forest
+    val ConversationBackdrop = Fill
     val Blue = Color(0xFF007AFF)
     val BlueSoft = Color(0xFFEFF5FF)
-    val Dock = Color(0xFFFAFBFA)
     val DialDock = Color(0xFFFCFCFD)
     val DialDockLine = Color(0xFFE0E0E3)
     val DialSelected = Color(0xFFEDEDF0)
@@ -43,7 +47,7 @@ object FlashPhoneColors {
 // MikaColors intentionally has no copy(): keep the phone palette local instead of
 // changing the upstream app's generic surfaces, accents, or dark appearance.
 private val PhoneColors = MikaColors(
-    bg = FlashPhoneColors.White,
+    bg = FlashPhoneColors.Paper,
     surface = FlashPhoneColors.White,
     fill = FlashPhoneColors.Fill,
     ink = FlashPhoneColors.Ink,
@@ -117,7 +121,7 @@ private val PhoneShapes = Shapes(
 )
 
 /**
- * The accepted phone design is white in every system appearance. Nest this inside
+ * The phone workspace uses the same paper palette in each system appearance. Nest this inside
  * MikaTheme around the entire phone screen so dialogs and phone subpages agree.
  * The caller's layout direction, typography, and reduced-motion setting survive.
  */
@@ -149,7 +153,7 @@ fun FlashPhoneTheme(
         bars?.isAppearanceLightStatusBars = true
         bars?.isAppearanceLightNavigationBars = true
         window?.statusBarColor = android.graphics.Color.TRANSPARENT
-        window?.navigationBarColor = android.graphics.Color.WHITE
+        window?.navigationBarColor = FlashPhoneColors.Paper.toArgb()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window?.isNavigationBarContrastEnforced = false
         onDispose {
             previousLightStatus?.let { bars?.isAppearanceLightStatusBars = it }
