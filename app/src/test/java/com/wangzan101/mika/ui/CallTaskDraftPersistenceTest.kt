@@ -1,6 +1,8 @@
 package com.wangzan101.mika.ui
 
 import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.ui.text.TextRange
+import com.wangzan101.mika.calls.CallTaskBrief
 import com.wangzan101.mika.settings.AesGcmKeyCipher
 import org.junit.Assert.*
 import org.junit.Test
@@ -64,6 +66,24 @@ class CallTaskDraftPersistenceTest {
         val scope = object : SaverScope { override fun canBeSaved(value: Any) = true }
         val saved = with(CallTaskDraft.Saver) { checkNotNull(scope.save(draft)) }
         return checkNotNull(CallTaskDraft.Saver.restore(saved))
+    }
+
+    @Test fun numberSelectionStaysTransientAndRestoredOrReusedNumbersStartAtTheEnd() {
+        val draft = CallTaskDraft().apply {
+            restoreFields(fields)
+            persistedFields = fields
+        }
+        val numberEnd = TextRange(fields[0].length)
+        assertEquals(numberEnd, draft.numberInput.selection)
+        draft.numberInput = draft.numberInput.copy(selection = TextRange(0, 2))
+        assertFalse(draft.needsPersistence())
+        assertEquals(fields, draft.snapshotFields())
+        assertEquals(numberEnd, recreate(draft).numberInput.selection)
+
+        // A history entry can bring in the same number with a different brief.
+        draft.fill(fields[0], CallTaskBrief(goal = "确认营业时间"))
+        assertEquals(fields[0], draft.number)
+        assertEquals(numberEnd, draft.numberInput.selection)
     }
 
     @Test fun recreationDuringInitialLoadDoesNotTurnEmptyPlaceholdersIntoAnAuthoritativeDraft() {

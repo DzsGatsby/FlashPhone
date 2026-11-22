@@ -13,6 +13,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
@@ -21,12 +22,12 @@ import androidx.core.view.WindowCompat
 object FlashPhoneColors {
     val White = Color.White
     val Ink = Color(0xFF1A201D)
-    val Secondary = Color(0xFF63686A)
-    val Muted = Color(0xFF777C80)
-    val Line = Color(0xFFEDEEF0)
-    val Fill = Color(0xFFF4F4F7)
+    val Secondary = Color(0xFF4D5754)
+    val Muted = Color(0xFF626B68)
+    val Line = Color(0xFFDCE2DE)
+    val Fill = Color(0xFFF3F5F4)
     val Green = Color(0xFF167447)
-    val GreenSoft = Color(0xFFE8EEE9)
+    val GreenSoft = Color(0xFFE4F2E9)
     val CallGreen = Color(0xFF2DCC59)
     val ConversationGreen = Color(0xFF32CF69)
     val ConversationInk = Color(0xFF123421)
@@ -164,7 +165,12 @@ fun FlashPhoneTheme(
         LocalMikaColors provides PhoneColors,
         LocalReduceMotion provides reduceMotion,
     ) {
-        MaterialTheme(colorScheme = PhoneScheme, shapes = PhoneShapes) {
+        val typography = MaterialTheme.typography
+        MaterialTheme(colorScheme = PhoneScheme, shapes = PhoneShapes, typography = typography.copy(
+            bodyMedium = typography.bodyMedium.copy(fontSize = 16.sp, lineHeight = 24.sp),
+            bodySmall = typography.bodySmall.copy(fontSize = 14.sp, lineHeight = 20.sp),
+            labelMedium = typography.labelMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+        )) {
             CompositionLocalProvider(LocalContentColor provides PhoneColors.ink, content = content)
         }
     }

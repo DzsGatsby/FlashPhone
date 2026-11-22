@@ -36,9 +36,9 @@ internal data class DialerPalette(
 @Composable
 internal fun dialerPalette(): DialerPalette {
     val c = MikaTheme.colors
-    return DialerPalette(c.bg, c.surface, c.edge,
-        if (c.isDark) Color(0xFF30C85A) else Color(0xFF2ACB55), Color.White,
-        if (c.isDark) Color(0xFF63AEFF) else Color(0xFF007AFF))
+    return DialerPalette(c.bg, c.fill, c.edge,
+        if (c.isDark) Color(0xFF30C85A) else Color(0xFF178248), Color.White,
+        if (c.isDark) Color(0xFF63AEFF) else c.accent)
 }
 
 @Composable
@@ -90,7 +90,7 @@ internal fun DialerKeypad(enabled: Boolean, onKey: (String) -> Unit, onPlus: () 
                                 Text(digit, color = if (enabled) c.ink else c.ink3, fontSize = numberSize.sp,
                                     fontWeight = FontWeight.Normal, lineHeight = numberLine.sp,
                                     style = androidx.compose.ui.text.TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
-                                if (letters.isNotEmpty()) Text(letters, color = c.ink, fontSize = ((if (keySize < 56.dp) 8f else 10f) / legendScale).sp,
+                                if (letters.isNotEmpty()) Text(letters, color = c.ink2, fontSize = ((if (keySize < 56.dp) 8f else 10f) / legendScale).sp,
                                     fontWeight = FontWeight.SemiBold, letterSpacing = ((if (keySize < 56.dp) 1.4f else 2f) / legendScale).sp,
                                     lineHeight = ((if (keySize < 56.dp) 10f else 12f) / legendScale).sp,
                                     style = androidx.compose.ui.text.TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))

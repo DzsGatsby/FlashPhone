@@ -17,8 +17,10 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
@@ -77,18 +79,49 @@ class CallWorkspaceVisualTest {
             assertWorkspaceNavigationVisible(compose)
             compose.onNodeWithTag("call-task-text-brief").assertDoesNotExist()
             val display = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
+            val voiceEntry = compose.onNodeWithTag("call-start-voice")
+            val textEntry = compose.onNodeWithTag("call-task-text-entry")
+            val hint = compose.onNodeWithTag("call-task-brief-hint")
             if (display.screenWidthDp < 600 && display.screenHeightDp >= 600 && display.fontScale <= 1.1f) {
-                val callButton = compose.onNodeWithTag("call-start-voice").getUnclippedBoundsInRoot()
+                val callButton = voiceEntry.assertIsDisplayed().getUnclippedBoundsInRoot()
                 val nav = compose.onNodeWithTag("call-tab-task").getUnclippedBoundsInRoot()
                 assertTrue("The complete green button must remain above navigation without scrolling", callButton.bottom <= nav.top)
-                compose.onNodeWithText("轻点语音交代 · 长按文字交代").assertIsDisplayed()
-                assertTrue("The long-press hint must remain completely above navigation",
-                    compose.onNodeWithTag("call-task-brief-hint").getUnclippedBoundsInRoot().bottom <= nav.top)
+                assertTrue("The text entry remains above navigation without scrolling",
+                    textEntry.assertIsDisplayed().getUnclippedBoundsInRoot().bottom <= nav.top)
+                assertTrue("The voice hint must remain completely above navigation",
+                    hint.assertIsDisplayed().getUnclippedBoundsInRoot().bottom <= nav.top)
             }
-            compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
-            compose.onNodeWithText("文字交代").assertDoesNotExist()
             screenshot("native-dialer-home.png")
-            compose.onNodeWithTag("call-start-voice").performScrollTo().performTouchInput { longClick() }
+            hint.performScrollTo().assertTextContains(workspaceText(R.string.flash_voice_brief_hint))
+            voiceEntry.performScrollTo().assertIsDisplayed()
+            textEntry.assertIsDisplayed().assertTextContains(workspaceText(R.string.flash_text_brief))
+            val entryBounds = textEntry.getUnclippedBoundsInRoot()
+            val voiceBounds = voiceEntry.getUnclippedBoundsInRoot()
+            assertTrue("Text and voice controls must not overlap",
+                entryBounds.right <= voiceBounds.left || voiceBounds.right <= entryBounds.left ||
+                    entryBounds.bottom <= voiceBounds.top || voiceBounds.bottom <= entryBounds.top)
+            val labelLayouts = mutableListOf<TextLayoutResult>()
+            val label = compose.onNode(
+                hasText(workspaceText(R.string.flash_text_brief)) and hasAnyAncestor(hasTestTag("call-task-text-entry")),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
+            val labelBounds = label.getUnclippedBoundsInRoot()
+            assertTrue("The full label bounds must lie within the text-entry button",
+                labelBounds.left >= entryBounds.left && labelBounds.right <= entryBounds.right &&
+                    labelBounds.top >= entryBounds.top && labelBounds.bottom <= entryBounds.bottom)
+            label.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(labelLayouts) }
+            assertTrue("The text entry must expose its measured layout", labelLayouts.isNotEmpty())
+            for (layout in labelLayouts) {
+                assertTrue("The text entry label must fit vertically", !layout.didOverflowHeight)
+                assertTrue("The text entry label must not be ellipsized",
+                    (0 until layout.lineCount).none(layout::isLineEllipsized))
+            }
+            assertTrue("The complete text action fits above navigation after scrolling",
+                entryBounds.bottom <= compose.onNodeWithTag("call-tab-task").getUnclippedBoundsInRoot().top)
+            if (display.screenHeightDp < 700 || display.fontScale > 1.1f) {
+                screenshot("native-dialer-actions-scrolled.png")
+            }
+            voiceEntry.performTouchInput { longClick() }
             compose.onNodeWithTag("call-text-brief-sheet").assertIsDisplayed()
             compose.onNodeWithTag("call-task-text-brief").assertIsDisplayed()
             screenshot("native-dialer-text-sheet.png")
@@ -141,6 +174,10 @@ class CallWorkspaceVisualTest {
             screenshot("native-receive-scrolled.png")
 
             selectWorkspace("settings")
+            val device = compose.onNodeWithTag("call-open-device-panel").assertIsDisplayed()
+            device.assertTextContains(workspaceText(R.string.flash_design_device))
+            assertTrue("Device status must be visible before scrolling settings",
+                device.getUnclippedBoundsInRoot().bottom <= compose.onNodeWithTag("call-tab-settings").getUnclippedBoundsInRoot().top)
             screenshot("native-settings-home.png")
             compose.onNodeWithTag("call-open-device-panel").performScrollTo().performClick()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()

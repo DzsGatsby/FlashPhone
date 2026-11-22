@@ -13,6 +13,10 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -273,6 +277,43 @@ class FlashWorkspaceJourneyTest {
         assertStatus("open")
         compose.onNodeWithTag("call-history-row-completed").assertDoesNotExist()
         compose.onNodeWithTag("call-history-row-delivery").assertDoesNotExist()
+        assertEquals(emptyList<String>(), opened.toList())
+    }
+
+    @Test fun clearingTheQueryPreservesFiltersAndEmptyResultsCanResetThemTogether() {
+        showHistory(allDirections = false)
+        val incoming = compose.onNodeWithTag("call-history-row-delivery")
+        val completed = compose.onNodeWithTag("call-history-row-completed")
+        val open = compose.onNodeWithTag("call-history-row-hours")
+        val outgoing = compose.onNodeWithTag("call-history-direction-outgoing")
+        val clear = compose.onNodeWithTag("call-history-clear-search")
+        val reset = compose.onNodeWithTag("call-history-reset-filters")
+        val search = compose.onNodeWithTag("call-history-search")
+        val emptyQuery = SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(""))
+
+        outgoing.performScrollTo().performClick()
+        selectStatus("open")
+        search.performScrollTo().performTextReplacement("没有对应记录")
+        reset.performScrollTo().assertIsDisplayed()
+        open.assertDoesNotExist()
+        clear.performScrollTo().assertIsDisplayed().performClick()
+        search.assert(emptyQuery)
+        outgoing.assertIsSelected()
+        assertStatus("open")
+        open.performScrollTo().assertIsDisplayed()
+        incoming.assertDoesNotExist()
+        completed.assertDoesNotExist()
+        clear.assertDoesNotExist()
+        reset.assertDoesNotExist()
+
+        search.performScrollTo().performTextReplacement("没有对应记录")
+        reset.performScrollTo().assertIsDisplayed().performClick()
+        search.assert(emptyQuery)
+        compose.onNodeWithTag("call-history-direction-all").performScrollTo().assertIsSelected()
+        assertStatus("all")
+        for (row in listOf(open, incoming, completed)) row.performScrollTo().assertIsDisplayed()
+        reset.assertDoesNotExist()
+        assertEquals(fixtures(), records.value)
         assertEquals(emptyList<String>(), opened.toList())
     }
 

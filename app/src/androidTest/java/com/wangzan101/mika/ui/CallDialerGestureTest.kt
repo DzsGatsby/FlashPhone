@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -29,11 +30,14 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wangzan101.mika.ChineseUi
+import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.CallConfig
 import com.wangzan101.mika.calls.CallRuntimeState
 import com.wangzan101.mika.calls.CallSim
+import com.wangzan101.mika.ui.components.KeyboardDismissArea
 import com.wangzan101.mika.ui.theme.MikaTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -53,22 +57,26 @@ class CallDialerGestureTest {
 
     private fun show() = compose.setContent {
         MikaTheme(dark = false, reduceMotion = true) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                CallTaskScreen(
-                    draft = draft,
-                    config = CallConfig(defaultOutgoingSimId = "sim-1"),
-                    state = CallRuntimeState(simOptions = listOf(CallSim("sim-1", "主号", true))),
-                    ready = true, editable = true, canDial = true, feedback = null, onSetup = {},
-                    onConfirm = { normalConfirmations++ },
-                    onConfirmLocked = { lockedConfirmations++ },
-                    onStartVoiceBriefing = { number, simId, simLabel ->
-                        assertEquals("15555550123", number)
-                        assertEquals("sim-1", simId)
-                        assertEquals("主号", simLabel)
-                        voiceStarts++
-                    },
-                    voiceBusy = busy.value,
-                )
+            KeyboardDismissArea(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    CallTaskScreen(
+                        draft = draft,
+                        config = CallConfig(defaultOutgoingSimId = "sim-1"),
+                        state = CallRuntimeState(simOptions = listOf(
+                            CallSim("sim-1", "主号", true), CallSim("sim-2", "备用号", false),
+                        )),
+                        ready = true, editable = true, canDial = true, feedback = null, onSetup = {},
+                        onConfirm = { normalConfirmations++ },
+                        onConfirmLocked = { lockedConfirmations++ },
+                        onStartVoiceBriefing = { number, simId, simLabel ->
+                            assertEquals("15555550123", number)
+                            assertEquals("sim-1", simId)
+                            assertEquals("主号", simLabel)
+                            voiceStarts++
+                        },
+                        voiceBusy = busy.value,
+                    )
+                }
             }
         }
     }
@@ -76,9 +84,9 @@ class CallDialerGestureTest {
     @Test fun tapStartsOnlyVoiceBriefingAndBusyStateBlocksAnotherStart() {
         show()
         compose.onNodeWithTag("call-task-text-brief").assertDoesNotExist()
-        compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
-        compose.onNodeWithText("文字交代").assertDoesNotExist()
-        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按文字交代")
+        textEntry().assertTextContains(workspaceText(R.string.flash_text_brief))
+        compose.onNodeWithTag("call-task-brief-hint").performScrollTo()
+            .assertTextContains(workspaceText(R.string.flash_voice_brief_hint))
         compose.onNodeWithTag("call-start-voice").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(1, voiceStarts)
@@ -86,7 +94,7 @@ class CallDialerGestureTest {
             busy.value = true
         }
         compose.onNodeWithTag("call-start-voice").performScrollTo().assertIsNotEnabled().performClick()
-        compose.onNodeWithTag("call-open-text-brief").assertDoesNotExist()
+        textEntry().assertIsNotEnabled()
         compose.runOnIdle { assertEquals(1, voiceStarts) }
     }
 
@@ -97,7 +105,7 @@ class CallDialerGestureTest {
         draft.constraints = "不要预约"
         val original = draft.snapshotFields()
         show()
-        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按编辑草稿")
+        textEntry().assertTextContains(workspaceText(R.string.flash_edit_draft))
         compose.onNodeWithTag("call-start-voice").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已有交代草稿"))
         compose.onNodeWithTag("call-start-voice").performScrollTo().performTouchInput { longClick() }
@@ -112,8 +120,83 @@ class CallDialerGestureTest {
             assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
         }
         compose.onNodeWithText("返回拨号键盘").performScrollTo().performClick()
+        textEntry().assertTextContains(workspaceText(R.string.flash_edit_draft)).performClick()
+        compose.onNodeWithTag("call-task-text-brief").assertTextContains("几点关门？", substring = true)
+        compose.runOnIdle {
+            assertEquals(original, draft.snapshotFields())
+            assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
+        }
+    }
+
+    @Test fun visibleTextEntryCreatesAnEditableDraftWithoutCalling() {
+        show()
+        textEntry().assertTextContains(workspaceText(R.string.flash_text_brief)).performClick()
+        compose.onNodeWithTag("call-task-text-brief").performTextReplacement("确认营业时间，不要预约。")
+        compose.onNodeWithText("返回拨号键盘").performScrollTo().performClick()
+        textEntry().assertTextContains(workspaceText(R.string.flash_edit_draft)).performClick()
+        compose.onNodeWithTag("call-task-text-brief").assertTextContains("确认营业时间，不要预约。")
+        compose.runOnIdle { assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations) }
+    }
+
+    @Test fun clearingCanBeUndoneUntilNewInputReplacesTheOldDraft() {
+        draft.goal = "确认营业时间"
+        draft.questions = "几点关门？"
+        draft.context = "只有今天方便去"
+        draft.constraints = "不要预约"
+        draft.simOverride = "sim-1"
+        val original = draft.snapshotFields()
+        show()
+
+        val clear = compose.onNodeWithTag("call-task-clear")
+        val undo = compose.onNodeWithTag("call-task-undo-clear")
+        clear.performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(List(6) { "" }, draft.snapshotFields()) }
+        undo.performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(original, draft.snapshotFields()) }
+        undo.assertDoesNotExist()
+
+        clear.performScrollTo().performClick()
+        undo.performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("call-key-8").performScrollTo().performClick()
+        undo.assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(listOf("8", "", "", "", "", ""), draft.snapshotFields())
+            assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
+        }
+    }
+
+    @Test fun selectingOnlyASimMakesTheOldClearUndoUnavailable() {
+        draft.goal = "旧草稿"
+        draft.simOverride = "sim-1"
+        show()
         compose.onNodeWithTag("call-task-clear").performScrollTo().performClick()
-        compose.onNodeWithTag("call-task-brief-hint").assertTextContains("轻点语音交代 · 长按文字交代")
+        val undo = compose.onNodeWithTag("call-task-undo-clear")
+        undo.assertIsDisplayed()
+        compose.onNodeWithTag("call-task-sim").performScrollTo().performClick()
+        compose.onNodeWithText("备用号").assertIsDisplayed().performClick()
+        undo.assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(listOf("", "", "", "", "", "sim-2"), draft.snapshotFields())
+            assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
+        }
+    }
+
+    @Test fun enteringThenRemovingOnlyWhitespaceDoesNotBringBackTheOldDraft() {
+        draft.goal = "旧草稿"
+        show()
+        compose.onNodeWithTag("call-task-clear").performScrollTo().performClick()
+        val undo = compose.onNodeWithTag("call-task-undo-clear")
+        undo.assertIsDisplayed()
+        val number = compose.onNodeWithTag("call-number")
+        number.performScrollTo().performTextReplacement(" ")
+        undo.assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(" ", "", "", "", "", ""), draft.snapshotFields()) }
+        number.performTextReplacement("")
+        undo.assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(List(6) { "" }, draft.snapshotFields())
+            assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
+        }
     }
 
     @Test fun accessibleTextEntryRetainsReviewAndLockedConfirmation() {
@@ -133,6 +216,40 @@ class CallDialerGestureTest {
         }
     }
 
+    @Test fun keypadKeysAndDeleteEditAtTheSystemTextSelection() {
+        show()
+        val input = compose.onNodeWithTag("call-number")
+        input.performTextReplacement("123456")
+        fun select(start: Int, end: Int) {
+            input.performScrollTo().performSemanticsAction(SemanticsActions.SetSelection) {
+                assertTrue(it(start, end, false))
+            }
+        }
+        fun tap(tag: String) {
+            compose.onNodeWithTag(tag).performScrollTo().performTouchInput { click() }
+        }
+
+        select(2, 2)
+        tap("call-key-9")
+        input.assertTextContains("1293456")
+        tap("call-number-delete")
+        input.assertTextContains("123456")
+
+        select(4, 1)
+        tap("call-key-8")
+        input.assertTextContains("1856")
+        select(2, 4)
+        tap("call-number-delete")
+        input.assertTextContains("18")
+
+        select(0, 0)
+        compose.onNodeWithTag("call-number-delete").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals("18", draft.snapshotFields()[0])
+            assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations)
+        }
+    }
+
     @Test fun keypadPlusLongPressAndDeleteKeepNumberEditableWithoutAnyStart() {
         draft.number = ""
         show()
@@ -143,4 +260,6 @@ class CallDialerGestureTest {
         compose.onNodeWithTag("call-number").performScrollTo().assertTextContains("+1")
         compose.runOnIdle { assertEquals(0, voiceStarts + normalConfirmations + lockedConfirmations) }
     }
+
+    private fun textEntry() = compose.onNodeWithTag("call-task-text-entry").performScrollTo().assertIsDisplayed()
 }

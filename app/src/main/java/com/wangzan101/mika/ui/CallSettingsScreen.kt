@@ -25,13 +25,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -366,7 +366,7 @@ private fun CallSettingsWorkspace(
                             .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(scroll)
-                            .padding(horizontal = if (tab == CallWorkspaceTab.Task) 0.dp else 23.dp)
+                            .padding(horizontal = if (tab == CallWorkspaceTab.Task) 0.dp else 16.dp)
                             .padding(top = if (tab == CallWorkspaceTab.Task) 0.dp else 8.dp, bottom = if (tab == CallWorkspaceTab.Task) 0.dp else 24.dp)
                             .testTag("call-page-" + tab.name.lowercase()),
                     ) {
@@ -464,6 +464,7 @@ private fun CallSettingsWorkspace(
                             CallWorkspaceTab.Settings -> FlashSettingsOverview(
                                 canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
                                 updateAvailable = updateAvailable,
+                                deviceSummary = state.backgroundStandbyBlockedReason ?: autoAnswerSummary(config, state),
                                 simSummary = state.simOptions.firstOrNull { it.id == config.defaultOutgoingSimId }?.label
                                     ?: stringResource(if (config.defaultOutgoingSimId == null) R.string.calls_sim_ask_each_time else R.string.calls_sim_unavailable),
                                 voiceSummary = if (config.speaker != CallConfig().speaker) stringResource(R.string.flash_guard_voice_custom, config.speaker)
@@ -706,7 +707,6 @@ private fun FlashHomeWorkspace(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlashGuardWorkspace(
     runtime: CallRuntime,
@@ -748,36 +748,52 @@ private fun FlashGuardWorkspace(
         state.backgroundStandbyStarting -> stringResource(R.string.flash_workspace_starting_standby)
         else -> stringResource(R.string.flash_workspace_background_standby_is_stopped)
     }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.flash_workspace_answering), Modifier.weight(1f), fontSize = 28.sp,
+    val needsSetup = !ready || !config.audioVerified ||
+        (config.autoAnswer && !state.backgroundStandbyRunning && !state.backgroundStandbyStarting)
+    val paused = state.autoAnswerStage == CallAutoAnswerStage.PAUSED
+    val statusBackground = when {
+        actuallyStandingBy -> c.okSoft
+        paused || needsSetup -> c.warnSoft
+        else -> c.fill
+    }
+    val statusTint = when {
+        actuallyStandingBy -> c.ok
+        paused || needsSetup -> c.warn
+        else -> c.ink2
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(stringResource(R.string.flash_workspace_answering), Modifier.weight(1f).semantics { heading() }, fontSize = 28.sp,
             lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
         MikaSwitch(config.autoAnswer, onCheckedChange = onToggle,
             enabled = controlsEnabled && (config.autoAnswer || canTurnOn),
             modifier = Modifier.testTag("call-auto-answer").semantics { contentDescription = autoLabel })
     }
-    Column(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 26.dp).testTag("call-home-standby"),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(76.dp).background(c.accentSoft, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(MikaIcons.Shield, null, Modifier.size(30.dp), tint = c.accent)
-        }
-        Text(title, Modifier.padding(top = 18.dp, bottom = 8.dp), fontSize = 23.sp, lineHeight = 30.sp,
-            fontWeight = FontWeight.SemiBold, color = c.ink, textAlign = TextAlign.Center)
-        Text(if (actuallyStandingBy) "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}"
-            else autoAnswerSummary(config, state), fontSize = 12.sp, lineHeight = 18.sp, color = c.ink3, textAlign = TextAlign.Center)
-        FlowRow(Modifier.padding(top = 14.dp).testTag("call-rules-pause"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            if (config.autoAnswer || state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
-                if (state.autoAnswerStage == CallAutoAnswerStage.PAUSED) {
-                    TextButton(onResume, enabled = controlsEnabled, modifier = Modifier.testTag("call-rules-resume"),
-                        colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
-                        Text(stringResource(R.string.calls_auto_resume), fontSize = 12.sp)
-                    }
-                } else {
-                    var pauseMenu by remember { mutableStateOf(false) }
-                    Box {
-                        TextButton({ pauseMenu = true }, enabled = controlsEnabled,
-                            colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
-                            Text(stringResource(R.string.flash_design_pause), fontSize = 12.sp)
+    Surface(color = statusBackground, shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().testTag("call-home-standby")) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(MikaIcons.Shield, null, Modifier.padding(top = 2.dp).size(22.dp), tint = statusTint)
+                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {
+                    if (!paused) liveRegion = LiveRegionMode.Polite
+                }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = c.ink)
+                    Text(if (actuallyStandingBy) "${rulesSummary(config)} · ${stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)}"
+                        else autoAnswerSummary(config, state), fontSize = 14.sp, lineHeight = 20.sp, color = c.ink2)
+                }
+            }
+            if (config.autoAnswer || paused) {
+                Box(Modifier.testTag("call-rules-pause")) {
+                    if (paused) {
+                        OutlinedButton(onResume, enabled = controlsEnabled,
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("call-rules-resume")) {
+                            Text(stringResource(R.string.calls_auto_resume))
+                        }
+                    } else {
+                        var pauseMenu by remember { mutableStateOf(false) }
+                        OutlinedButton({ pauseMenu = true }, enabled = controlsEnabled,
+                            modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.flash_design_pause))
                         }
                         DropdownMenu(pauseMenu, { pauseMenu = false }) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.flash_workspace_pause_15_min)) },
@@ -788,31 +804,32 @@ private fun FlashGuardWorkspace(
                     }
                 }
             }
-            TextButton(onRules, enabled = canConfigure, modifier = Modifier.testTag("call-rules-scope"),
-                colors = ButtonDefaults.textButtonColors(containerColor = c.fill), shape = CircleShape) {
-                Text(stringResource(R.string.flash_design_scope), fontSize = 12.sp)
-            }
         }
     }
+    if (needsSetup) {
+        Spacer(Modifier.height(10.dp))
+        FlashSettingsRow(MikaIcons.Gear, stringResource(R.string.flash_workspace_complete_device_setup),
+            stringResource(R.string.flash_design_device_note), "call-receive-device", prominent = true, onClick = onSetup)
+    }
+    if (config.autoAnswer && !actuallyStandingBy) {
+        Spacer(Modifier.height(10.dp))
+        CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby, onSetup.takeIf { standbyNeedsSetup })
+    }
+    Spacer(Modifier.height(12.dp))
     Column(Modifier.testTag("call-incoming-rules")) {
+        val delay = stringResource(R.string.calls_rule_delay_summary, config.autoAnswerDelaySeconds)
+        FlashSettingsRow(MikaIcons.Phone, stringResource(R.string.flash_design_scope),
+            "${rulesSummary(config)} · $delay", "call-rules-scope", canConfigure, onClick = onRules)
         FlashSettingsRow(MikaIcons.Heart, stringResource(R.string.calls_bypass_title),
             if (config.bypassIncomingNumbers.isEmpty()) stringResource(R.string.calls_bypass_empty)
             else stringResource(R.string.calls_bypass_count, config.bypassIncomingNumbers.size),
-            "call-rules-important", canConfigure, onBypass)
+            "call-rules-important", canConfigure, onClick = onBypass)
+        Spacer(Modifier.height(10.dp))
         FlashSettingsRow(MikaIcons.Doc, stringResource(R.string.flash_workspace_answering_instructions),
-            stringResource(R.string.flash_design_instructions_note), "call-open-instructions", canConfigure, onInstructions)
+            stringResource(R.string.flash_design_instructions_note), "call-open-instructions", canConfigure, onClick = onInstructions)
         FlashSettingsRow(MikaIcons.Sound, stringResource(R.string.flash_design_greeting),
             config.greeting.takeIf { it.isNotBlank() } ?: stringResource(R.string.flash_guard_greeting_blank),
-            "call-open-profile", canConfigure, onProfile)
-    }
-    if (!ready || !config.audioVerified || (config.autoAnswer && !state.backgroundStandbyRunning && !state.backgroundStandbyStarting)) {
-        Spacer(Modifier.height(20.dp))
-        FlashSettingsRow(MikaIcons.Gear, stringResource(R.string.flash_workspace_complete_device_setup),
-            stringResource(R.string.flash_design_device_note), "call-receive-device", true, onSetup)
-    }
-    if (config.autoAnswer && !actuallyStandingBy) {
-        Spacer(Modifier.height(12.dp))
-        CallBackgroundStandbyRow(config, state, canStartStandby, onStartStandby, onSetup.takeIf { standbyNeedsSetup })
+            "call-open-profile", canConfigure, onClick = onProfile)
     }
 }
 

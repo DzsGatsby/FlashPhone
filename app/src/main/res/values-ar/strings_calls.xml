@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">فتح إعدادات الإشعارات</string>
     <string name="calls_speaker_edit_note">اختر الأصوات المستنسخة في قسم استنساخ الصوت. اترك الحقل فارغًا لاستعادة الصوت الافتراضي.</string>
     <string name="calls_greeting_hint">تُقرأ التحية كما كُتبت. اترك الحقل فارغًا ليتكلم الطرف الآخر أولًا.</string>
+    <string name="flash_text_brief">تعليمات نصية</string>
+    <string name="flash_edit_draft">تعديل المسودة</string>
+    <string name="flash_voice_brief_hint">اضغط على سماعة الهاتف لإعطاء تعليمات صوتية</string>
+    <string name="flash_reset_filters">إعادة ضبط الفلاتر</string>
 </resources>

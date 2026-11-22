@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">通知設定を開く</string>
     <string name="calls_speaker_edit_note">クローン音声は「音声クローン」で選択してください。空欄にすると既定の声に戻ります。</string>
     <string name="calls_greeting_hint">入力したとおりに読み上げます。空欄の場合は相手が話し始めるまで待ちます。</string>
+    <string name="flash_text_brief">文字で指示</string>
+    <string name="flash_edit_draft">下書きを編集</string>
+    <string name="flash_voice_brief_hint">受話器をタップして音声で指示</string>
+    <string name="flash_reset_filters">絞り込みをリセット</string>
 </resources>

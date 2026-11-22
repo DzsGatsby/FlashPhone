@@ -5,19 +5,28 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.wangzan101.mika.calls.*
 import com.wangzan101.mika.calls.briefing.*
+import com.wangzan101.mika.ui.theme.MikaIcons
+import com.wangzan101.mika.ui.theme.MikaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,35 +68,7 @@ internal fun rememberCallVoiceBriefing(
         if (!allowed && (starting || voice.active)) cancel()
     }
     if (open) {
-        AlertDialog(
-            onDismissRequest = { cancel(); open = false },
-            title = { Text("和豆包交代任务") },
-            text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(label)
-                    Text(when {
-                        starting || voice.activity == VoiceBriefingActivity.CONNECTING -> "正在连接豆包…"
-                        voice.activity == VoiceBriefingActivity.LISTENING -> "正在听，请交代要办的事"
-                        voice.activity == VoiceBriefingActivity.CLOSING -> if (voice.message != null) "语音交代已中断，未拨号" else "正在释放语音连接…"
-                        voice.activity == VoiceBriefingActivity.AUTHORIZED -> "交代已确认，正在提交拨号"
-                        voice.message != null -> "语音交代已中断，未拨号"
-                        else -> "尚未开始语音交代"
-                    })
-                    Text("交代完毕后，单独说“我说完了，你去打”，才会拨出。")
-                    if (voice.assistantTranscript.isNotBlank()) Text("豆包\n${voice.assistantTranscript}")
-                    if (voice.ownerTranscript.isNotBlank() || voice.ownerPartial.isNotBlank())
-                        Text("本次交代\n${voice.ownerTranscript}\n${voice.ownerPartial}")
-                    (detail ?: voice.message)?.let { Text(it) }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { cancel(); open = false }, modifier = Modifier.testTag("call-voice-cancel")) {
-                    Text(if (voice.active || starting) "取消，不拨号" else "返回拨号盘")
-                }
-            },
-            modifier = Modifier.testTag("call-voice-briefing"),
-        )
+        CallVoiceBriefingDialog(voice, starting, label, detail) { cancel(); open = false }
     }
     return VoiceBriefingLauncher(starting || voice.active) { number, simId, simLabel ->
         if (!currentAllowed || starting || voice.active) return@VoiceBriefingLauncher
@@ -136,6 +117,98 @@ internal fun rememberCallVoiceBriefing(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun CallVoiceBriefingDialog(
+    voice: VoiceBriefingState,
+    starting: Boolean,
+    label: String,
+    detail: String?,
+    onCancel: () -> Unit,
+) {
+    val colors = MikaTheme.colors
+    val message = detail ?: voice.message
+    val interrupted = voice.message != null
+    val listening = voice.activity == VoiceBriefingActivity.LISTENING
+    val statusBackground = when {
+        interrupted -> colors.warnSoft
+        listening -> colors.okSoft
+        else -> colors.fill
+    }
+    val statusForeground = when {
+        interrupted -> colors.warn
+        listening -> colors.ok
+        else -> colors.ink
+    }
+    val status = when {
+        starting || voice.activity == VoiceBriefingActivity.CONNECTING -> "正在连接豆包…"
+        voice.activity == VoiceBriefingActivity.LISTENING -> "正在听，请交代要办的事"
+        voice.activity == VoiceBriefingActivity.CLOSING -> if (voice.message != null) "语音交代已中断，未拨号" else "正在释放语音连接…"
+        voice.activity == VoiceBriefingActivity.AUTHORIZED -> "交代已确认，正在提交拨号"
+        voice.message != null -> "语音交代已中断，未拨号"
+        else -> "尚未开始语音交代"
+    }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("和豆包交代任务", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = colors.ink2)
+            }
+        },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 400.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    color = statusBackground,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("call-voice-status")
+                        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                ) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(status, style = MaterialTheme.typography.titleSmall,
+                            color = statusForeground)
+                        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.ink) }
+                    }
+                }
+                Column(
+                    Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())
+                        .testTag("call-voice-transcript"),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                        Icon(MikaIcons.Message, null, Modifier.padding(top = 2.dp).size(16.dp), tint = colors.ink2)
+                        Text("交代完毕后，单独说“我说完了，你去打”，才会拨出。",
+                            style = MaterialTheme.typography.bodyMedium, color = colors.ink2)
+                    }
+                    if (voice.assistantTranscript.isNotBlank()) {
+                        BriefingTranscript("豆包", voice.assistantTranscript, colors.fill)
+                    }
+                    val instructions = listOf(voice.ownerTranscript, voice.ownerPartial)
+                        .filter(String::isNotBlank).joinToString("\n")
+                    if (instructions.isNotBlank()) {
+                        BriefingTranscript("本次交代", instructions, colors.okSoft)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            OutlinedButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp).testTag("call-voice-cancel")) {
+                Text(if (voice.active || starting) "取消，不拨号" else "返回拨号盘")
+            }
+        },
+        modifier = Modifier.testTag("call-voice-briefing"),
+    )
+}
+
+@Composable
+private fun BriefingTranscript(speaker: String, message: String, background: Color) {
+    Surface(color = background, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(speaker, Modifier.semantics { heading() }, style = MaterialTheme.typography.labelLarge, color = MikaTheme.colors.ink2)
+            Text(message, style = MaterialTheme.typography.bodyLarge, color = MikaTheme.colors.ink)
         }
     }
 }

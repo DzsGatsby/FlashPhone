@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -21,6 +24,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wangzan101.mika.ChineseUi
@@ -31,6 +35,8 @@ import com.wangzan101.mika.calls.CallPhase
 import com.wangzan101.mika.calls.CallRuntimeState
 import com.wangzan101.mika.calls.CallTranscriptLine
 import com.wangzan101.mika.calls.CallTaskBrief
+import com.wangzan101.mika.calls.briefing.VoiceBriefingActivity
+import com.wangzan101.mika.calls.briefing.VoiceBriefingState
 import com.wangzan101.mika.ui.components.PageBackground
 import com.wangzan101.mika.ui.theme.FlashPhoneTheme
 import org.junit.Assert.assertEquals
@@ -201,6 +207,38 @@ class CallCurrentControlsUiTest {
         compose.runOnIdle { state.value = state.value.copy(autoAnswerStage = CallAutoAnswerStage.OFF) }
         compose.onNodeWithTag("call-cancel-ai-answer").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(listOf("answer", "cancel-auto", "cancel-manual"), events) }
+    }
+
+    @Test fun voiceBriefingKeepsItsStatusAndCancelReachableAfterTheTranscriptGrows() {
+        val voice = mutableStateOf(VoiceBriefingState(
+            activity = VoiceBriefingActivity.LISTENING,
+            ownerTranscript = "只确认营业时间，不要预约。".repeat(360),
+            assistantTranscript = "我会先确认问题。".repeat(70),
+        ))
+        var cancellations = 0
+        compose.setContent {
+            FlashPhoneTheme {
+                val density = LocalDensity.current.density
+                CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.6f)) {
+                    CallVoiceBriefingDialog(voice.value, starting = false, label = "5550100 · 主号", detail = null) {
+                        cancellations++
+                    }
+                }
+            }
+        }
+        val status = compose.onNodeWithTag("call-voice-status")
+        val transcript = compose.onNodeWithTag("call-voice-transcript")
+        val cancel = compose.onNodeWithTag("call-voice-cancel")
+        status.assertIsDisplayed().assertTextContains("正在听，请交代要办的事")
+        cancel.assertIsDisplayed().assertTextContains("取消，不拨号")
+        transcript.assertIsDisplayed().performTouchInput { swipeUp() }
+        compose.runOnIdle {
+            voice.value = voice.value.copy(activity = VoiceBriefingActivity.CLOSING, message = "语音播放中断，仍可取消。")
+        }
+        status.assertIsDisplayed().assertTextContains("语音交代已中断，未拨号")
+        status.assertTextContains("语音播放中断，仍可取消。")
+        cancel.assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, cancellations) }
     }
 
     private fun assertControlsAndWorkspaceVisible() {

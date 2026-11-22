@@ -27,9 +27,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,7 +54,10 @@ import com.wangzan101.mika.ui.theme.MikaType
 /** A private draft in the workspace, never a saved call profile or background request. */
 @Stable
 internal class CallTaskDraft {
-    var number by mutableStateOf("")
+    var numberInput by mutableStateOf(TextFieldValue())
+    var number: String
+        get() = numberInput.text
+        set(value) { numberInput = TextFieldValue(value, TextRange(value.length)) }
     var goal by mutableStateOf("")
     var questions by mutableStateOf("")
     var context by mutableStateOf("")
@@ -79,6 +84,25 @@ internal class CallTaskDraft {
         if (persistenceGeneration != revision) return
         persistenceFailed = !success
         if (success) persistedFields = fields
+    }
+
+    fun insertNumberKey(key: String) = replaceNumberText(numberInput.selection, key)
+
+    fun deleteNumberAtSelection() {
+        val selection = numberInput.selection
+        if (selection.max == 0) return
+        val range = if (selection.collapsed) {
+            val start = Character.offsetByCodePoints(number, selection.end, -1)
+            TextRange(start, selection.end)
+        } else selection
+        replaceNumberText(range, "")
+    }
+
+    private fun replaceNumberText(range: TextRange, replacement: String) {
+        numberInput = TextFieldValue(
+            number.replaceRange(range.min, range.max, replacement),
+            TextRange(range.min + replacement.length),
+        )
     }
 
     fun snapshotFields(): List<String> = listOf(number, goal, questions, context, constraints, simOverride.orEmpty())
@@ -172,6 +196,11 @@ internal fun CallTaskScreen(
         var requiresSections by rememberSaveable { mutableStateOf(false) }
         var review by remember { mutableStateOf<CallTaskSubmission?>(null) }
         var tapMessage by remember { mutableStateOf<String?>(null) }
+        var clearedDraft by remember { mutableStateOf<List<String>?>(null) }
+        val canUndoClear = clearedDraft != null && draft.snapshotFields().all(String::isEmpty)
+        LaunchedEffect(canUndoClear) {
+            if (!canUndoClear) clearedDraft = null
+        }
         val number = CallPolicy.outgoingNumber(draft.number)
         val sim = CallPolicy.chooseOutgoingSim(state.simOptions, draft.simOverride, config.defaultOutgoingSimId)
         val missingSim = stringResource(R.string.calls_task_pick_sim)
@@ -213,9 +242,33 @@ internal fun CallTaskScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 if (draft.hasContent) {
-                    TextButton(onClick = { draft.clear() }, enabled = canEdit,
-                        modifier = Modifier.testTag("call-task-clear")) {
+                    TextButton(
+                        onClick = {
+                            clearedDraft = draft.snapshotFields()
+                            tapMessage = null
+                            draft.clear()
+                        },
+                        enabled = canEdit,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-clear"),
+                    ) {
                         Text(stringResource(R.string.flash_dial_clear_draft), style = MikaType.Caption, color = c.ink3)
+                    }
+                } else if (canUndoClear) {
+                    TextButton(
+                        onClick = {
+                            if (draft.snapshotFields().all(String::isEmpty)) clearedDraft?.let(draft::restoreFields)
+                            clearedDraft = null
+                        },
+                        enabled = canEdit,
+                        shape = RoundedCornerShape(9.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = palette.blue.copy(alpha = 0.12f),
+                            contentColor = palette.blue,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("call-task-undo-clear"),
+                    ) {
+                        Text(stringResource(R.string.undo), style = MikaType.Caption)
                     }
                 }
             }
@@ -229,8 +282,8 @@ internal fun CallTaskScreen(
             }
             Box(Modifier.fillMaxWidth().heightIn(min = if (compactDialer) 52.dp else 84.dp).padding(vertical = if (compactDialer) 6.dp else 12.dp), contentAlignment = Alignment.Center) {
                 BasicTextField(
-                    value = draft.number,
-                    onValueChange = { draft.number = it },
+                    value = draft.numberInput,
+                    onValueChange = { draft.numberInput = it },
                     enabled = canEdit,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -251,14 +304,30 @@ internal fun CallTaskScreen(
                 Text(stringResource(R.string.calls_task_number_hint), color = c.bad, style = MikaType.Caption,
                     modifier = Modifier.padding(bottom = 8.dp).testTag("call-number-error"))
             }
-            DialerKeypad(
-                enabled = canEdit,
-                onKey = { draft.number += it },
-                onPlus = { if (draft.number.isEmpty()) draft.number = "+" },
-            )
+            // Keep the number field focused when tapping a key so the selection stays active.
+            Box(Modifier.fillMaxWidth().keepsKeyboard()) {
+                DialerKeypad(
+                    enabled = canEdit,
+                    onKey = draft::insertNumberKey,
+                    onPlus = { if (draft.number.isEmpty()) draft.number = "+" },
+                )
+            }
             Spacer(Modifier.height(if (compactDialer) 12.dp else 18.dp))
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val buttonSize = dialerKeySize(maxWidth)
+                TextButton(
+                    onClick = openText,
+                    enabled = canEdit,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.textButtonColors(containerColor = c.accentSoft, contentColor = c.accent),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    modifier = Modifier.align(Alignment.CenterStart)
+                        .width(((maxWidth - buttonSize) / 2 - 8.dp).coerceAtLeast(48.dp)).heightIn(min = 48.dp)
+                        .testTag("call-task-text-entry"),
+                ) {
+                    Text(stringResource(if (hasTextBrief) R.string.flash_edit_draft else R.string.flash_text_brief),
+                        modifier = Modifier.fillMaxWidth(), style = MikaType.Caption, textAlign = TextAlign.Center)
+                }
                 Box(
                     Modifier.size(buttonSize).clip(CircleShape)
                         .background(if (canStartVoice) palette.callGreen else palette.callGreen.copy(alpha = 0.42f))
@@ -297,16 +366,18 @@ internal fun CallTaskScreen(
                     else Icon(DialerIcons.Handset, null, Modifier.size(32.dp), tint = palette.onGreen)
                 }
                 IconButton(
-                    onClick = { draft.number = draft.number.dropLast(1) },
-                    enabled = canEdit && draft.number.isNotEmpty(),
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp).testTag("call-number-delete"),
+                    onClick = draft::deleteNumberAtSelection,
+                    enabled = canEdit && draft.numberInput.selection.max > 0,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)
+                        .keepsKeyboard().testTag("call-number-delete"),
                 ) {
-                    Icon(DialerIcons.Delete, "删除一位号码", Modifier.size(25.dp), tint = c.ink2)
+                    val deleteDescription = if (draft.numberInput.selection.collapsed) "删除一位号码" else "删除选中的号码"
+                    Icon(DialerIcons.Delete, deleteDescription, Modifier.size(25.dp), tint = c.ink2)
                 }
             }
             tapMessage?.let { Text(it, style = MikaType.Caption, color = c.warn,
                 modifier = Modifier.padding(top = 10.dp).testTag("call-task-action-hint")) }
-            Text(if (hasTextBrief) "轻点语音交代 · 长按编辑草稿" else "轻点语音交代 · 长按文字交代",
+            Text(stringResource(R.string.flash_voice_brief_hint),
                 style = MikaType.Caption, color = c.ink3, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = if (compactDialer) 8.dp else 12.dp).testTag("call-task-brief-hint"))
             if (draft.persistenceFailed) {

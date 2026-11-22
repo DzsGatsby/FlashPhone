@@ -86,10 +86,9 @@ internal fun FlashWorkspaceNavigation(
     val c = MikaTheme.colors
     val configuration = LocalConfiguration.current
     val compactRail = rail && configuration.screenHeightDp < 500
-    val dialer = selected == CallWorkspaceTab.Task
-    val selectedColor = if (dialer) FlashPhoneColors.Blue else c.accent
-    val selectedFill = if (dialer) FlashPhoneColors.DialSelected else c.accentSoft
-    val itemShape = RoundedCornerShape(if (dialer) 27.dp else 20.dp)
+    val selectedColor = c.accent
+    val selectedFill = c.accentSoft
+    val itemShape = RoundedCornerShape(14.dp)
     val content: @Composable (Modifier) -> Unit = { itemModifier ->
         listOf(CallWorkspaceTab.Task, CallWorkspaceTab.History, CallWorkspaceTab.Receive, CallWorkspaceTab.Settings).forEach { tab ->
             val active = tab == selected
@@ -132,7 +131,7 @@ internal fun FlashWorkspaceNavigation(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, null, Modifier.size(if (compactRail) 20.dp else 23.dp),
-                        tint = if (active) selectedColor else if (dialer) c.ink else c.ink3)
+                        tint = if (active) selectedColor else c.ink3)
                     if (badge != null) {
                         if (badge == "•") {
                             Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-2).dp)
@@ -147,7 +146,7 @@ internal fun FlashWorkspaceNavigation(
                 }
                 Spacer(Modifier.height(3.dp))
                 Text(shortTitle, modifier = Modifier.fillMaxWidth(),
-                    color = if (active) selectedColor else if (dialer) c.ink else c.ink3,
+                    color = if (active) selectedColor else c.ink3,
                     fontSize = 12.sp, lineHeight = 16.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -164,17 +163,17 @@ internal fun FlashWorkspaceNavigation(
             verticalArrangement = Arrangement.spacedBy(if (compactRail) 0.dp else 8.dp),
         ) { content(Modifier.fillMaxWidth()) }
     } else {
-        val dockShape = RoundedCornerShape(if (dialer) 32.dp else 25.dp)
+        val dockShape = RoundedCornerShape(19.dp)
         val narrow = configuration.screenWidthDp < 360 || configuration.fontScale > 1.3f
         Box(Modifier.fillMaxWidth().background(c.bg).padding(
-            start = if (narrow) 12.dp else if (dialer) 18.dp else 24.dp,
-            end = if (narrow) 12.dp else if (dialer) 18.dp else 24.dp,
+            start = if (narrow) 12.dp else 16.dp,
+            end = if (narrow) 12.dp else 16.dp,
             top = 8.dp, bottom = if (configuration.screenHeightDp < 700) 8.dp else 12.dp,
         )) {
             Row(
                 Modifier.fillMaxWidth()
-                    .background(if (dialer) FlashPhoneColors.DialDock else FlashPhoneColors.Dock, dockShape)
-                    .border(1.dp, if (dialer) FlashPhoneColors.DialDockLine else c.edge, dockShape)
+                    .background(FlashPhoneColors.Dock, dockShape)
+                    .border(1.dp, c.edge, dockShape)
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically,

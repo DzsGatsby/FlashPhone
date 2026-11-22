@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">打开通知设置</string>
     <string name="calls_speaker_edit_note">请在「音色复刻」中选择复刻音色。清空此栏可恢复默认音色。</string>
     <string name="calls_greeting_hint">按填写的内容播报；留空则等对方先开口。</string>
+    <string name="flash_text_brief">文字交代</string>
+    <string name="flash_edit_draft">编辑草稿</string>
+    <string name="flash_voice_brief_hint">轻点听筒进入语音交代</string>
+    <string name="flash_reset_filters">重置筛选</string>
 </resources>

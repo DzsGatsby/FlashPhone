@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -30,15 +31,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wangzan101.mika.R
 import com.wangzan101.mika.calls.*
+import com.wangzan101.mika.ui.theme.FlashPhoneColors
 import com.wangzan101.mika.ui.theme.MikaIcons
 import kotlinx.coroutines.flow.collect
 
-private val LiveWash = Color(0xFFF3F2F8)
-private val LiveInk = Color(0xFF1A201D)
-private val LiveMuted = Color(0xFF73797A)
-private val LiveGreen = Color(0xFF32CF69)
-private val LiveGreenInk = Color(0xFF123923)
-private val LiveBorder = Color(0xFFE5E5EB)
+private val LiveWash = FlashPhoneColors.ConversationBackdrop
+private val LiveInk = FlashPhoneColors.Ink
+private val LiveMuted = FlashPhoneColors.Secondary
+private val LiveGreen = FlashPhoneColors.ConversationGreen
+private val LiveGreenInk = FlashPhoneColors.ConversationInk
+private val LiveBorder = FlashPhoneColors.Line
+private val LiveAction = FlashPhoneColors.Green
+private val LiveDanger = Color(0xFF942D27)
+private val LiveDangerSoft = Color(0xFFFFEEEB)
 
 /** The expanded call owns its remaining viewport; controls never belong to the transcript scroller. */
 @Composable
@@ -120,12 +125,17 @@ internal fun CurrentCallCard(
                 Icon(DialerIcons.Handset, null, Modifier.size(20.dp), tint = LiveGreenInk)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(party, color = LiveInk, fontSize = if (expanded) 16.sp else 14.sp,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (state.phase == CallPhase.ACTIVE) Box(Modifier.size(5.dp).background(Color(0xFF1F8C4D), CircleShape))
+                Text(party, color = LiveInk, fontSize = if (expanded) 19.sp else 15.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() })
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (state.phase == CallPhase.ACTIVE) Box(Modifier.size(6.dp).background(LiveAction, CircleShape))
                     Text(listOfNotNull(phase, state.direction?.let { directionLabel(it) }).joinToString(" · "),
-                        color = LiveMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = if (state.aiActive) LiveAction else LiveMuted, fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium, maxLines = if (expanded) 2 else 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("call-current-status").semantics {
+                            if (state.autoAnswerStage != CallAutoAnswerStage.COUNTDOWN) liveRegion = LiveRegionMode.Polite
+                        })
                 }
                 if (!expanded) state.liveTranscript.lastOrNull { it.text.isNotBlank() }?.let { latest ->
                     Row(Modifier.fillMaxWidth().testTag("call-current-latest"),
@@ -146,38 +156,33 @@ internal fun CurrentCallCard(
             ) { Icon(MikaIcons.Apps, stringResource(R.string.calls_dtmf_open), Modifier.size(20.dp), tint = LiveMuted) }
             if (!expanded || compact) IconButton(onClick = openTranscript,
                 modifier = Modifier.size(48.dp).testTag("call-current-transcript")) {
-                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(20.dp), tint = Color(0xFF167447))
+                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(20.dp), tint = LiveAction)
             }
         }
     }
     Column(modifier.then(if (expanded) Modifier.fillMaxHeight() else Modifier).testTag("call-current"),
         verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 8.dp)) {
         if (expanded) {
-            if (onCollapse != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onCollapse, modifier = Modifier.heightIn(min = 40.dp).testTag("call-current-collapse"),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
+            if (onCollapse != null) {
+                TextButton(onClick = onCollapse, modifier = Modifier.heightIn(min = 48.dp).testTag("call-current-collapse"),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
                     Icon(MikaIcons.Back, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.calls_collapse), fontSize = 12.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.calls_collapse), fontSize = 13.sp)
                 }
-                Spacer(Modifier.weight(1f))
-                if (!compact) Text(stringResource(R.string.calls_live_transcript), color = LiveMuted, fontSize = 11.sp)
             }
-            if (!compact) Column(Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(44.dp).background(Color(0xFFE4EBE5), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(MikaIcons.Spark, null, Modifier.size(25.dp), tint = Color(0xFF53765C))
-                }
-                Text(stringResource(R.string.flash_design_phone_assistant), color = LiveInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Surface(color = FlashPhoneColors.Fill, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { header() }
             }
-            Column(Modifier.weight(1f).fillMaxWidth().background(LiveWash, RoundedCornerShape(27.dp))
-                .padding(if (compact) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
+            Column(Modifier.weight(1f).fillMaxWidth().background(LiveWash, RoundedCornerShape(22.dp))
+                .padding(if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)) {
                 task?.takeIf { it.goal.isNotBlank() }?.let { brief ->
                     Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp))
                         .border(1.dp, LiveBorder, RoundedCornerShape(18.dp))
-                        .clickable(role = Role.Button) { showTask = true }.padding(horizontal = 14.dp, vertical = if (compact) 6.dp else 12.dp)
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.calls_record_brief)) { showTask = true }
+                        .heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 10.dp)
                         .testTag("call-current-task"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (!compact) Text(stringResource(R.string.calls_record_brief), fontSize = 10.sp, color = LiveMuted)
+                        if (!compact) Text(stringResource(R.string.calls_record_brief), fontSize = 12.sp, color = LiveMuted)
                         Text(brief.goal, fontSize = 14.sp, color = LiveInk, fontWeight = FontWeight.Medium,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -185,7 +190,6 @@ internal fun CurrentCallCard(
                 Column(Modifier.weight(1f).fillMaxWidth().background(Color.White, RoundedCornerShape(23.dp))
                     .border(1.dp, LiveBorder, RoundedCornerShape(23.dp))
                     .padding(if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 10.dp)) {
-                    header()
                     LiveCallTranscript(state.callId, state.liveTranscript, transcriptRequest, compact,
                         Modifier.weight(1f), showHeading = !compact, fillViewport = true, viewport = transcriptViewport, onExpand = {
                             transcriptRequest++
@@ -194,7 +198,7 @@ internal fun CurrentCallCard(
                 }
             }
         } else {
-            Surface(color = Color(0xFFF2F8F3), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = FlashPhoneColors.Fill, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Box(Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.calls_live_transcript),
                     onClick = openTranscript).padding(horizontal = 12.dp, vertical = 6.dp)) { header() }
             }
@@ -212,27 +216,30 @@ internal fun CurrentCallCard(
                     Button(onClick = action.second, enabled = if (cancelManual || showTakeover) canControl else canAnswer,
                         modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag(action.third),
                         shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F4F2), contentColor = Color(0xFF384D40))) {
-                        Text(stringResource(action.first), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (cancelManual) FlashPhoneColors.GreenSoft else LiveAction,
+                            contentColor = if (cancelManual) LiveAction else Color.White,
+                        )) {
+                        Text(stringResource(action.first), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                     }
                 }
                 if (cancelAuto) Button(onClick = onCancelAuto, enabled = canControl,
                     modifier = Modifier.weight(1.25f).heightIn(min = 48.dp).testTag("call-cancel-auto"),
                     shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F4F2), contentColor = Color(0xFF384D40))) {
-                    Text(stringResource(R.string.calls_auto_cancel), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    colors = ButtonDefaults.buttonColors(containerColor = FlashPhoneColors.GreenSoft, contentColor = LiveAction)) {
+                    Text(stringResource(R.string.calls_auto_cancel), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 }
                 if (state.canHangUp) Button(onClick = onHangup, enabled = canControl,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("call-hangup"),
                     shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0EF), contentColor = Color(0xFFBE4843))) {
-                    Text(stringResource(R.string.calls_hangup), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    colors = ButtonDefaults.buttonColors(containerColor = LiveDangerSoft, contentColor = LiveDanger)) {
+                    Text(stringResource(R.string.calls_hangup), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 }
             }
         }
         feedback?.let { result ->
             Text(result.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 11.sp,
-                color = if (result.ok) LiveMuted else Color(0xFFBE4843), maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
+                color = if (result.ok) LiveMuted else LiveDanger, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -295,13 +302,14 @@ internal fun LiveCallTranscript(
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (showHeading) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.calls_live_transcript), color = LiveMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.calls_live_transcript), color = LiveInk, fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { heading() })
             if (lines.size > 3) TextButton(onClick = { expanded = !expanded },
-                modifier = Modifier.heightIn(min = 32.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
-                Text(stringResource(if (expanded) R.string.calls_collapse else R.string.calls_expand), fontSize = 11.sp)
+                modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
+                Text(stringResource(if (expanded) R.string.calls_collapse else R.string.calls_expand), fontSize = 12.sp)
             }
-            if (onExpand != null) IconButton(onClick = onExpand, modifier = Modifier.size(40.dp).testTag("call-current-transcript")) {
-                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(16.dp), tint = Color(0xFF167447))
+            if (onExpand != null) IconButton(onClick = onExpand, modifier = Modifier.size(48.dp).testTag("call-current-transcript")) {
+                Icon(MikaIcons.Message, stringResource(R.string.calls_live_transcript), Modifier.size(16.dp), tint = LiveAction)
             }
         }
         val visibleLines = if (expanded) lines else lines.takeLast(if (compact) 1 else 3)

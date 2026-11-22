@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">Buka pengaturan notifikasi</string>
     <string name="calls_speaker_edit_note">Pilih suara hasil kloning di Kloning suara. Kosongkan kolom untuk memulihkan suara default.</string>
     <string name="calls_greeting_hint">Teks dibacakan apa adanya. Kosongkan agar lawan bicara berbicara terlebih dahulu.</string>
+    <string name="flash_text_brief">Instruksi teks</string>
+    <string name="flash_edit_draft">Edit draf</string>
+    <string name="flash_voice_brief_hint">Ketuk gagang telepon untuk memberi instruksi suara</string>
+    <string name="flash_reset_filters">Atur ulang filter</string>
 </resources>

@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">Abrir configurações de notificação</string>
     <string name="calls_speaker_edit_note">Escolha vozes clonadas em Clonagem de voz. Deixe em branco para restaurar a voz padrão.</string>
     <string name="calls_greeting_hint">O texto será lido tal como foi escrito. Deixe em branco para a outra pessoa falar primeiro.</string>
+    <string name="flash_text_brief">Por escrito</string>
+    <string name="flash_edit_draft">Editar rascunho</string>
+    <string name="flash_voice_brief_hint">Toque no telefone para dar instruções por voz</string>
+    <string name="flash_reset_filters">Redefinir filtros</string>
 </resources>

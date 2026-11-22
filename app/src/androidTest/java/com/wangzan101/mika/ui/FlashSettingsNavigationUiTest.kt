@@ -4,6 +4,7 @@ import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -51,6 +52,12 @@ class FlashSettingsNavigationUiTest {
         ActivityScenario.launch<MainActivity>(workspaceIntent(app)).use { scenario ->
             scenario.onActivity { assertEquals("zh-Hans", it.getString(R.string.ui_locale)) }
             compose.onNodeWithTag("call-tab-settings").assertIsDisplayed().performClick()
+            val currentDeviceSummary = app.calls.state.value.backgroundStandbyBlockedReason ?: workspaceText(
+                if (app.calls.settings.state.value.enabled) R.string.calls_auto_off else R.string.calls_system_default,
+            )
+            compose.onNodeWithTag("call-open-device-panel").assertIsDisplayed()
+                .assertTextContains(workspaceText(R.string.flash_design_device))
+                .assertTextContains(currentDeviceSummary)
             assertSettingsHome()
             captureWorkspaceScreenshot("native-settings-all-entries.png")
 

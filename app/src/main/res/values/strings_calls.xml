@@ -125,4 +125,8 @@
     <string name="calls_notification_settings">Open notification settings</string>
     <string name="calls_speaker_edit_note">Choose cloned voices in Voice cloning. Leave blank to restore the default voice.</string>
     <string name="calls_greeting_hint">Read as written. Leave blank to let the other person speak first.</string>
+    <string name="flash_text_brief">Text brief</string>
+    <string name="flash_edit_draft">Edit draft</string>
+    <string name="flash_voice_brief_hint">Tap the handset to give voice instructions</string>
+    <string name="flash_reset_filters">Reset filters</string>
 </resources>
