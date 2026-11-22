@@ -33,6 +33,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.DpRect
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -123,8 +124,8 @@ class CallWorkspaceVisualTest {
                 assertTrue("The text entry label must not be ellipsized",
                     (0 until layout.lineCount).none(layout::isLineEllipsized))
             }
-            assertTrue("The complete text action fits above navigation after scrolling",
-                entryBounds.bottom <= compose.onNodeWithTag("call-tab-task").getUnclippedBoundsInRoot().top)
+            assertActionClearOfNavigation(entryBounds, "The complete text action")
+            assertActionClearOfNavigation(voiceBounds, "The complete green button")
             if (display.screenHeightDp < 700 || display.fontScale > 1.1f) {
                 screenshot("native-dialer-actions-scrolled.png")
             }
@@ -183,8 +184,7 @@ class CallWorkspaceVisualTest {
             selectWorkspace("settings")
             val device = compose.onNodeWithTag("call-open-device-panel").assertIsDisplayed()
             device.assertTextContains(workspaceText(R.string.flash_design_device))
-            assertTrue("Device status must be visible before scrolling settings",
-                device.getUnclippedBoundsInRoot().bottom <= compose.onNodeWithTag("call-tab-settings").getUnclippedBoundsInRoot().top)
+            assertActionClearOfNavigation(device.getUnclippedBoundsInRoot(), "Device status before scrolling settings")
             screenshot("native-settings-home.png")
             compose.onNodeWithTag("call-open-device-panel").performScrollTo().performClick()
             compose.onNodeWithTag("call-recovery-section").performScrollTo().assertIsDisplayed()
@@ -212,6 +212,19 @@ class CallWorkspaceVisualTest {
     private fun screenshot(name: String) {
         compose.waitForIdle()
         captureWorkspaceScreenshot(name)
+    }
+
+    private fun assertActionClearOfNavigation(action: DpRect, description: String) {
+        val viewport = compose.onRoot().getUnclippedBoundsInRoot()
+        assertTrue("$description must be fully within the visible workspace",
+            action.left >= viewport.left && action.right <= viewport.right &&
+                action.top >= viewport.top && action.bottom <= viewport.bottom)
+        for (route in listOf("task", "history", "receive", "settings")) {
+            val tab = compose.onNodeWithTag("call-tab-$route").assertIsDisplayed().getUnclippedBoundsInRoot()
+            assertTrue("$description must not overlap navigation ($route)",
+                action.right <= tab.left || tab.right <= action.left ||
+                    action.bottom <= tab.top || tab.bottom <= action.top)
+        }
     }
 
     private fun selectWorkspace(route: String) {

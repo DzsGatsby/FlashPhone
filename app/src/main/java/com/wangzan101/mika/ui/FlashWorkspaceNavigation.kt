@@ -49,6 +49,7 @@ internal fun CallWorkspaceTab.title(): String = when (this) {
 @Composable
 internal fun FlashWorkspaceHeader(
     title: String,
+    showPageTitle: Boolean,
     standalone: Boolean,
     onBack: () -> Unit,
     updateAvailable: Boolean,
@@ -61,7 +62,10 @@ internal fun FlashWorkspaceHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!standalone) BarIconButton(MikaIcons.Back, stringResource(R.string.flash_workspace_back), onBack)
-            Row(Modifier.weight(1f).semantics { contentDescription = "flash phone · $title" },
+            if (showPageTitle) {
+                Text(title, Modifier.weight(1f), fontSize = 28.sp, lineHeight = 36.sp,
+                    fontWeight = FontWeight.SemiBold, color = c.ink)
+            } else Row(Modifier.weight(1f).semantics { contentDescription = "flash phone · $title" },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("flash phone", modifier = Modifier.weight(1f, fill = false), fontSize = 21.sp, lineHeight = 27.sp,

@@ -303,6 +303,7 @@ private fun CallSettingsWorkspace(
                         .then(if (tab == CallWorkspaceTab.Task) Modifier.background(androidx.compose.ui.graphics.Color.White) else Modifier)
                         .then(if (!showWorkspaceHeader) Modifier.statusBarsPadding() else Modifier)) {
                         if (showWorkspaceHeader) FlashWorkspaceHeader(
+                            showPageTitle = tab == CallWorkspaceTab.Settings,
                             title = tab.title(),
                             standalone = standalone,
                             onBack = onBack,
@@ -462,6 +463,7 @@ private fun CallSettingsWorkspace(
                                 },
                             )
                             CallWorkspaceTab.Settings -> FlashSettingsOverview(
+                                showTitle = !showWorkspaceHeader,
                                 canConfigure = idle && pendingLockedDial == null && !busy && !controlBusy && !settingsBusy,
                                 updateAvailable = updateAvailable,
                                 deviceSummary = state.backgroundStandbyBlockedReason ?: autoAnswerSummary(config, state),

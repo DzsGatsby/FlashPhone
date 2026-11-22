@@ -54,6 +54,7 @@ internal fun FlashSettingsRow(
 
 @Composable
 internal fun FlashSettingsOverview(
+    showTitle: Boolean,
     canConfigure: Boolean,
     updateAvailable: Boolean,
     simSummary: String,
@@ -67,7 +68,7 @@ internal fun FlashSettingsOverview(
     onAbout: () -> Unit,
 ) {
     val c = MikaTheme.colors
-    Text(stringResource(R.string.flash_workspace_settings), fontSize = 28.sp, lineHeight = 36.sp,
+    if (showTitle) Text(stringResource(R.string.flash_workspace_settings), fontSize = 28.sp, lineHeight = 36.sp,
         fontWeight = FontWeight.SemiBold, color = c.ink, modifier = Modifier.padding(top = 6.dp, bottom = 18.dp))
     FlashSettingsGroup(stringResource(R.string.flash_design_device_section))
     FlashSettingsRow(MikaIcons.Phone, stringResource(R.string.flash_design_device),
