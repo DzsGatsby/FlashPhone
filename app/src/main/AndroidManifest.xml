@@ -65,6 +65,8 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the user-enabled incoming call assistant available while the screen is locked and carries one user-confirmed outgoing call across screen lock, with a visible ongoing notification and no idle audio capture" />
         </service>
+        <service android:name=".calls.CallStandbyRecoveryJob"
+            android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service android:name=".calls.remote.CallDeviceAgentService" android:exported="false"
             android:foregroundServiceType="specialUse">

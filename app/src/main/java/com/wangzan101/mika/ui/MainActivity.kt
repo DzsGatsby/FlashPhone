@@ -147,6 +147,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val flags = FeatureFlags.get(this)
         if (flags.quitRequested()) flags.setQuitRequested(false)
+        app.calls.onStandbyOwnerOpenedApp()
         monitor.start()
         UpdateDelivery.schedule(this)
         app.updates.autoCheckInBackground()

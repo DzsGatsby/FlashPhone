@@ -60,6 +60,9 @@ class ManifestProvidersTest {
         assertEquals("false", standby.getAttributeNS(androidNs, "exported"))
         assertEquals("specialUse", standby.getAttributeNS(androidNs, "foregroundServiceType"))
         assertEquals(0, standby.getElementsByTagName("intent-filter").length)
+        val recovery = byName.getValue(".calls.CallStandbyRecoveryJob")
+        assertEquals("false", recovery.getAttributeNS(androidNs, "exported"))
+        assertEquals("android.permission.BIND_JOB_SERVICE", recovery.getAttributeNS(androidNs, "permission"))
         val telecom = byName.getValue(".calls.MikaInCallService")
         assertEquals("android.permission.BIND_INCALL_SERVICE", telecom.getAttributeNS(androidNs, "permission"))
         val metadata = telecom.getElementsByTagName("meta-data").item(0) as Element
@@ -111,7 +114,8 @@ class ManifestProvidersTest {
             return (0 until nodes.length).map { (nodes.item(it) as Element).getAttributeNS(androidNs, "name") }.toSet()
         }
         assertEquals(setOf(".ui.MainActivity"), names("activity"))
-        assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".calls.remote.CallDeviceAgentService", ".about.UpdateJobService"), names("service"))
+        assertEquals(setOf(".calls.MikaInCallService", ".calls.CallStandbyService", ".calls.CallStandbyRecoveryJob",
+            ".calls.remote.CallDeviceAgentService", ".about.UpdateJobService"), names("service"))
         assertEquals(setOf(".calls.CallNotificationAction", ".setup.PairingCodeReceiver", ".cap.phone.setup.PhoneCallRestoreReceiver", ".calls.remote.CallDeviceAgentReceiver"), names("receiver"))
         val remote = doc.getElementsByTagName("service").let { nodes ->
             (0 until nodes.length).map { nodes.item(it) as Element }

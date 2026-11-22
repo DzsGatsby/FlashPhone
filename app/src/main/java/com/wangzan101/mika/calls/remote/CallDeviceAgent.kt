@@ -3,6 +3,7 @@ package com.wangzan101.mika.calls.remote
 import android.content.Intent
 import com.wangzan101.mika.MikaApp
 import com.wangzan101.mika.calls.CallPhase
+import com.wangzan101.mika.calls.CallStandbyRecoveryJob
 import com.wangzan101.mika.settings.KeystoreKeyCipher
 import java.io.File
 import java.io.IOException
@@ -70,10 +71,11 @@ class CallDeviceAgent(private val app: MikaApp) {
         }
     }
 
-    /** Called only from the visible phone UI or an eligible system restore receiver. */
+    /** Restore the saved transport unless the owner stopped the app. */
     fun restoreAuthorizedConnection() {
         scope.launch {
-            if (initialization.await() && mutable.value.enabled && identity != null && service == null) requestStart()
+            if (initialization.await() && mutable.value.enabled && identity != null && service == null &&
+                (app.foreground.visible.value || CallStandbyRecoveryJob.allowsBackgroundRecovery(app))) requestStart()
         }
     }
     suspend fun enroll(code: String, name: String): Boolean {

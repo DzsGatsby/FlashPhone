@@ -1,5 +1,6 @@
 package com.wangzan101.mika.calls
 
+import android.app.ApplicationExitInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -59,6 +60,15 @@ class CallStandbyPolicyTest {
     @Test fun activeCallWakeLockIsBoundedByConfiguredDurationAndCleanupAllowance() {
         assertEquals(130_000L, CallStandbyPolicy.activeWakeBudgetMs(120))
         assertEquals(610_000L, CallStandbyPolicy.activeWakeBudgetMs(Int.MAX_VALUE))
+    }
+
+    @Test fun backgroundRecoveryHonorsAUserStopUntilTheOwnerOpensTheApp() {
+        val stop = ApplicationExitInfo.REASON_USER_REQUESTED
+        assertTrue(CallStandbyRecoveryJob.explicitStopSinceOpen(stop, exitedAt = 200, lastOpened = 100))
+        assertTrue(CallStandbyRecoveryJob.explicitStopSinceOpen(stop, exitedAt = 200, lastOpened = 200))
+        assertFalse(CallStandbyRecoveryJob.explicitStopSinceOpen(stop, exitedAt = 200, lastOpened = 300))
+        assertFalse(CallStandbyRecoveryJob.explicitStopSinceOpen(ApplicationExitInfo.REASON_OTHER, exitedAt = 200, lastOpened = 100))
+        assertFalse(CallStandbyRecoveryJob.explicitStopSinceOpen(ApplicationExitInfo.REASON_LOW_MEMORY, exitedAt = 200, lastOpened = 100))
     }
 
     @Test fun foregroundRestoreWaitsForTheLateHelperAndDoesNotRetryAfterFailure() {

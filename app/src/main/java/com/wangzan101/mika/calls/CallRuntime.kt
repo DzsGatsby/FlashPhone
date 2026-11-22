@@ -19,12 +19,14 @@ import android.telecom.VideoProfile
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.annotation.MainThread
 import com.wangzan101.mika.BuildConfig
 import com.wangzan101.mika.MikaApp
 import com.wangzan101.mika.calls.remote.validatedDeviceTask
 import com.wangzan101.mika.calls.remote.RemoteCallHandle
 import com.wangzan101.mika.calls.remote.RemoteCallSnapshot
 import com.wangzan101.mika.calls.instructions.CallInstructionStore
+import com.wangzan101.mika.settings.FeatureFlags
 import com.wangzan101.mika.shell.IMikaShell
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -251,11 +253,20 @@ class CallRuntime(private val app: MikaApp) {
             maybeStartAutoAnswer()
         }
         scope.launch {
+            combine(
+                settings.state.map { CallStandbyPolicy.optedIn(it, userUnlocked()) && it.backgroundStandbyAuthorized },
+                app.phone.callRecovery.state.map { it.batteryExempt },
+                ::Pair,
+            ).distinctUntilChanged().collect {
+                CallStandbyRecoveryJob.reconcile(app, hasAuthorizedIncomingStandby())
+            }
+        }
+        scope.launch {
             val resume = CallStandbyResumeGate()
             // The app can reopen before the on-device audio helper finishes reconnecting.
             // Reevaluate when readiness changes; Android only permits this start while visible.
             combine(app.foreground.visible, state) { visible, _ -> visible }.collect { visible ->
-                val eligible = visible && !standbyStarting && standbyService?.stickyAutoAnswer != true &&
+                val eligible = visible && !configuring && !standbyStarting && standbyService?.stickyAutoAnswer != true &&
                     work == null && lockedDial == null && !unobservedManagedCall && liveCalls().isEmpty() &&
                     hasAuthorizedIncomingStandby() && interactiveForeground() &&
                     CallStandbyService.notificationsAvailable(app, create = true)
@@ -279,17 +290,28 @@ class CallRuntime(private val app: MikaApp) {
         if (isIncomingStandbyRunning()) ok("后台待命已启动") else fail(standbyStartError ?: "后台待命未启动")
     }
 
-    /** Boot/unlock/update restore only the owner's incoming policy, never a saved outgoing task. */
-    fun restoreAuthorizedStandbyFromSystem() {
-        scope.launch {
-            if (!hasAuthorizedIncomingStandby() || standbyStarting || isIncomingStandbyRunning()) return@launch
-            if (!CallStandbyService.notificationsAvailable(app, create = true)) {
-                standbyStartError = "请允许后台待命通知"
-                publish()
-                return@launch
-            }
-            requestCallForegroundService(incoming = true)
+    internal fun onStandbyOwnerOpenedApp() {
+        CallStandbyRecoveryJob.acknowledgeUserOpen(app)
+        CallStandbyRecoveryJob.reconcile(app, hasAuthorizedIncomingStandby())
+    }
+
+    /** System recovery restores only the owner's incoming policy. */
+    @MainThread
+    fun restoreAuthorizedStandbyFromSystem(requireBatteryExemption: Boolean = false) {
+        val authorized = hasAuthorizedIncomingStandby()
+        if (!authorized || (requireBatteryExemption && !CallStandbyRecoveryJob.allowsScheduledForegroundStart(app))) {
+            CallStandbyRecoveryJob.reconcile(app, authorized)
+            return
         }
+        if (configuring || standbyStarting || isIncomingStandbyRunning() || hasOutgoingForegroundWork() ||
+            !CallStandbyRecoveryJob.allowsBackgroundRecovery(app)) return
+        CallStandbyRecoveryJob.reconcile(app, authorized = true)
+        if (!CallStandbyService.notificationsAvailable(app, create = true)) {
+            standbyStartError = "请允许后台待命通知"
+            publish()
+            return
+        }
+        requestCallForegroundService(incoming = true)
     }
 
     private fun requestCallForegroundService(incoming: Boolean): Boolean {
@@ -320,7 +342,8 @@ class CallRuntime(private val app: MikaApp) {
 
     private fun isStandbyOptedIn(): Boolean = CallStandbyPolicy.optedIn(settings.state.value, userUnlocked())
 
-    internal fun hasAuthorizedIncomingStandby(): Boolean = isStandbyOptedIn() && settings.state.value.backgroundStandbyAuthorized
+    internal fun hasAuthorizedIncomingStandby(): Boolean =
+        isStandbyOptedIn() && settings.state.value.backgroundStandbyAuthorized && !FeatureFlags.get(app).quitRequested()
 
     private fun isIncomingStandbyRunning(): Boolean = standbyService?.stickyAutoAnswer == true && hasAuthorizedIncomingStandby()
 
